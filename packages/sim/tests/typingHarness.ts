@@ -252,6 +252,7 @@ export function mkSimpleDef(
   },
   over: Partial<ResolvedLevel> = {},
   waveCount = 1,
+  hp: { poolM: number; hitM: number } = { poolM: 300_000, hitM: 5000 },
 ): ResolvedLevel {
   const wave = enemyIds.map((enemyId) => ({ enemyId, gimmick: null }));
   return mkDef({
@@ -261,8 +262,8 @@ export function mkSimpleDef(
       {
         kind: "encounter",
         name: "Test",
-        hpPoolM: 300_000,
-        gruntHitM: 5000,
+        hpPoolM: hp.poolM,
+        gruntHitM: hp.hitM,
         waves: Array.from({ length: waveCount }, () => wave),
       },
     ],

@@ -2,8 +2,7 @@
 // consumers can import and mock them; T1.2+ (typing, combat, boss, trial) replace the bodies.
 import type { ContentBundle } from "@hd2d/content";
 import { SimError } from "./errors.ts";
-import type { Milli } from "./fixed.ts";
-import type { LevelOptions, LevelResult, LevelState, Loadout, ResolvedLevel } from "./types.ts";
+import type { LevelOptions, LevelResult, LevelState, ResolvedLevel } from "./types.ts";
 import type { LevelView } from "./view.ts";
 
 const notImplemented = (name: string, task: string): never => {
@@ -22,10 +21,11 @@ export function resolveLevel(
 // T1.2: the typing-only level runtime lives in level.ts (createLevel, applyInput, step, getView, getResult).
 export { applyInput, createLevel, getResult, getView, step } from "./level.ts";
 // T5.1: the Typing Trial runtime lives in trial.ts.
-export { resolveTrial } from "./trial.ts";
-
-export function computeHeroStats(_loadout: Loadout): { atk: Milli; maxHp: Milli } {
-  return notImplemented("computeHeroStats", "T1.3");
-}
-
-export { applyTrialInput, createTrial, getTrialResult, getTrialView, stepTrial } from "./trial.ts";
+export {
+  applyTrialInput,
+  createTrial,
+  getTrialResult,
+  getTrialView,
+  resolveTrial,
+  stepTrial,
+} from "./trial.ts";

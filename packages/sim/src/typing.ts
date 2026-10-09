@@ -1,6 +1,8 @@
 // Typing engine (T1.2): plates, first-letter targeting, per-char advance, typos, Escape, completion, combo, key streak,
 // ATB charge, live stats. Rules: docs/interfaces.md §3.3 and docs/brainstorm/01-combat-and-levels.md §1.
 // Enemy-side consequences of a completed plate (chip hit, death, replacement plate) go through TypingHooks (level.ts).
+import { launchAutoAttack } from "./attack.ts";
+import { K } from "./balance.ts";
 import type { Emit } from "./bus.ts";
 import type {
   ComboTier,
@@ -14,7 +16,6 @@ import { BP, mulBp } from "./fixed.ts";
 import type { SimKey } from "./input.ts";
 import type { EncounterState, PlateState, RunState } from "./state.ts";
 import type { LevelState } from "./types.ts";
-import { TK, weaponTyping } from "./typingBalance.ts";
 import { firstLetter, plateFolds } from "./words.ts";
 
 export interface TypingHooks {
@@ -26,17 +27,17 @@ export interface TypingHooks {
 
 export const comboTierOf = (combo: number): ComboTier => {
   let t = 0;
-  for (const th of TK.COMBO_TIERS) if (combo >= th) t++;
+  for (const th of K.COMBO_TIERS) if (combo >= th) t++;
   return t as ComboTier;
 };
 export const keyStreakTierOf = (streak: number): KeyStreakTier => {
   let t = 0;
-  for (const th of TK.KEY_STREAK_TIERS) if (streak >= th) t++;
+  for (const th of K.KEY_STREAK_TIERS) if (streak >= th) t++;
   return t as KeyStreakTier;
 };
 /** ComboMult = 1 + COMBO_PER x min(combo, COMBO_CAP), in basis points (<= 15_000 with the defaults). */
 export const comboMultBp = (combo: number): number =>
-  BP + TK.COMBO_PER_BP * Math.min(combo, TK.COMBO_CAP);
+  BP + K.COMBO_PER_BP * Math.min(combo, K.COMBO_CAP);
 
 export const isExclusiveKind = (k: PlateKind): boolean => k === "secondWind" || k === "finisher";
 /** Only word and guard plates pay ATB (secondWind, finisher, doom and minigame plates do not; T1.5 may revisit). */
@@ -146,14 +147,15 @@ export function dropTarget(state: LevelState, reason: TargetDropReason, emit: Em
 
 // ---------------------------------------------------------------- ATB
 
-/** Adds ATB; on full emits AtbFilled and keeps the overflow up to the cap (auto-attack itself is T1.3). */
+/** Adds ATB; on full emits AtbFilled, keeps the overflow up to the cap and launches the auto-attack (attack.ts). */
 export function addAtb(state: LevelState, gainM: number, emit: Emit): void {
   const enc = state.enc as EncounterState;
   enc.atbM += gainM;
-  if (enc.atbM >= TK.ATB_FULL_M) {
-    const overflow = Math.min(enc.atbM - TK.ATB_FULL_M, TK.ATB_OVERFLOW_CAP_M);
+  if (enc.atbM >= K.ATB_FULL_M) {
+    const overflow = Math.min(enc.atbM - K.ATB_FULL_M, K.ATB_OVERFLOW_CAP_M);
     enc.atbM = overflow;
     emit({ type: "AtbFilled", tick: state.tick, overflowM: overflow });
+    launchAutoAttack(state, emit);
   }
 }
 
@@ -240,7 +242,7 @@ function correctChar(state: LevelState, plate: PlateState, hooks: TypingHooks, e
   // ATB: pay once per index (anti-farm, B1)
   let gainM = 0;
   if (paysAtb(plate.kind) && idx >= plate.maxPaid) {
-    gainM = mulBp(weaponTyping(run.loadout.weapon.archetype).charChargeM, comboMultBp(run.combo));
+    gainM = mulBp(K.WEAPONS[run.loadout.weapon.archetype].charChargeM, comboMultBp(run.combo));
     plate.paidChars++;
     plate.paidAtbM += gainM;
   }
@@ -290,7 +292,7 @@ function burst(state: LevelState, emit: Emit): void {
   const run = state.run;
   const t = state.tick;
   run.burstTicks.push(t);
-  if (run.burstTicks.length > TK.BURST_CHARS) run.burstTicks.shift();
+  if (run.burstTicks.length > K.BURST_CHARS) run.burstTicks.shift();
   const n = run.burstTicks.length;
   if (n < 2) {
     run.burstWpm = 0;
@@ -299,12 +301,12 @@ function burst(state: LevelState, emit: Emit): void {
   const span = Math.max(1, t - (run.burstTicks[0] as number));
   const wpm = Math.floor(((n - 1) * 720) / span);
   run.burstWpm = wpm;
-  if (n < TK.BURST_CHARS) return;
-  if (run.lastBurstTick !== null && t - run.lastBurstTick < TK.BURST_COOLDOWN_T) return;
+  if (n < K.BURST_CHARS) return;
+  if (run.lastBurstTick !== null && t - run.lastBurstTick < K.BURST_COOLDOWN_T) return;
   const pace = run.options.pace;
   let band: "swift" | "blazing" | null = null;
-  if (wpm * BP >= pace * TK.BURST_BLAZING_BP) band = "blazing";
-  else if (wpm * BP >= pace * TK.SWIFT_THRESHOLD_BP) band = "swift";
+  if (wpm * BP >= pace * K.BURST_BLAZING_BP) band = "blazing";
+  else if (wpm * BP >= pace * K.SWIFT_THRESHOLD_BP) band = "swift";
   if (band !== null) {
     run.lastBurstTick = t;
     emit({ type: "BurstWpm", tick: t, wpm, band });
@@ -340,7 +342,7 @@ function typo(state: LevelState, plate: PlateState | null, got: string, emit: Em
       } else {
         newCombo = 0;
         penalty = "reset";
-        enc.atbM = Math.max(0, enc.atbM - TK.STRICT_TYPO_ATB_M);
+        enc.atbM = Math.max(0, enc.atbM - K.STRICT_TYPO_ATB_M);
       }
     }
   }
@@ -376,18 +378,24 @@ function completePlate(state: LevelState, plate: PlateState, hooks: TypingHooks,
   const len = plate.text.length;
   const wordWpm = Math.floor(((len - 1) * 720) / Math.max(1, tick - (plate.tFirst ?? tick)));
   const swift =
-    plate.kind === "word" && perfect && wordWpm * BP >= run.options.pace * TK.SWIFT_THRESHOLD_BP;
+    plate.kind === "word" && perfect && wordWpm * BP >= run.options.pace * K.SWIFT_THRESHOLD_BP;
 
   let bonusM = 0;
   if (paysAtb(plate.kind)) {
-    const w = weaponTyping(run.loadout.weapon.archetype);
-    bonusM = perfect ? mulBp(w.wordBonusM, TK.PERFECT_ATB_MULT_BP) : w.wordBonusM;
-    if (perfect) bonusM += mulBp(plate.paidAtbM, TK.PERFECT_CHAR_BONUS_BP);
-    if (swift) bonusM += TK.SWIFT_ATB_M;
+    const w = K.WEAPONS[run.loadout.weapon.archetype];
+    bonusM = perfect ? mulBp(w.wordBonusM, K.PERFECT_ATB_MULT_BP) : w.wordBonusM;
+    if (perfect) bonusM += mulBp(plate.paidAtbM, K.PERFECT_CHAR_BONUS_BP);
+    if (swift) bonusM += K.SWIFT_ATB_M;
   }
 
   run.stats.wordsCompleted++;
   if (perfect) run.stats.perfectWords++;
+  if (paysAtb(plate.kind)) {
+    // crit share since the last auto-attack (D10); counted BEFORE this word's ATB can fill the gauge
+    const enc = state.enc as EncounterState;
+    enc.critWords++;
+    if (perfect) enc.critPerfect++;
+  }
   // mechanical combo: a Perfect completion is +1 (a Sword Perfect Parry +1 more); imperfect leaves it unchanged
   let combo = run.combo;
   if (perfect) {

@@ -1,11 +1,26 @@
 // T1.2 typing engine: one test per rule of docs/brainstorm/01-combat-and-levels.md §1 and docs/interfaces.md §3.3.
 import { describe, expect, test } from "vitest";
+import { K } from "../src/balance.ts";
 import { paceFactorBp, scheduleAttack } from "../src/guard.ts";
 import { applyInput, createLevel, deriveRng, mulBp, type SimEvent } from "../src/index.ts";
 import { comboMultBp } from "../src/typing.ts";
-import { TK } from "../src/typingBalance.ts";
 import { firstLetter, pickPlateWord } from "../src/words.ts";
-import { Driver, mkDef, mkLoadout, mkOptions, mkSimpleDef, POOL_GUARD } from "./typingHarness.ts";
+import {
+  BOSS,
+  Driver,
+  mkDef,
+  mkLoadout,
+  mkOptions,
+  mkSimpleDef,
+  POOL_GUARD,
+} from "./typingHarness.ts";
+
+/** A boss-only level whose boss has 8 HP, so a few perfect chips (2.5 each) reach the final gate. */
+const bossDef = () =>
+  mkDef({
+    segments: [{ kind: "boss", bossId: "ruinGolem" }],
+    boss: { ...BOSS, hpM: 8000 },
+  });
 
 /** Zen difficulty = enemies never attack, so typing tests are not disturbed by guard words. */
 const zenDriver = (
@@ -16,7 +31,7 @@ const zenDriver = (
   loadout = mkLoadout(),
 ): Driver => {
   const d = new Driver(
-    mkSimpleDef(enemies, { current: pool }, {}, waves),
+    mkSimpleDef(enemies, { current: pool }, {}, waves, { poolM: 3_000_000, hitM: 5000 }),
     7,
     { difficulty: "zen", ...opts },
     loadout,
@@ -199,13 +214,17 @@ describe("doc 01 §1.2 targeting", () => {
   });
 
   test("when the focus dies, focus moves to the lowest-slot living enemy", () => {
-    const d = zenDriver(["slime", "bat"], ["apple", "bird"]);
+    // two enemies share a 5 HP pool (2.5 each): a perfect word's chip (25% of 10 ATK) kills one outright
+    const d = new Driver(
+      mkSimpleDef(["slime", "bat"], { current: ["apple", "bird"] }, {}, 1, {
+        poolM: 5000,
+        hitM: 5000,
+      }),
+      7,
+      { difficulty: "zen" },
+    ).toCombat();
     const bird = plateOf(d, "bird");
-    for (let i = 0; i < TK.STUB_WORDS_TO_KILL; i++) {
-      d.type("bird");
-      if (i < TK.STUB_WORDS_TO_KILL - 1)
-        expect(d.plates().some((p) => p.text === "bird")).toBe(true);
-    }
+    d.type("bird");
     const dead = d.view().enemies.find((e) => e.id === bird.ownerId);
     expect(dead?.alive).toBe(false);
     const alive = d.view().enemies.filter((e) => e.alive);
@@ -294,7 +313,7 @@ describe("doc 01 §1.4 accuracy vs speed", () => {
     const ev = d.type("apple", 10); // 72 WPM >= 45.5
     const wc = d.ofType("WordCompleted", ev)[0];
     expect(wc?.swift).toBe(true);
-    expect(wc?.atbGainM).toBe(mulBp(10_000, 12_500) + mulBp(5 * 8000, 2500) + TK.SWIFT_ATB_M);
+    expect(wc?.atbGainM).toBe(mulBp(10_000, 12_500) + mulBp(5 * 8000, 2500) + K.SWIFT_ATB_M);
   });
 
   test("an imperfect word is never Swift", () => {
@@ -375,12 +394,12 @@ describe("doc 01 §1.5 combo", () => {
     const d = zenDriver(["slime"], ["apple"], { comboMode: "strict" }, 20);
     for (let i = 0; i < 3; i++) perfectWord(d);
     const atbBefore = d.state.enc?.atbM ?? 0;
-    expect(atbBefore).toBeGreaterThan(TK.STRICT_TYPO_ATB_M);
+    expect(atbBefore).toBeGreaterThan(K.STRICT_TYPO_ATB_M);
     d.key("a");
     const atbMid = d.state.enc?.atbM ?? 0;
     const ev = d.key("x");
     expect(d.ofType("Typo", ev)[0]).toMatchObject({ comboBefore: 3, combo: 0, penalty: "reset" });
-    expect(d.state.enc?.atbM).toBe(atbMid - TK.STRICT_TYPO_ATB_M);
+    expect(d.state.enc?.atbM).toBe(atbMid - K.STRICT_TYPO_ATB_M);
   });
 
   test("Zen has no combo or ATB penalty (typos only count toward accuracy)", () => {
@@ -563,7 +582,7 @@ describe("interfaces §3.3 Escape (B1)", () => {
     // the completion bonus counts only chars actually paid on this plate
     const wc = d.ofType("WordCompleted")[0];
     expect(wc?.atbGainM).toBe(
-      mulBp(10_000, 12_500) + mulBp(5 * 8000, 2500) + (wc?.swift ? TK.SWIFT_ATB_M : 0),
+      mulBp(10_000, 12_500) + mulBp(5 * 8000, 2500) + (wc?.swift ? K.SWIFT_ATB_M : 0),
     );
   });
 
@@ -598,8 +617,8 @@ describe("doc 01 §2 / interfaces §3.3 ATB gauge", () => {
     }
     expect(filled?.type).toBe("AtbFilled");
     const overflow = (filled as Extract<SimEvent, { type: "AtbFilled" }>).overflowM;
-    expect(overflow).toBeLessThanOrEqual(TK.ATB_OVERFLOW_CAP_M);
-    expect(d.state.enc?.atbM).toBeLessThan(TK.ATB_FULL_M);
+    expect(overflow).toBeLessThanOrEqual(K.ATB_OVERFLOW_CAP_M);
+    expect(d.state.enc?.atbM).toBeLessThan(K.ATB_FULL_M);
   });
 
   test("hero ATB resets to 0 at each encounter start", () => {
@@ -612,7 +631,7 @@ describe("doc 01 §2 / interfaces §3.3 ATB gauge", () => {
             {
               kind: "encounter",
               name: "A",
-              hpPoolM: 90_000,
+              hpPoolM: 6000,
               gruntHitM: 1,
               waves: [[{ enemyId: "slime", gimmick: null }]],
             },
@@ -638,8 +657,8 @@ describe("doc 01 §2 / interfaces §3.3 ATB gauge", () => {
 
 describe("doc 01 §1.7 guard words", () => {
   const guardSpan = (pace: number, story = false): number => {
-    let g = Math.max(TK.GUARD_MIN_T, mulBp(TK.GUARD_T, paceFactorBp(pace)));
-    if (story) g += TK.STORY_GUARD_BONUS_T;
+    let g = Math.max(K.GUARD_MIN_T, mulBp(K.GUARD_T, paceFactorBp(pace)));
+    if (story) g += K.STORY_GUARD_BONUS_T;
     return g;
   };
 
@@ -649,7 +668,7 @@ describe("doc 01 §1.7 guard words", () => {
       const ev = d.until("GuardWordShown");
       expect(ev.spanTicks).toBe(guardSpan(pace));
       expect(ev.impactTick - ev.tick).toBe(guardSpan(pace));
-      expect(guardSpan(pace)).toBeGreaterThanOrEqual(TK.GUARD_MIN_T);
+      expect(guardSpan(pace)).toBeGreaterThanOrEqual(K.GUARD_MIN_T);
     }
     expect(guardSpan(120)).toBe(90); // the 1.5 s floor
   });
@@ -665,8 +684,9 @@ describe("doc 01 §1.7 guard words", () => {
     const d = new Driver(mkSimpleDef(["slime"], { current: ["apple"] }), 5, {
       tutorial: true,
     }).toCombat();
+    for (let i = 0; i < 3; i++) perfectWord(d); // the tutorial holds enemy attacks until 3 words are typed
     expect(d.until("GuardWordShown").spanTicks).toBe(
-      mulBp(guardSpan(35), TK.TUTORIAL_FIRST_GUARD_MULT_BP),
+      mulBp(guardSpan(35), K.TUTORIAL_FIRST_GUARD_MULT_BP),
     );
   });
 
@@ -759,7 +779,7 @@ describe("doc 01 §1.7 guard words", () => {
     d.type(d.plates().find((p) => p.kind === "guard")?.text ?? "");
     const before = d.state.enc?.atbM ?? 0;
     d.until("EnemyAttack");
-    expect((d.state.enc?.atbM ?? 0) - before).toBe(TK.PARRY_ATB_M);
+    expect((d.state.enc?.atbM ?? 0) - before).toBe(K.PARRY_ATB_M);
   });
 
   test("an ignored guard word: the hit lands, then the plate reverts to a normal word", () => {
@@ -791,11 +811,11 @@ describe("doc 01 §1.7 guard words", () => {
     if (a === undefined || b === undefined || a.nextImpact === null) throw new Error("setup");
     scheduleAttack(d.state, b, a.nextImpact + 10);
     expect(Math.abs((b.nextImpact as number) - (a.nextImpact as number))).toBeGreaterThanOrEqual(
-      TK.TELEGRAPH_STAGGER_T,
+      K.TELEGRAPH_STAGGER_T,
     );
     scheduleAttack(d.state, b, a.nextImpact - 5);
     expect(Math.abs((b.nextImpact as number) - (a.nextImpact as number))).toBeGreaterThanOrEqual(
-      TK.TELEGRAPH_STAGGER_T,
+      K.TELEGRAPH_STAGGER_T,
     );
   });
 
@@ -810,7 +830,7 @@ describe("doc 01 §1.7 guard words", () => {
         .sort((x, y) => x - y);
       for (let i = 1; i < imp.length; i++) {
         expect((imp[i] as number) - (imp[i - 1] as number)).toBeGreaterThanOrEqual(
-          TK.TELEGRAPH_STAGGER_T,
+          K.TELEGRAPH_STAGGER_T,
         );
       }
     }
@@ -877,7 +897,7 @@ describe("live stats (integer math)", () => {
     for (const e of swift) expect(e).toMatchObject({ band: "swift", wpm: 51 });
     for (let i = 1; i < swift.length; i++) {
       expect((swift[i]?.tick ?? 0) - (swift[i - 1]?.tick ?? 0)).toBeGreaterThanOrEqual(
-        TK.BURST_COOLDOWN_T,
+        K.BURST_COOLDOWN_T,
       );
     }
     const blazing = run(3); // 240 WPM
@@ -1057,26 +1077,24 @@ describe("level flow (typing-only)", () => {
   });
 
   test("the encounter plays intro, combat, EncounterCleared, rewards, then the next segment", () => {
-    const d = new Driver(mkSimpleDef(["slime"], { current: ["apple"] }), 3, { difficulty: "zen" });
+    const d = new Driver(
+      mkSimpleDef(["slime"], { current: ["apple"] }, {}, 1, { poolM: 2000, hitM: 5000 }),
+      3,
+      { difficulty: "zen" },
+    );
     d.toCombat();
-    for (let i = 0; i < TK.STUB_WORDS_TO_KILL; i++) d.type("apple");
+    d.type("apple"); // a perfect chip (2.5 HP) kills the 2 HP slime
     d.step();
     expect(d.state.phase).toBe("rewards");
     expect(d.ofType("EncounterCleared")).toHaveLength(1);
-    d.step(TK.REWARD_T);
+    d.step(K.REWARD_T);
     expect(d.state.phase).toBe("cleared");
     expect(d.all.at(-1)?.type).toBe("LevelCleared");
   });
 
   test("the boss finisher is an exclusive, auto-targeted sentence plate that needs typed spaces", () => {
-    const d = new Driver(mkDef({ segments: [{ kind: "boss", bossId: "ruinGolem" }] }), 9, {
-      difficulty: "zen",
-    }).toCombat();
-    for (
-      let i = 0;
-      i < TK.STUB_WORDS_TO_KILL_BOSS + 3 && d.ofType("FinisherShown").length === 0;
-      i++
-    ) {
+    const d = new Driver(bossDef(), 9, { difficulty: "zen" }).toCombat();
+    for (let i = 0; i < 12 && d.ofType("FinisherShown").length === 0; i++) {
       d.type(d.plates()[0]?.text ?? "");
     }
     const shown = d.ofType("FinisherShown")[0];
@@ -1094,14 +1112,12 @@ describe("level flow (typing-only)", () => {
     expect(d.ofType("FinisherCompleted", rest)).toHaveLength(1);
     expect(d.ofType("EnemyDeath", rest)[0]?.byKind).toBe("finisher");
     expect(d.ofType("SentenceWordDone").map((e) => e.wordCount)).toEqual([5, 5, 5, 5, 5]);
-    d.step(TK.REWARD_T + 1);
+    d.step(K.REWARD_T + 1);
     expect(d.state.phase).toBe("cleared");
   });
 
   test("Escape does not drop an exclusive (finisher) plate", () => {
-    const d = new Driver(mkDef({ segments: [{ kind: "boss", bossId: "ruinGolem" }] }), 9, {
-      difficulty: "zen",
-    }).toCombat();
+    const d = new Driver(bossDef(), 9, { difficulty: "zen" }).toCombat();
     for (let i = 0; i < 12 && d.ofType("FinisherShown").length === 0; i++)
       d.type(d.plates()[0]?.text ?? "");
     expect(d.key("Escape")).toEqual([]);

@@ -9,15 +9,21 @@ import { expect, type Page, test } from "@playwright/test";
 import { build } from "esbuild";
 import { goldenHashes } from "../tests/toy.ts";
 import { type TrialGolden, trialGoldens } from "../tests/trialHarness.ts";
-import { type TypingGolden, typingGoldens } from "../tests/typingGolden.ts";
+import {
+  type CombatGolden,
+  combatGoldens,
+  type TypingGolden,
+  typingGoldens,
+} from "../tests/typingGolden.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const readJson = <T>(rel: string): T =>
   JSON.parse(fs.readFileSync(path.join(here, rel), "utf8")) as T;
 const golden = readJson<{ hashes: Record<string, string> }>("../tests/fixtures/golden-replay.json");
-const typingGolden = readJson<{ goldens: Record<string, TypingGolden> }>(
-  "../tests/fixtures/golden-typing.json",
-);
+const typingGolden = readJson<{
+  goldens: Record<string, TypingGolden>;
+  combatGoldens: Record<string, CombatGolden>;
+}>("../tests/fixtures/golden-typing.json");
 
 const trialGolden = readJson<{ goldens: Record<string, TrialGolden> }>(
   "../tests/fixtures/golden-trial.json",
@@ -27,6 +33,7 @@ type Parity = {
   trialGoldens: () => Record<string, TrialGolden>;
   goldenHashes: () => Record<string, string>;
   typingGoldens: () => Record<string, TypingGolden>;
+  combatGoldens: () => Record<string, CombatGolden>;
 };
 
 async function loadBundle(page: Page): Promise<void> {
@@ -82,4 +89,18 @@ test("Typing Trial: Chromium scripted-session replays equal Node's and the golde
   console.log("browser:", JSON.stringify(browser));
   expect(browser).toEqual(node);
   expect(browser).toEqual(trialGolden.goldens);
+});
+
+test("combat replays (reference bot: boss, shields, Second Wind): Chromium equals Node and the golden fixture", async ({
+  page,
+}) => {
+  await loadBundle(page);
+  const browser = await page.evaluate(() =>
+    (globalThis as unknown as { __parity: Parity }).__parity.combatGoldens(),
+  );
+  const node = combatGoldens();
+  console.log("node   :", JSON.stringify(node));
+  console.log("browser:", JSON.stringify(browser));
+  expect(browser).toEqual(node);
+  expect(browser).toEqual(typingGolden.combatGoldens);
 });

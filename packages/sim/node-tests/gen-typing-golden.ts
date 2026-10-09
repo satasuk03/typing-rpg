@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { typingGoldens } from "../tests/typingGolden.ts";
+import { combatGoldens, typingGoldens } from "../tests/typingGolden.ts";
 
 const dest = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -11,9 +11,10 @@ const dest = path.join(
 );
 const out = {
   description:
-    "Scripted typing sessions (tests/typingHarness.ts scriptedSession) on the fixture level, replayed through replay(): final-state hash and event-stream hash per seed. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
+    "Scripted typing sessions (tests/typingHarness.ts scriptedSession) on the fixture level (goldens, combat on since T1.3) and reference-bot combat replays (combatGoldens: boss/sword, dagger+shields, glass hero with Second Wind), replayed through replay(): final-state hash and event-stream hash. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
   simVersion: 1,
   goldens: typingGoldens(),
+  combatGoldens: combatGoldens(),
 };
 fs.writeFileSync(dest, `${JSON.stringify(out, null, 2)}\n`);
 console.log(JSON.stringify(out.goldens));

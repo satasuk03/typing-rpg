@@ -8,6 +8,7 @@ export * from "./fixed.ts";
 export * from "./hash.ts";
 export * from "./input.ts";
 export * from "./logcodec.ts";
+export * from "./meta/index.ts";
 export * from "./replay.ts";
 export * from "./rng.ts";
 export * from "./snapshot.ts";

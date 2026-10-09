@@ -1,12 +1,12 @@
 // Typing-only level plumbing: generated tables, timeout, results, views. (Typing rules live in typing.test.ts.)
 import { describe, expect, test } from "vitest";
+import { K } from "../src/balance.ts";
 import { getResult, MAX_LEVEL_TICKS, replay } from "../src/index.ts";
-import { TK } from "../src/typingBalance.ts";
 import { Driver, mkDef, mkLoadout, mkOptions, scriptedSession } from "./typingHarness.ts";
 
 describe("level timeout and results", () => {
   test("the level timeout equals the replay runner's MAX_LEVEL_TICKS", () => {
-    expect(TK.LEVEL_TIMEOUT_T).toBe(MAX_LEVEL_TICKS);
+    expect(K.LEVEL_TIMEOUT_T).toBe(MAX_LEVEL_TICKS);
   });
 
   test("a level that never ends fails with timeout at MAX_LEVEL_S", () => {

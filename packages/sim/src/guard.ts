@@ -3,6 +3,8 @@
 //   scheduleAttack(state, enemy, impactTick)  -- (re)schedules an enemy's next impact (stagger-aware), arms its guard word
 //   ImpactResolver                           -- called at impact; applies damage/parry/block and reschedules
 // Rules: doc 01 §1.7, interfaces §3.3 "Guard (D13)" and §3.2 step 3.
+
+import { K } from "./balance.ts";
 import type { Emit } from "./bus.ts";
 import { SimError } from "./errors.ts";
 import { mulBp } from "./fixed.ts";
@@ -10,16 +12,13 @@ import type { EncounterState, EnemyState, PlateState } from "./state.ts";
 import { PACE_FACTOR_BP } from "./tables.generated.ts";
 import type { LevelState, ResolvedEnemy } from "./types.ts";
 import { addPlate, dropTarget, findPlate, removePlate, visibleFirstLetters } from "./typing.ts";
-import { TK } from "./typingBalance.ts";
 import { pickGuardWord } from "./words.ts";
 
 export type ImpactResolver = (state: LevelState, enemy: EnemyState, emit: Emit) => void;
 
 /** PACE_FACTOR_BP lookup: integer pace 15..120 (clamped). */
 export const paceFactorBp = (pace: number): number =>
-  PACE_FACTOR_BP[
-    Math.min(TK.AUTO_PACE_MAX, Math.max(TK.AUTO_PACE_MIN, pace)) - TK.AUTO_PACE_MIN
-  ] as number;
+  PACE_FACTOR_BP[Math.min(K.PACE_MAX, Math.max(K.PACE_MIN, pace)) - K.PACE_MIN] as number;
 
 export function enemyDef(state: LevelState, defId: string): ResolvedEnemy {
   const d = state.run.def.enemies[defId];
@@ -30,7 +29,7 @@ export function enemyDef(state: LevelState, defId: string): ResolvedEnemy {
 /** interval = baseInterval x PACE_FACTOR x PRESET_INTERVAL_MULT (interfaces §3.3 "Enemy timers"). */
 export function attackIntervalTicks(state: LevelState, defId: string): number {
   const run = state.run;
-  const preset = TK.PRESET_INTERVAL_MULT_BP[run.options.difficulty] as number;
+  const preset = K.PRESET_INTERVAL_MULT_BP[run.options.difficulty] as number;
   return Math.max(
     1,
     mulBp(mulBp(enemyDef(state, defId).baseIntervalTicks, paceFactorBp(run.options.pace)), preset),
@@ -40,9 +39,9 @@ export function attackIntervalTicks(state: LevelState, defId: string): number {
 /** guardTicks = max(1.5 s, 2.5 s x paceFactor) (+1 s on the story preset; x2 for the tutorial's first guard). */
 export function guardSpanTicks(state: LevelState): number {
   const run = state.run;
-  let g = Math.max(TK.GUARD_MIN_T, mulBp(TK.GUARD_T, paceFactorBp(run.options.pace)));
-  if (run.options.difficulty === "story") g += TK.STORY_GUARD_BONUS_T;
-  if (run.options.tutorial && run.guardsShown === 0) g = mulBp(g, TK.TUTORIAL_FIRST_GUARD_MULT_BP);
+  let g = Math.max(K.GUARD_MIN_T, mulBp(K.GUARD_T, paceFactorBp(run.options.pace)));
+  if (run.options.difficulty === "story") g += K.STORY_GUARD_BONUS_T;
+  if (run.options.tutorial && run.guardsShown === 0) g = mulBp(g, K.TUTORIAL_FIRST_GUARD_MULT_BP);
   return g;
 }
 
@@ -57,8 +56,8 @@ export function scheduleAttack(state: LevelState, enemy: EnemyState, desiredImpa
     let moved = false;
     for (const o of enc.enemies) {
       if (o === enemy || !o.alive || o.nextImpact === null) continue;
-      if (Math.abs(d - o.nextImpact) < TK.TELEGRAPH_STAGGER_T) {
-        d = o.nextImpact + TK.TELEGRAPH_STAGGER_T;
+      if (Math.abs(d - o.nextImpact) < K.TELEGRAPH_STAGGER_T) {
+        d = o.nextImpact + K.TELEGRAPH_STAGGER_T;
         moved = true;
       }
     }
@@ -92,6 +91,25 @@ export function initAttack(state: LevelState, enemy: EnemyState, progressBp: num
     enemy,
     start + enemy.intervalTicks - mulBp(enemy.intervalTicks, progressBp),
   );
+}
+
+/** Starts a fresh attack cycle from now (after a Break or a revive): a full interval, no head start; zen never attacks. */
+export function restartAttackCycle(state: LevelState, enemy: EnemyState): void {
+  const t = state.tick;
+  enemy.cycleStart = t;
+  cancelAttack(enemy);
+  if (state.run.options.difficulty === "zen") return;
+  scheduleAttack(state, enemy, t + enemy.intervalTicks);
+}
+
+/** Tutorial hold (BALANCE.TUTORIAL_HOLD_ATTACKS_UNTIL_WORDS): pushes every not-yet-telegraphed attack back by one tick. */
+export function holdAttacks(state: LevelState): void {
+  const enc = state.enc as EncounterState;
+  for (const e of enc.enemies) {
+    if (!e.alive || e.nextImpact === null || e.windupShown) continue;
+    e.nextImpact++;
+    e.cycleStart++;
+  }
 }
 
 /** Swaps the enemy's plate for a guard word and emits EnemyAttackWindup + GuardWordShown (step 3). */
@@ -149,6 +167,7 @@ export function stepEnemyAttacks(state: LevelState, resolve: ImpactResolver, emi
   const enc = state.enc as EncounterState;
   const t = state.tick;
   for (const enemy of enc.enemies) {
+    if (state.phase !== "combat") return; // the hero went down mid-tick: the encounter is frozen
     if (!enemy.alive || enemy.nextImpact === null) continue;
     if (!enemy.windupShown && t >= enemy.nextImpact - enemy.guardTicks)
       startGuard(state, enemy, emit);

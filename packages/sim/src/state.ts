@@ -1,6 +1,14 @@
 // Sim-internal state shapes (plain JSON; docs/interfaces.md §1.4, §3.1). Not part of the published contract beyond
 // "plain data": consumers read getView() only. Everything here is integers, strings, booleans, null, arrays, objects.
-import type { ComboTier, EntityId, KeyStreakTier, PlateId, PlateKind } from "./events.ts";
+import type { DamageType } from "@hd2d/content";
+import type {
+  ComboTier,
+  EntityId,
+  HitOrigin,
+  KeyStreakTier,
+  PlateId,
+  PlateKind,
+} from "./events.ts";
 import type { RngState } from "./rng.ts";
 import type { Tick } from "./time.ts";
 import type { LevelOptions, Loadout, ResolvedLevel, WordResult } from "./types.ts";
@@ -36,6 +44,13 @@ export interface EnemyState {
   alive: boolean;
   hpM: number;
   maxHpM: number;
+  hitM: number; // damage of one unhindered attack (gruntHit x hitWeight, or the boss hit)
+  shield: number; // shield points left (0 while Broken or for shieldless enemies)
+  shieldMax: number;
+  revealed: DamageType[]; // weaknesses already unveiled (WeaknessRevealed is a one-shot per type)
+  brokenUntil: Tick | null; // Break window end; the attack timer is suspended while set
+  staggerUntil: Tick | null; // Doom Spell stagger (T1.5): x DOOM_STAGGER_DMG_MULT damage while set
+  gateHpM: number | null; // phase gate: damage cannot take HP below this floor (boss phases, T1.5)
   plateId: PlateId | null;
   spawnTick: Tick;
   intervalTicks: number;
@@ -45,6 +60,14 @@ export interface EnemyState {
   windupShown: boolean; // guard word shown for the scheduled impact
   guardResult: "block" | "parry" | null; // typed, waiting for impact
   wordsDone: number;
+}
+
+/** A hero attack in flight: resolves when the tick reaches `tick` (ATTACK_IMPACT_T after AutoAttack). */
+export interface PendingHit {
+  tick: Tick;
+  kind: "auto";
+  targetId: EntityId;
+  crit: boolean;
 }
 
 export interface EncounterState {
@@ -59,6 +82,10 @@ export interface EncounterState {
   targetPlateId: PlateId | null;
   focusEnemyId: EntityId | null;
   atbM: number;
+  pending: PendingHit[]; // scheduled hero impacts (step 2 of the tick)
+  critWords: number; // plates completed since the last auto-attack (crit share, D10)
+  critPerfect: number; // ... of which perfect
+  frozenAt: Tick | null; // Second Wind / downed freeze start (timers shift on resume)
   wordsRng: RngState;
   aiRng: RngState;
   combatRng: RngState;
@@ -78,7 +105,7 @@ export interface RunStats {
   perfectParries: number;
   hitsTaken: number;
   autoAttacks: number;
-  chipDamageM: number;
+  damageByOriginM: Record<HitOrigin, number>; // actual HP removed, by origin (skill-share metric)
 }
 
 export interface RunState {
@@ -99,8 +126,12 @@ export interface RunState {
   burstTicks: number[]; // ticks of the last <= BURST_CHARS correct chars
   burstWpm: number;
   lastBurstTick: Tick | null;
+  heroAtkM: number; // computeHeroStats(loadout).atk
   heroMaxHpM: number;
   heroHpM: number;
+  barrier: number; // absorb-the-next-hit charges (Aegis / Bulwark Streak, T1.4)
+  secondWindUsed: boolean;
+  goldCollected: number; // T1.6 pays gold; failLevel keeps FAIL_GOLD_KEEP of it
   guardsShown: number;
   encountersStarted: number;
   endTick: Tick | null;
