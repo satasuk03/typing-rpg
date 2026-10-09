@@ -87,3 +87,10 @@ against a recording fake AudioContext and fails if any oscillator or filter freq
 - **`tests/hud/typingSettings.spec.ts`:** 3/3 pass.
 - **`tests/level/typing-fx.spec.ts` (`--repeat-each=2`):** 4/4 pass, 0 readability violations (L1 26–30 probes, L10 94–96 probes). The earlier L10 "pop covers a letter" flake did not reproduce.
 - **`tests/hud/typingPerf.spec.ts`:** a first run measured 0.74–0.76 ms/key, but that run used the default port 5173 and most likely reused a stale dev server (`reuseExistingServer`). Re-measured on a unique port: main 0.457 / 0.466 ms/key (draw 0.39–0.40), just over the 0.45 budget. After the HUD perf fix (530f0cc: halo pass as one path, sparks/embers batched by colour, empty layers skipped): **0.403 / 0.417 ms/key, PASS** (A/B back to back, load 4–7). Pixel diff of the fix vs main: ≤0.048% of pixels changed, mean ≤0.006/channel (spark-overlap scatter only). **Always give Playwright perf runs a unique `PW_PORT`.**
+
+## Final main after T6.3 round 2 (orchestrator, 2026-10-10, 5d8c8ca, no agents running)
+
+- **typingPerf:** 0.403 / 0.404 / 0.421 ms/key (budget 0.45), heap growth 39–41 KB. PASS ×3.
+- **typingSettings:** 3/3.
+- **Frame budget (Metal):** 8/8; p95 16.7–16.8 ms at all tiers; tier 2 at 4× throttle cpu avg 3.4–3.6 ms (was 4.7–6.6 before round 2).
+- **typing-fx:** L1 2/2 clean. **L10 fails ~1 run in 3** on the new H3 next-letter keep-out invariant ("typing FX touch the next letter or a streak head (70 px)", tick ≈8413). Being fixed.
