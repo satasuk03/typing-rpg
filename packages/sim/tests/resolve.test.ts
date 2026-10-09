@@ -72,7 +72,7 @@ describe("resolveLevel", () => {
     expect(b).toMatchObject({
       id: "ruin-golem",
       hpM: 752_900,
-      hitM: 7980,
+      hitM: 10_370, // T6.1: 7.98 x BOSS_LEVEL_HIT_MULT 1.3
       enemyId: "ruin-golem",
       breatherTicks: 120,
       introTicks: 240,
@@ -85,7 +85,7 @@ describe("resolveLevel", () => {
     // adds pool = BOSS_ADDS_HP_ENC / BOSS_HP_ENC of the boss; the hit base is the level's encounter gruntHit
     expect(b?.phase1.addsHpPoolM).toBe(mulDiv(752_900, K.BOSS_ADDS_HP_NUM, K.BOSS_ADDS_HP_DEN));
     expect(b?.phase1.addsHpPoolM).toBe(117_640);
-    expect(b?.phase1.addsGruntHitM).toBe(5280);
+    expect(b?.phase1.addsGruntHitM).toBe(6860); // T6.1: 5.28 x BOSS_LEVEL_HIT_MULT 1.3
     expect(b?.phase2).toEqual({ endAtHpBp: 3300, doomEveryTicks: 960, minDoomSpells: 2 });
     expect(b?.phase3.minigame).toEqual({
       kind: "fallingRubble",

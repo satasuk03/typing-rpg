@@ -1,8 +1,13 @@
 # Chapter 1 balance (T6.1)
 
-`pnpm balance` reproduces every number in this document (60 seeds per level per persona, about 2 s on 12 workers). It
-also writes `tools/balance/out/balance-ch1.json`. The exit code is 1 when a plan §9 cell or a parity cell fails. A
-documented structural miss (`FAIL*`, see "Remaining deltas") fails only with `--strict`.
+`pnpm balance` reproduces every number in this document (200 seeds per level per persona, about 13 s on 12 workers). It
+also writes `tools/balance/out/balance-ch1.json`. The exit code is 1 when a target cell or a parity cell fails. The
+`FAIL*` mechanism for documented structural misses (`KNOWN_MISSES`, fails only with `--strict`) is kept, but the list is
+empty since the PO decisions of §8.
+
+Targets are plan §9, with two PO decisions (2026-10-09, §8):
+- Chapter 1 boss times come from economy_sim's own Chapter 1 model on this content: 8.1 / 4.4 / 2.8 min ±15%.
+- The Beginner's first-try boss clear must land in an 80–90% window.
 
 ## 1. What is measured
 
@@ -49,54 +54,62 @@ checks it against the Python dump.
 - A point target (~x) is a range of zero width.
 - Clear rates are floors.
 
-## 2. Final table vs plan §9
+## 2. Final table vs targets
+
+200 seeds per level per persona. Before the §8 changes, every clear cell was 100%.
 
 | Persona | Normal active, L1–L9 mean (target) | Boss active (target) | First-try clear, normal / boss (target) | Skill share (15–20%) |
 |---|---|---|---|---|
-| Beginner 20 | **4.31** (3.0–4.5) PASS | **9.01** (~5.4) FAIL* | 100% / 100% (≥80 / ≥50) PASS | 17.2% PASS |
-| Average 40 | **2.33** (2.4–3.0) PASS(±15%) | **4.44** (~4.2) PASS(±15%) | 100% / 100% (≥97 / ≥85) PASS | 16.2% PASS |
-| Fast 75 | **1.58** (1.7–2.2) PASS(±15%) | **2.90** (~3.4) PASS(±15%), at the edge | 100% / 100% (≥99 / ≥90) PASS | 15.2% PASS |
-| Reference 35 | auto-attacks per encounter **11.6** (~11) PASS(±15%) | | | 16.3% |
+| Beginner 20 | **4.31** (3.0–4.5) PASS | **8.68** (~8.1) PASS(±15%) | **99.9%** (worst level 99.5%) / **85.0%** (≥80 / 80–90 window) PASS | 17.0% PASS |
+| Average 40 | **2.33** (2.4–3.0) PASS(±15%) | **4.46** (~4.4) PASS(±15%) | 100% / 100% (≥97 / ≥85) PASS | 16.1% PASS |
+| Fast 75 | **1.58** (1.7–2.2) PASS(±15%) | **2.95** (~2.8) PASS(±15%) | 100% / 100% (≥99 / ≥90) PASS | 15.2% PASS |
+| Reference 35 | auto-attacks per encounter **11.6** (~11) PASS(±15%) | | | 16.4% |
+
+The Beginner's boss clear is 87.4% over 1000 seeds (85.0% at the default 200, whose standard error is about ±2.5
+points).
 
 **Parity with economy_sim's Chapter 1 model on this content.** Every cell passes.
 
 | Persona | Normal: sim / Py, mean (worst level) | Boss: sim / Py | Clear vs Py Ch1 row (100%) |
 |---|---|---|---|
-| Beginner | 1.05 (1.13) | 1.11 (9.01 vs 8.09 min) | 100% / 100% |
-| Average | 1.02 (1.09) | 1.01 (4.44 vs 4.38) | 100% / 100% |
-| Fast | 1.06 (1.12) | 1.04 (2.90 vs 2.80) | 100% / 100% |
+| Beginner | 1.05 (1.13) | 1.07 (8.68 vs 8.09 min) | 99.9% normal; boss clear is set by the PO window instead (§8) |
+| Average | 1.02 (1.09) | 1.02 (4.46 vs 4.38) | 100% / 100% |
+| Fast | 1.06 (1.12) | 1.06 (2.95 vs 2.80) | 100% / 100% |
 
-**Per level** (active minutes, sim vs Py, mean auto-attacks per encounter, skill share, mean damage taken per run):
+**Per level** (clear, active minutes sim vs Py, mean auto-attacks per encounter, skill share, mean damage taken per
+run):
 
 | Level | Beginner | Average | Fast |
 |---|---|---|---|
-| L1 (2 enc, tutorial) | 3.15 vs 2.81, 12.0 auto, 18.7%, 26 dmg | 1.73 vs 1.59, 11.7, 17.9%, 4 | 1.21 vs 1.07, 12.1, 16.7%, 2 |
-| L2 (2 enc) | 3.03 vs 2.85, 11.7, 16.8%, 35 | 1.66 vs 1.61, 10.9, 16.3%, 14 | 1.16 vs 1.08, 11.0, 15.4%, 6 |
-| L3 | 4.18 vs 4.27, 11.2, 17.9%, 19 | 2.29 vs 2.38, 10.5, 16.6%, 7 | 1.60 vs 1.57, 10.6, 15.2%, 3 |
-| L4 | 4.92 vs 4.34, 12.9, 17.6%, 47 | 2.58 vs 2.41, 12.4, 16.6%, 9 | 1.77 vs 1.58, 12.6, 15.7%, 3 |
-| L5 | 4.60 vs 4.41, 12.3, 16.9%, 37 | 2.51 vs 2.44, 11.5, 16.3%, 8 | 1.71 vs 1.60, 11.7, 14.8%, 4 |
-| L6 | 4.68 vs 4.47, 12.4, 17.1%, 30 | 2.60 vs 2.47, 12.1, 16.2%, 9 | 1.72 vs 1.61, 12.1, 15.3%, 4 |
-| L7 | 4.75 vs 4.54, 12.5, 17.7%, 40 | 2.60 vs 2.50, 11.9, 15.7%, 10 | 1.70 vs 1.62, 11.9, 14.5%, 5 |
-| L8 | 4.46 vs 4.61, 11.8, 16.4%, 19 | 2.36 vs 2.53, 10.6, 15.3%, 6 | 1.60 vs 1.64, 10.2, 14.6%, 2 |
-| L9 | 5.00 vs 4.67, 13.2, 17.3%, 26 | 2.63 vs 2.56, 12.4, 16.7%, 8 | 1.75 vs 1.65, 12.4, 15.4%, 3 |
-| L10 boss | 9.01 vs 8.09, 0/1012 rubble missed, 0% Second Wind | 4.44 vs 4.38, 0/734 missed | 2.90 vs 2.80, 0/406 missed |
+| L1 (2 enc, tutorial) | 100%, 3.12 vs 2.81, 12.0 auto, 18.3%, 57 dmg | 100%, 1.73 vs 1.59, 11.7, 17.4%, 16 | 100%, 1.20 vs 1.07, 12.0, 16.4%, 6 |
+| L2 (2 enc) | 99.5%, 3.01 vs 2.85, 11.6, 16.5%, 59 | 100%, 1.65 vs 1.61, 10.8, 16.2%, 19 | 100%, 1.16 vs 1.08, 11.0, 15.9%, 8 |
+| L3 | 100%, 4.27 vs 4.27, 11.3, 17.6%, 38 | 100%, 2.30 vs 2.38, 10.4, 16.5%, 11 | 100%, 1.60 vs 1.57, 10.6, 15.4%, 4 |
+| L4 | 100%, 4.91 vs 4.34, 12.9, 17.5%, 83 | 100%, 2.61 vs 2.41, 12.3, 16.4%, 24 | 100%, 1.76 vs 1.58, 12.6, 15.4%, 6 |
+| L5 | 99.5%, 4.68 vs 4.41, 12.3, 16.9%, 70 | 100%, 2.52 vs 2.44, 11.6, 16.1%, 23 | 100%, 1.70 vs 1.60, 11.7, 14.8%, 7 |
+| L6 | 100%, 4.71 vs 4.47, 12.6, 16.8%, 60 | 100%, 2.59 vs 2.47, 12.0, 16.2%, 20 | 100%, 1.72 vs 1.61, 12.1, 15.1%, 6 |
+| L7 | 100%, 4.73 vs 4.54, 12.6, 17.7%, 75 | 100%, 2.59 vs 2.50, 11.9, 15.9%, 25 | 100%, 1.71 vs 1.62, 12.0, 14.6%, 8 |
+| L8 | 100%, 4.46 vs 4.61, 11.7, 16.5%, 50 | 100%, 2.36 vs 2.53, 10.6, 15.0%, 12 | 100%, 1.59 vs 1.64, 10.2, 14.5%, 3 |
+| L9 | 100%, 4.94 vs 4.67, 13.1, 17.1%, 58 | 100%, 2.63 vs 2.56, 12.4, 16.5%, 18 | 100%, 1.75 vs 1.65, 12.4, 15.5%, 5 |
+| L10 boss | **85.0%**, 8.68 vs 8.09, 110 dmg, Second Wind in 20% of runs, 0 / 2869 rubble missed | 100%, 4.46 vs 4.38, 24 dmg | 100%, 2.95 vs 2.80, 5 dmg |
 
-- **Boss phases** (min, Beginner / Average / Fast):
+- **Boss phases** (min):
 
   | Phase | Beginner | Average | Fast |
   |---|---|---|---|
-  | Pre-boss waves | 2.79 | 1.58 | 1.10 |
-  | Phase 1 | 1.71 | 0.77 | 0.37 |
-  | Phase 2 (Doom) | 2.51 | 1.03 | 0.81 |
-  | Phase 3 + finisher | 1.83 | 0.90 | 0.45 |
+  | Pre-boss waves | 2.70 | 1.58 | 1.12 |
+  | Phase 1 | 1.67 | 0.77 | 0.39 |
+  | Phase 2 (Doom) | 2.36 | 1.05 | 0.82 |
+  | Phase 3 + finisher | 1.78 | 0.90 | 0.46 |
 
-- **Damage by origin** (Average): weapon 58%, chip 18%, skill 16%, counter 6%, rubble 1%. All Fireball, since Aegis does
-  no damage.
-- **Chapter 1 gold** for first clears (level and chest gold): 2180 / 2150 / 2195 for Beginner / Average / Fast.
-- **Damage taken.** The reference typist takes **44.6 per level** without a defensive build (no Aegis or Iron Will), at
-  60% guard. The budget is 44.0, from `DMG_FRAC` 0.40 × par HP × saw. With the starter kit the same typist takes 10.2.
-  - The Beginner takes 31 per level with the starter kit. Without it they take 90 per level and clear 97% of normal
-    levels and 80% of boss runs.
+- **Damage by origin** (Average): weapon 58%, chip 18%, skill 16%, counter 6%, rubble 1%. All the skill damage is
+  Fireball, since Aegis does no damage.
+- **Chapter 1 gold** for first clears (level and chest gold): about 2110–2180 per persona.
+- **Damage taken.**
+  - The reference typist takes **44.6 per level** without a defensive build (no Aegis or Iron Will), at 60% guard. The
+    budget is 44.0, from `DMG_FRAC` 0.40 × par HP × saw.
+  - With the starter kit the same typist now takes **23.5** per level. Before §8 it took 10.2, so the kit's damage
+    reduction went from 77% to 47%.
+  - The Beginner takes 61 per level with the starter kit (31 before §8).
 
 ## 3. Diagnosis: why the pre-T6.1 numbers missed
 
@@ -171,9 +184,9 @@ content multipliers.
 - `CONTENT_VERSION` 9d21ae83 → 2de9e929 (`build-version`).
 - `tests/fixtures/golden-typing.json`: only `golem-40wpm` and `golem-20wpm-sw` change. Both use real content at a pace
   other than 35, so the boss timers move.
-  - `golem-20wpm-sw` now uses a barrier-free build with a 40% guard attempt rate and seed 4245. With the knob on, the
-    starter kit at 20 WPM never needs a Second Wind at the boss, and this scenario must still cover a mid-boss Second
-    Wind.
+  - `golem-20wpm-sw` used a barrier-free build with a 40% guard attempt rate and seed 4245. With the knob on, the
+    starter kit at 20 WPM never needed a Second Wind at the boss, and this scenario must still cover a mid-boss Second
+    Wind. §8.2 superseded this: the scenario is back on the starter kit.
 - `resolve.test.ts`: L4 encounter values.
 - `refBot.test.ts`: the no-skill band for auto-attacks per encounter is now 12.5–16.5.
 - `bossBot.test.ts`: new assertion that fewer than 5% of rubble words are missed.
@@ -198,44 +211,32 @@ Pace 35 is unchanged, so every T1.5 boss unit test still holds.
 
 ## 6. Remaining deltas and risks
 
-- **Beginner boss 9.0 min vs ~5.4 (FAIL\*). This cannot be reached by tuning.**
-  - economy_sim itself puts a 20 WPM Chapter 1 boss at about 7.4 min (8.1 on this content); the 5.4 is a 30-chapter
-    average.
-  - Cutting boss HP enough to reach 6.2 min (−35%) would take Average to about 3.3 min (FAIL) and Fast to about 2.2 min
-    (FAIL).
-  - Even pace-adaptive boss HP at the Python's own clamp does not get there. With `--whatif hpPaceExp=0.7`, plus the
-    Python's 235 HP pre-boss pool, the boss lands at 6.8 / 4.4 / 3.1 min.
-  - **Proposed rule changes, for the PO:**
-    - **(a)** Set the Chapter 1 boss targets from economy_sim's model on this content: 8.1 / 4.4 / 2.8 min, ±15%. All
-      of these pass today (1.11 / 1.01 / 1.04).
-    - **(b)** If the 20 WPM boss must be about 6 min:
-      - make boss HP pace-adaptive with economy_sim's `HP_PACE_EXP` (boss only, x ≈ 0.5–0.7, clamp 0.7–1.4). Doc 02 C1
-        currently rejects pace-adaptive HP.
-      - and make Doom Spell characters pay ATB, or give slow paces fewer and shorter spells.
-      - Pace-adaptive boss HP alone measures 7.2–7.5 / 4.6 / 3.2 min (`--whatif hpPaceExp=0.5` or `0.7`). The last
-        ~1 min for the Beginner would have to come from the Doom change, which the what-if layer cannot model; the
-        Beginner spends 2.5 min in phase 2.
-- **Fast boss 2.90 vs ≥ 2.89.** This passes the ±15% band at its edge, for the same structural reason.
-  - economy_sim budgets `BOSS_EXTRA_S` 30 s for the intro dialogue, breathers and finisher. The sim models only the
-    4 s intro and 2 × 2 s breathers, plus the typed finisher.
-  - A real boss-intro dialogue in the client (T3.x) would add that time back to every persona and move Fast to about 3.1
-    min.
+- **Boss times against §9's story-wide 5.4 / 4.2 / 3.4 min.** This was the earlier `FAIL*` and is resolved by the PO
+  decision in §8.1.
+  - Background: economy_sim puts a 20 WPM Chapter 1 boss at about 7.4 min (8.1 on this content).
+  - No pace-independent knob makes 20 and 75 WPM land within 1.6× of each other.
+  - If the PO later wants a ~6 min boss at 20 WPM, the measured options are:
+    - pace-adaptive boss HP with economy_sim's `HP_PACE_EXP`: 7.2–7.5 / 4.6 / 3.2 min with `--whatif hpPaceExp=0.5`
+      or `0.7`;
+    - plus a Doom change (spell characters pay ATB, or fewer and shorter spells at slow paces). Phase 2 alone is
+      2.4 min for the Beginner.
+- **The Beginner's boss clear (85% at 200 seeds, 87% at 1000) sits in the middle of the 80–90% window**, but it is a
+  probability.
+  - It is sensitive to the bot model. The bot's guard attempt rate (0.60) is calibrated to economy_sim's guard of 0.40.
+  - It is also sensitive to gimmick reading cost, which the bot gets for free.
+  - With the bot guarding every word, the 20 WPM boss clear is still 100% (`bossBot.test.ts`). The fails come from
+    unguarded hits.
+  - Re-check it with T6.2 playtests.
 - **Average 2.33 and Fast 1.58 normal-level times** sit just under §9's ranges, inside the ±15% band. Matching the
   Python makes them land where economy_sim's own model lands.
   - Raising HP until they enter the range would push the Beginner over 4.5 min and the reference to about 12.5
     auto-attacks.
-  - The 2-encounter L1–L2 pull the mean down. For 3-encounter levels alone the times are 4.66 / 2.51 / 1.69.
-- **The starter kit makes Chapter 1 nearly risk-free.** Aegis plus Iron Will remove about 77% of the incoming damage:
-  10 per level instead of 45 for the reference typist.
-  - Clear rates are 100% for every persona, against economy_sim's 100% for Chapter 1, so this is not a §9 miss.
-  - It does make the starter kit the dominant defensive choice. Consider it in T4.x/T6.x skill tuning (Aegis has charge
-    10 and absorbs 2 hits).
-  - A build without defence is the one economy_sim's damage budget describes: the Beginner clears 97% of normal levels
-    and 80% of boss runs that way.
+  - The 2-encounter L1–L2 pull the mean down. For 3-encounter levels alone the times are 4.67 / 2.51 / 1.69.
+- **Fast boss 2.95 vs 2.8.** Inside the band. economy_sim's `BOSS_EXTRA_S` (30 s of intro dialogue, breathers and
+  finisher) is only partly modelled by the sim. A client boss-intro dialogue would add about 15 s for every persona.
 - **The bot is optimistic about gimmicks.** It reads scrambled and faded words for free. Real players will be slower on
   L4–L9 and on the phase-1 adds. The Playwright bot and playtests in T6.2 should check this.
-- **No player in the runs used a Second Wind on any normal level.** Second Wind is only exercised by the golden scenario
-  and by builds without defence.
+- **Second Wind on normal levels is rare.** Even after §8 it fires in about 0.5% of Beginner runs, on L2 and L5 only.
 
 ## 7. Knobs and procedure for future chapters
 
@@ -259,3 +260,62 @@ Pace 35 is unchanged, so every T1.5 boss unit test still holds.
    - Boss-script timers follow the pace (`BOSS_SCRIPT_PACE_SCALE`).
    - Watch the "rubble miss", "Doom fail" and "SW" columns, and the boss phase split.
    - Phase 2 is the slow-typist bottleneck, because Doom Spells pay no ATB.
+
+## 8. PO decisions of 2026-10-09 (T6.1 follow-up)
+
+### 8.1 Chapter 1 boss time targets
+
+§9's boss times (5.4 / 4.2 / 3.4 min) are 30-chapter averages (§3.5). For Chapter 1 the targets are economy_sim's own
+Chapter 1 model on this content: **8.1 / 4.4 / 2.8 min, ±15%**. Normal-level times keep §9's ranges.
+
+- **Tool:** `PLAN_TARGETS` boss times are 8.1 / 4.4 / 2.8, and `KNOWN_MISSES` is now empty.
+- **`bossBot.test.ts`:** now checks every tier's boss time (+10 s level end) against these targets ±15%.
+
+### 8.2 "Add some risk": a weaker starter kit, and the Beginner boss clear at about 80–90%
+
+The PO asked for the Beginner's first-try boss clear in an **80–90%** window, with every other §9 clear target held.
+Every persona was at 100% before.
+
+**The defensive skills alone cannot reach the window.** Beginner boss clear, 200 seeds:
+
+| Aegis charge / barrier hits, Iron Will | Beginner boss clear |
+|---|---|
+| 10 / 2, 0.10 (before) | 100% |
+| 10 / 1, 0.10 | 98.5% |
+| 10 / 1, 0.20 | 98.5% |
+| 14 / 1, 0.20 | 96.0% |
+| 18 / 1, 0.20 | 96.0% |
+| No Aegis or Iron Will at all | about 80–87% |
+
+- Iron Will barely matters at the boss, because the Beginner blocks little.
+- Getting to about 85% would need Aegis to be practically useless (charge 25 or more).
+
+So the change combines a moderate nerf with the smallest alternative the orchestrator named: **an L10-only hit
+multiplier**.
+
+| Knob | Where | From → to | Why |
+|---|---|---|---|
+| Aegis | `BALANCE.SKILLS.aegis` | charge 10 → **12**, barrier_hits 2 → **1** | Absorbs per word 0.2 → 0.083. The starter kit's damage reduction goes from 77% to 47% (reference typist 10.2 → 23.5 per level). |
+| Iron Will | `BALANCE.IRON_WILL_BLOCK_MULT` (and the mirror `PASSIVES.ironWill.block_mult`) | 0.10 → **0.15** | A block takes 15% instead of 10%, still better than the base 20%. |
+| `BOSS_LEVEL_HIT_MULT` (new) | `levels.ts`; applied to L10's wave `gruntHit` (and so the phase-1 adds) and to the Ruin Golem's `hit` in `bosses.ts` | 1 → **1.3**. 5.28 → 6.86, 7.98 → 10.37 | Lands the Beginner boss clear at 85.0% (200 seeds) and 87.4% (1000 seeds). Sweep: ×1.0 gives 97.5%, ×1.3 gives 85.0%, ×1.6 gives 69.0%. Rubble miss (6) and Doom damage (15% par HP) are unchanged. |
+
+**First-try clears, before → after** (200 seeds):
+
+| Persona | Normal (mean, worst level) | Boss |
+|---|---|---|
+| Beginner 20 | 100% → **99.9%** (99.5% on L2, L5) | 100% → **85.0%** |
+| Average 40 | 100% → 100% | 100% → 100% |
+| Fast 75 | 100% → 100% | 100% → 100% |
+
+- Average and Fast boss runs take 24 and 5 damage, so they keep a large margin.
+- Times are unchanged within noise.
+- Skill share is unchanged: Aegis does no damage. Fireball stays at 1.3×.
+
+**Fixtures and tests.**
+- `CONTENT_VERSION` → ca6ebf5a.
+- `golden-typing.json` is regenerated: Aegis and Iron Will appear in the kit and golem scenarios.
+  - `golem-20wpm-sw` is back on the starter kit, with a 60% guard attempt rate (the Beginner's calibrated rate) and
+    seed 4246. It covers a mid-boss Second Wind that still clears.
+- `skills.test.ts` and `combat.test.ts` (Aegis 1 barrier, chargeFrac 0.125, Iron Will 0.75 of 5) and `resolve.test.ts`
+  (boss hit 10.37, adds hit 6.86) are updated.
+- `bossBot.test.ts` asserts that a 20 WPM typist guarding 60% of attacks now fails some boss runs.

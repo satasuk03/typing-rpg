@@ -93,10 +93,12 @@ const row = (name: string, m: Measured): string =>
   `${name.padEnd(34)} clear ${m.cleared}/${m.n} (${Math.round((100 * m.cleared) / m.n)}%)  total ${m.totalMin.toFixed(2)} min  active ${m.activeMin.toFixed(2)} min  SW ${m.secondWind}/${m.n}  hits/run ${(m.hits / m.n).toFixed(1)}  doom fail ${m.doomsFailed}/${m.doomsStarted}  rubble miss ${m.rubbleMissed}/${m.rubbleSpawned}`;
 
 describe("boss level ch1-l10 (starter kit, 30 seeds per tier) vs plan §9", () => {
+  // Boss times: PO 2026-10-09, economy_sim's own Chapter 1 model on this content (8.1 / 4.4 / 2.8 min +-15%, active time
+  // incl. the 10 s level-end screen); clears: plan §9 floors.
   const TARGET = {
-    "20 WPM": { min: 5.4, clear: 50 },
-    "40 WPM": { min: 4.2, clear: 85 },
-    "75 WPM": { min: 3.4, clear: 90 },
+    "20 WPM": { min: 8.1, clear: 50 },
+    "40 WPM": { min: 4.4, clear: 85 },
+    "75 WPM": { min: 2.8, clear: 90 },
   };
   for (const tier of TIERS) {
     test(`${tier.name}: ${tier.acc * 100}% accuracy`, () => {
@@ -109,13 +111,13 @@ describe("boss level ch1-l10 (starter kit, 30 seeds per tier) vs plan §9", () =
       // T6.1 BOSS_SCRIPT_PACE_SCALE: rubble timing follows the pace, so even 20 WPM misses (almost) no falling word
       // (T1.5 without it: 43% missed, 63% clears). Before: 458/1056 missed at 20 WPM.
       expect(m.rubbleMissed / Math.max(1, m.rubbleSpawned)).toBeLessThan(0.05);
-      // the 40 WPM level time lands in the plan's window (4.2 min +-15%). The 20 and 75 WPM times (~8.2 / ~2.7 min here,
-      // without the level-end screen) are the structural deltas of docs/balance-ch1.md (plan §9's boss times are
-      // story-wide averages; `pnpm balance` reproduces the persona numbers).
-      if (tier.wpm === 40) {
-        expect(m.totalMin).toBeGreaterThan(4.2 * 0.85);
-        expect(m.totalMin).toBeLessThan(4.2 * 1.15);
-      }
+      // level time (+ the 10 s level-end screen) within +-15% of the Chapter 1 target at every tier
+      const active = m.totalMin + 10 / 60;
+      expect(active).toBeGreaterThan(t.min * 0.85);
+      expect(active).toBeLessThan(t.min * 1.15);
+      // T6.1 "add some risk" (weaker Aegis / Iron Will, BOSS_LEVEL_HIT_MULT): guarding only 60% of the attacks, a 20 WPM
+      // typist now fails some boss runs (the persona runner, 200 seeds, puts the Beginner at ~85-87%)
+      if (tier.wpm === 20) expect(p.cleared / p.n).toBeLessThan(1);
       // a stuck script would show up as a timeout (T1.5 found one: a Break ending after the Finisher resumed boss attacks)
       expect(m.timeouts + p.timeouts).toBe(0);
     }, 120_000);

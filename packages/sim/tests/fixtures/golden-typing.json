@@ -63,8 +63,8 @@
       "skillsCast": 0
     },
     "kit-starter": {
-      "state": "ce4c18f6",
-      "events": "5751ccc9",
+      "state": "81bd959f",
+      "events": "ca139882",
       "inputs": 67,
       "endTick": 1789,
       "outcome": "cleared",
@@ -93,8 +93,8 @@
       "skillsCast": 3
     },
     "golem-40wpm": {
-      "state": "4fa8a964",
-      "events": "1eca2095",
+      "state": "f08dd6fc",
+      "events": "6ff3d163",
       "inputs": 629,
       "endTick": 15334,
       "outcome": "cleared",
@@ -103,14 +103,14 @@
       "skillsCast": 16
     },
     "golem-20wpm-sw": {
-      "state": "f0480b5e",
-      "events": "0bff448c",
-      "inputs": 761,
-      "endTick": 32963,
+      "state": "d54cd7bb",
+      "events": "8c25c2ea",
+      "inputs": 767,
+      "endTick": 32000,
       "outcome": "cleared",
-      "autoAttacks": 47,
+      "autoAttacks": 49,
       "secondWindUsed": true,
-      "skillsCast": 10
+      "skillsCast": 19
     }
   }
 }

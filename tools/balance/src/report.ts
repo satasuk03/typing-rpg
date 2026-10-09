@@ -8,7 +8,11 @@ import type { WhatIf } from "./whatif.ts";
 
 // ---------------------------------------------------------------- targets
 
-/** Plan §9 (economy_sim v2, docs/brainstorm/02 §"Time per level"). Times in minutes, rates as fractions. */
+/**
+ * Plan §9 (economy_sim v2, docs/brainstorm/02 §"Time per level"). Times in minutes, rates as fractions.
+ * Boss times: PO decision 2026-10-09 (T6.1 follow-up): §9's 5.4 / 4.2 / 3.4 are 30-chapter averages, so Chapter 1 uses
+ * economy_sim's own Chapter 1 model on this content (8.1 / 4.4 / 2.8 min, ±15%). Normal-level times keep §9's ranges.
+ */
 export const PLAN_TARGETS: Record<
   "beginner" | "average" | "fast",
   {
@@ -16,26 +20,29 @@ export const PLAN_TARGETS: Record<
     bossMin: number;
     clearNormal: number;
     clearBoss: number;
+    /** PO 2026-10-09 ("add some risk"): first-try boss clear window, checked as its own cell. */
+    clearBossWindow?: [number, number];
     skillShare: [number, number];
   }
 > = {
   beginner: {
     normalMin: [3.0, 4.5],
-    bossMin: 5.4,
+    bossMin: 8.1,
     clearNormal: 0.8,
     clearBoss: 0.5,
+    clearBossWindow: [0.8, 0.9],
     skillShare: [0.15, 0.2],
   },
   average: {
     normalMin: [2.4, 3.0],
-    bossMin: 4.2,
+    bossMin: 4.4,
     clearNormal: 0.97,
     clearBoss: 0.85,
     skillShare: [0.15, 0.2],
   },
   fast: {
     normalMin: [1.7, 2.2],
-    bossMin: 3.4,
+    bossMin: 2.8,
     clearNormal: 0.99,
     clearBoss: 0.9,
     skillShare: [0.15, 0.2],
@@ -227,11 +234,10 @@ export interface Cell {
 }
 
 /**
- * Plan §9 cells that cannot be met without a rule change (docs/balance-ch1.md "Remaining deltas"): §9's boss times are
- * economy_sim's 30-chapter averages, and its own Chapter 1 model puts a 20 WPM Ruin Golem at ~7.4 min (8.1 on this
- * content). Listed as persona:metric.
+ * Target cells that cannot be met without a rule change, listed as persona:metric (docs/balance-ch1.md). Empty since the
+ * PO set the Chapter 1 boss targets from economy_sim's Chapter 1 model (2026-10-09).
  */
-export const KNOWN_MISSES: readonly string[] = ["beginner:boss active min"];
+export const KNOWN_MISSES: readonly string[] = [];
 
 const inRange = (v: number, lo: number, hi: number): Verdict =>
   v >= lo && v <= hi ? "PASS" : v >= lo * (1 - TOL) && v <= hi * (1 + TOL) ? "PASS(±15%)" : "FAIL";
@@ -281,6 +287,20 @@ export function verdicts(sums: readonly PersonaSummary[]): Cell[] {
         target: `>=${t.clearBoss}`,
         verdict: atLeast(s.bossClear, t.clearBoss),
       },
+      ...(t.clearBossWindow === undefined
+        ? []
+        : [
+            {
+              persona: s.persona,
+              metric: "first-try clear boss (PO window)",
+              value: s.bossClear,
+              target: `${t.clearBossWindow[0]}-${t.clearBossWindow[1]}`,
+              verdict:
+                s.bossClear >= t.clearBossWindow[0] && s.bossClear <= t.clearBossWindow[1]
+                  ? ("PASS" as const)
+                  : ("FAIL" as const),
+            },
+          ]),
       {
         persona: s.persona,
         metric: "skill damage share",
@@ -344,14 +364,17 @@ export function parityCells(rows: readonly LevelRow[], sums: readonly PersonaSum
         target: `>=${py.clear - TOL}`,
         verdict: atLeast(s.normalClear, py.clear - TOL),
       },
-      {
+    );
+    // The Beginner's boss clear is set by the PO window (80-90%) instead: economy_sim's 100% leans on the 50% feather
+    // revive, which the slice does not ship.
+    if (PLAN_TARGETS[s.persona].clearBossWindow === undefined)
+      cells.push({
         persona: s.persona,
         metric: "first-try clear boss vs Py Ch1",
         value: s.bossClear,
         target: `>=${py.boss - TOL}`,
         verdict: atLeast(s.bossClear, py.boss - TOL),
-      },
-    );
+      });
   }
   return cells;
 }
@@ -407,7 +430,7 @@ export function markdown(rep: Report): string {
     "Active time = sim time (intro, walks, wave intros, combat, rewards, boss breathers) + LEVEL_END_S 10 s, i.e.",
     "economy_sim's `win_secs - MENU_S - JOURNAL_S`. Means over cleared runs. Py = economy_sim's analytic model on this content.",
     "",
-    "## Plan §9 verdicts",
+    "## Plan §9 verdicts (boss times: economy_sim Ch1 model, PO 2026-10-09)",
     "",
     table(
       ["Persona", "Metric", "Value", "Target", "Verdict"],

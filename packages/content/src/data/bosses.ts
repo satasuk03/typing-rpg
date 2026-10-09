@@ -1,5 +1,6 @@
 import { BossDef } from "../schemas.ts";
 import { RUIN_GOLEM_FINISHER_TEXT } from "./boss.ts";
+import { bossLevelHit } from "./levels.ts";
 
 /**
  * The Ruin Golem (doc 01 section 4.2 three-phase template, interfaces 3.4 and D14-D16).
@@ -17,7 +18,7 @@ export const RUIN_GOLEM: BossDef = BossDef.parse({
   title: "Warden of the Hollow",
   enemyId: "ruin-golem",
   hp: 752.9,
-  hit: 7.98,
+  hit: bossLevelHit(7.98), // T6.1: x BOSS_LEVEL_HIT_MULT (levels.ts)
   plateLength: [4, 7],
   phase1: {
     endAtHpPct: 66,

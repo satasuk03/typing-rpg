@@ -56,6 +56,7 @@ export function applyWhatIf(def: ResolvedLevel, w: WhatIf, pace: number): Resolv
   if (b !== null) {
     const m = (w.bossHp ?? 1) * hpPace;
     b.hpM = r(b.hpM * m);
+    b.hitM = r(b.hitM * (w.hit ?? 1));
     if (b.phase1.addsHpPoolM !== undefined) b.phase1.addsHpPoolM = r(b.phase1.addsHpPoolM * m);
     if (b.phase1.addsGruntHitM !== undefined)
       b.phase1.addsGruntHitM = r(b.phase1.addsGruntHitM * (w.hit ?? 1));

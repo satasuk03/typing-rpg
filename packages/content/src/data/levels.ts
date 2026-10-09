@@ -44,7 +44,16 @@ export const ENC_HP_MULT = 1.2;
  * The starter kit's Aegis and Iron Will then show up as damage below the budget, which is their value.
  */
 export const HIT_MULT = 1.34;
+/**
+ * T6.1 knob (PO 2026-10-09 "add some risk"): x every hit of the boss level L10 (its waves' gruntHit, which the phase-1 adds
+ * also use, and the Ruin Golem's hit in bosses.ts). With the weaker starter kit (Aegis 12 / 1 barrier, Iron Will 0.15) the
+ * 20 WPM Beginner's first-try boss clear lands at ~85% (target 80-90%); the Aegis/Iron Will knobs alone cannot get there
+ * (even no Aegis at all gives ~96%).
+ */
+export const BOSS_LEVEL_HIT_MULT = 1.3;
 const r1 = (x: number): number => Math.round(x * 100) / 100;
+/** L10 hits: authored value x BOSS_LEVEL_HIT_MULT. */
+export const bossLevelHit = (authored: number): number => r1(authored * BOSS_LEVEL_HIT_MULT);
 const hp = (authored: number): number => r1(authored * ENC_HP_MULT);
 const hit = (authored: number): number => r1(authored * HIT_MULT);
 /** parRefS from the authored value: its HP part (sum HP / 5.54 HP/s) scales with ENC_HP_MULT, the 2 s wave intros do not. */
@@ -240,11 +249,11 @@ export const LEVELS: LevelDef[] = [
     star3: { kind: "guardian", parries: 6 },
     segments: chain(
       [
-        enc("Approach Cave", 75, 5.28, [gs(), mu()], [gr(), bt(), ms()]),
+        enc("Approach Cave", 75, bossLevelHit(5.28), [gs(), mu()], [gr(), bt(), ms()]),
         enc(
           "Rune Ring",
           65,
-          5.28,
+          bossLevelHit(5.28),
           [bt(), bt(), mu()],
           [gs(), gs(), bt()],
           [gr(), gs("fading"), mu("scrambled")],
