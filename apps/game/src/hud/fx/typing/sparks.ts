@@ -21,7 +21,9 @@ const KIND = 0;
 const COL = 1;
 const LAYER = 2;
 
-const HALO = "#140a06";
+/** Dark warm underlay of every pixel spark (T6.3 R2 P2-7: 2 px, alpha 0.65 so tier 0-1 sparks read on bright forest). */
+const HALO = "#2a1606";
+const HALO_ALPHA = 0.65;
 // scratch for the colour-grouped draw (module level: nothing is allocated per frame)
 const CI = new Uint8Array(POOL_CAP.sparks);
 const ORDER = new Uint16Array(POOL_CAP.sparks);
@@ -163,12 +165,12 @@ export class SparkField {
     const col = p.b[COL] as Uint8Array;
     const lay = p.b[LAYER] as Uint8Array;
     const n = p.count;
-    const o = Math.max(1, Math.round(S));
+    const o = Math.max(1, Math.round(S)) + 1;
     const arm = Math.max(4, Math.round(4.5 * S));
     // pass 1: a dark halo under every pixel spark (constant style, plain fillRects: cheaper than one big
     // path of rect subpaths), so the sparks read on bright worlds too (additive light alone vanishes)
     let anyLine = false;
-    c.globalAlpha = 0.4;
+    c.globalAlpha = HALO_ALPHA;
     c.fillStyle = HALO;
     c.beginPath();
     let nHalo = 0;
@@ -202,7 +204,7 @@ export class SparkField {
           (y[i] as number) - (vy[i] as number) * 0.05,
         );
       }
-      c.globalAlpha = 0.4;
+      c.globalAlpha = HALO_ALPHA;
       c.strokeStyle = HALO;
       c.lineWidth = 3.5 * S;
       c.stroke();
@@ -353,7 +355,12 @@ export function emitLetterSparks(
   colourOverride = -1,
 ): void {
   const n = Math.round(
-    (STREAK_STYLE.sparks[tier] as number) * SPARK_BOOST * env.k * env.q * (isLast ? 1.5 : 1),
+    (STREAK_STYLE.sparks[tier] as number) *
+      SPARK_BOOST *
+      (tier <= 1 ? 1.2 : 1) * // T6.3 R2 P2-7: 6 sparks per key instead of 5 at tier 0-1
+      env.k *
+      env.q *
+      (isLast ? 1.5 : 1),
   );
   const rng = env.rng;
   const S = env.S;

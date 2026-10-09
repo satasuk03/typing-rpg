@@ -83,7 +83,15 @@ const WTIP = { x: 0, y: 0 };
 /** Lock-on / finisher ring radius cap (design px; polish #18). */
 const RING_MAX = 120;
 const ATBR = { x: 0, y: 0, w: 0, h: 0 };
+const KR: RectLike = { x: 0, y: 0, w: 0, h: 0 };
 const SAMPLES = 4096;
+/** Keep-out kinds (T6.3 R2 P2-2/3/6): VFX drawn above the HUD never touch these. */
+const KO_PANEL = 0;
+const KO_LABEL = 1;
+const KO_NEXT = 2;
+/** Extra clearance of the next-letter rect for ATB streak heads (head sprite radius, CSS px at S=1). */
+const STREAK_HEAD_PAD = 6;
+const KO_CAP = 24;
 
 export class TypingHudFx {
   private readonly sparks = new SparkField();
@@ -126,6 +134,16 @@ export class TypingHudFx {
   private readonly samples = new Float32Array(SAMPLES);
   private nSamples = 0;
   private parts: Record<string, number> = {};
+  /** Keep-out rects (CSS px, integer-aligned), rebuilt each frame the above layer draws. */
+  private readonly ko: RectLike[] = Array.from({ length: KO_CAP }, () => ({
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+  }));
+  private readonly koKind = new Uint8Array(KO_CAP);
+  private koN = 0;
+  private koNext = -1;
   private lap(name: string, t0: number): number {
     const t = performance.now();
     this.parts[name] = (this.parts[name] ?? 0) + (t - t0);
@@ -200,12 +218,14 @@ export class TypingHudFx {
     this.hud.fx.add(above);
     const off = this.hud.onUpdate((dt, view) => this.update(dt, view));
     this.hud.setTypingFxAttached(true);
+    this.hud.setKeepOutProbe(() => this.debugKeepOutPixels());
     this.hud.setQuality(this.quality);
     const detach = (): void => {
       this.hud.fx.remove(behind);
       this.hud.fx.remove(above);
       off();
       this.hud.setTypingFxAttached(false);
+      this.hud.setKeepOutProbe(null);
       this.hud.setGhostOnComplete(true);
       this.attached = false;
     };
@@ -387,7 +407,11 @@ export class TypingHudFx {
       this.tierFx.tierUp(to, R, this.sparks, this.env, hud.getSettings().reducedFlash);
       if (id >= 0 && !hud.getSettings().reducedFlash && hud.getSettings().effectsIntensity > 0)
         hud.plateFx.flashBorder(id, 60, 200);
-    } else this.tierFx.setTier(to);
+    } else {
+      // typo step-down: re-tint to the lower tier (cross-fade) with a brief subtle pulse, no tier-up burst
+      this.tierFx.setTier(to);
+      if (to > 0 && !hud.getSettings().reducedFlash) hud.triggerTierFlash(0.25);
+    }
   }
 
   /**
@@ -781,7 +805,11 @@ export class TypingHudFx {
     this.tierFx.setPanels(S, this.bossPlateOn);
     this.tierFx.draw(c, S, time, this.sprites, this.halos, !set.reducedFlash, set.reducedMotion);
     if (this.benching) tp = this.lap("tier", tp);
+    // behind-layer sparks (and their dark halos) and shatter shards also keep out of panel text / labels / next letter
+    c.save();
+    this.keepOutBegin(c, true);
     this.sparks.draw(c, L_BEHIND, S, this.sprites);
+    c.restore();
     if (this.sparks.hasLayer(L_ATB)) {
       // arrival sparks / flare: clipped to the ATB bar rect so nothing lands on the HP bar or its text
       hud.getAtbRectInto(ATBR);
@@ -794,7 +822,10 @@ export class TypingHudFx {
     }
     if (this.benching) tp = this.lap("sparksBehind", tp);
     c.globalCompositeOperation = "source-over";
+    c.save();
+    this.keepOutBegin(c, true);
     this.shatter.drawBehind(c, S, set.reducedFlash, set.effectsIntensity);
+    c.restore();
     if (this.benching) tp = this.lap("shatterBehind", tp);
     if (this.atbFlash >= 0 && !set.reducedFlash) {
       const u = this.atbFlash / 0.12;
@@ -821,6 +852,14 @@ export class TypingHudFx {
     const S = hud.getScale();
     let tp = this.benching ? performance.now() : 0;
     c.globalCompositeOperation = "source-over";
+    const anyFx =
+      this.sparks.count > 0 ||
+      this.guard.count > 0 ||
+      this.streaks.count > 0 ||
+      this.shatter.fragments > 0;
+    if (anyFx) this.buildKeepOut();
+    c.save();
+    if (anyFx) this.clipKeepOut(c, 0);
     this.sparks.draw(c, L_ABOVE, S, this.sprites);
     if (this.benching) tp = this.lap("sparksAbove", tp);
     if (this.guard.count > 0)
@@ -833,20 +872,15 @@ export class TypingHudFx {
         this.sprites,
         I_ELEMENT + 5,
       );
-    if (this.orbs.count > 0) this.orbs.draw(c, S, this.sprites, set.effectsIntensity);
     this.shatter.drawAbove(c, S, this.sprites, set.effectsIntensity);
+    c.restore();
+    if (this.orbs.count > 0) this.orbs.draw(c, S, this.sprites, set.effectsIntensity);
     c.globalCompositeOperation = "source-over";
     if (this.benching) tp = this.lap("shatter", tp);
     if (this.streaks.count > 0) {
-      // never over the HP bar / name / HP text: clip the hero panel above the ATB bar out of the streak layer
-      hud.getAtbRectInto(ATBR);
-      const hp = HERO_PANEL;
-      const cut = (hp.y + 0) * S;
+      // keep-out + streak head radius around the next letter (the head sprite is ~6 px)
       c.save();
-      c.beginPath();
-      c.rect(-4, -4, 16384, 16384);
-      c.rect(hp.x * S, cut, hp.w * S, ATBR.y - 7 * S - cut);
-      c.clip("evenodd");
+      this.clipKeepOut(c, STREAK_HEAD_PAD * S);
       this.streaks.draw(
         c,
         { S, time, k: set.effectsIntensity, q: this.quality, reducedMotion: set.reducedMotion },
@@ -859,6 +893,171 @@ export class TypingHudFx {
     if (this.benching) this.lap("streaks", tp);
     c.globalAlpha = 1;
     if (this.benching) this.drawMs += performance.now() - t0;
+  }
+
+  // ---------------------------------------------------------------- keep-out
+
+  private koAdd(kind: number, x: number, y: number, w: number, h: number, pad: number): number {
+    if (this.koN >= KO_CAP || w <= 0 || h <= 0) return -1;
+    const r = this.ko[this.koN] as RectLike;
+    r.x = Math.floor(x - pad);
+    r.y = Math.floor(y - pad);
+    r.w = Math.ceil(x + w + pad) - r.x;
+    r.h = Math.ceil(y + h + pad) - r.y;
+    this.koKind[this.koN] = kind;
+    return this.koN++;
+  }
+
+  /**
+   * Rebuild the keep-out set: the hero panel above the ATB bar, the boss plate, the stats panel,
+   * every plate label row (+4 px: "GUARD 1.0s") and the next letter of the target plate (+4 px).
+   * Overlapping rects are merged so an even-odd clip cuts every one of them.
+   */
+  private buildKeepOut(): void {
+    const hud = this.hud;
+    const S = hud.getScale();
+    this.koN = 0;
+    this.koNext = -1;
+    hud.getAtbRectInto(ATBR);
+    const hp = HERO_PANEL;
+    this.koAdd(KO_PANEL, hp.x * S, hp.y * S, hp.w * S, ATBR.y - 7 * S - hp.y * S, 0);
+    const bp = hud.getBossPlateCss();
+    if (bp) this.koAdd(KO_PANEL, bp.x, bp.y, bp.w, bp.h, 0);
+    this.koAdd(KO_PANEL, (1280 - 22 - 220) * S, 18 * S, 220 * S, 104 * S, 0);
+    const v = this.view;
+    if (v) {
+      for (let i = 0; i < v.plates.length; i++) {
+        const p = v.plates[i];
+        if (!p) continue;
+        if (hud.getPlateLabelRectInto(p.id, KR) && p.kind === "guard")
+          this.koAdd(KO_LABEL, KR.x, KR.y, KR.w, KR.h, 4);
+        if (p.isTarget && p.typedIndex < p.text.length && p.text[p.typedIndex] !== " ")
+          if (hud.getLetterRectInto(p.id, p.typedIndex, KR))
+            this.koNext = this.koAdd(KO_NEXT, KR.x, KR.y, KR.w, KR.h, 4);
+      }
+    }
+    // merge overlapping rects (even-odd clip would re-open an overlap)
+    for (let again = true; again; ) {
+      again = false;
+      for (let i = 0; i < this.koN && !again; i++)
+        for (let j = i + 1; j < this.koN; j++) {
+          const a = this.ko[i] as RectLike;
+          const b = this.ko[j] as RectLike;
+          if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) {
+            const x0 = Math.min(a.x, b.x);
+            const y0 = Math.min(a.y, b.y);
+            const x1 = Math.max(a.x + a.w, b.x + b.w);
+            const y1 = Math.max(a.y + a.h, b.y + b.h);
+            a.x = x0;
+            a.y = y0;
+            a.w = x1 - x0;
+            a.h = y1 - y0;
+            this.koKind[i] = Math.min(this.koKind[i] as number, this.koKind[j] as number);
+            // remove j (swap with last)
+            const last = this.koN - 1;
+            if (j !== last) {
+              const l = this.ko[last] as RectLike;
+              b.x = l.x;
+              b.y = l.y;
+              b.w = l.w;
+              b.h = l.h;
+              this.koKind[j] = this.koKind[last] as number;
+            }
+            if (this.koNext === j) this.koNext = i;
+            else if (this.koNext === last) this.koNext = j === last ? i : j;
+            this.koN--;
+            again = true;
+            break;
+          }
+        }
+    }
+  }
+
+  /** Build (when any FX is live) and apply the keep-out clip; the caller wraps it in save/restore. */
+  private keepOutBegin(c: CanvasRenderingContext2D, panelsOnly = false): void {
+    if (
+      this.sparks.count > 0 ||
+      this.guard.count > 0 ||
+      this.streaks.count > 0 ||
+      this.shatter.fragments > 0
+    ) {
+      this.buildKeepOut();
+      this.clipKeepOut(c, 0, panelsOnly);
+    }
+  }
+
+  /** Clip the context to everything except the keep-out set; `extra` widens the next letter (streak heads). */
+  private clipKeepOut(c: CanvasRenderingContext2D, extra: number, panelsOnly = false): void {
+    c.beginPath();
+    c.rect(-4, -4, 16384, 16384);
+    for (let i = 0; i < this.koN; i++) {
+      const r = this.ko[i] as RectLike;
+      if (panelsOnly && this.koKind[i] !== KO_PANEL) continue;
+      if (i === this.koNext && extra > 0)
+        c.rect(r.x - extra, r.y - extra, r.w + 2 * extra, r.h + 2 * extra);
+      else c.rect(r.x, r.y, r.w, r.h);
+    }
+    c.clip("evenodd");
+  }
+
+  /**
+   * Test hook: draw the above layer alone onto a scratch canvas and count the FX pixels (alpha > 10)
+   * inside the keep-out rects (deflated 1 px for clip anti-aliasing). Streak heads are held to the same
+   * (4 px) next-letter rect, so this also covers the head sprites.
+   */
+  private countKeepOut(
+    c: CanvasRenderingContext2D,
+    cv: HTMLCanvasElement,
+    dpr: number,
+    out: { panel: number; label: number; next: number },
+    panelsOnly: boolean,
+  ): void {
+    for (let i = 0; i < this.koN; i++) {
+      const kind = this.koKind[i] as number;
+      if (panelsOnly && kind !== KO_PANEL) continue;
+      const r = this.ko[i] as RectLike;
+      const x = Math.max(0, Math.round((r.x + 1) * dpr));
+      const y = Math.max(0, Math.round((r.y + 1) * dpr));
+      const w = Math.min(cv.width - x, Math.round((r.w - 2) * dpr));
+      const h = Math.min(cv.height - y, Math.round((r.h - 2) * dpr));
+      if (w <= 0 || h <= 0) continue;
+      const d = c.getImageData(x, y, w, h).data;
+      let n = 0;
+      for (let k = 3; k < d.length; k += 4) if ((d[k] as number) > 10) n++;
+      if (kind === KO_PANEL) out.panel += n;
+      else if (kind === KO_LABEL) out.label += n;
+      else out.next += n;
+    }
+  }
+
+  debugKeepOutPixels(): { panel: number; label: number; next: number; rects: number } {
+    const out = { panel: 0, label: 0, next: 0, rects: 0 };
+    if (!this.attached) return out;
+    const dpr = this.hud.getDpr();
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(this.hud.getCssW() * dpr);
+    cv.height = Math.round(this.hud.getCssH() * dpr);
+    const c = cv.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.drawAbove(c, this.clock);
+    out.rects = this.koN;
+    this.countKeepOut(c, cv, dpr, out, false);
+    // behind-layer sparks and shatter shards (drawn under the plates, over the panels): panel rects only
+    const cv2 = document.createElement("canvas");
+    cv2.width = cv.width;
+    cv2.height = cv.height;
+    const c2 = cv2.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+    c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.keepOutBegin(c2, true);
+    this.sparks.draw(c2, L_BEHIND, this.hud.getScale(), this.sprites);
+    this.shatter.drawBehind(
+      c2,
+      this.hud.getScale(),
+      false,
+      this.hud.getSettings().effectsIntensity,
+    );
+    this.countKeepOut(c2, cv2, dpr, out, true);
+    return out;
   }
 
   // ---------------------------------------------------------------- diagnostics
