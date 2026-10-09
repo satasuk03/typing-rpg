@@ -2,12 +2,16 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.5** (2026-10-09) |
+| **Doc version** | **1.6** (2026-10-09) |
 | **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **1.6** (2026-10-09): T6.1 and T3.1 notes, recorded by the orchestrator.
+  - `BALANCE.BOSS_SCRIPT_PACE_SCALE = true` (approved): rubble spawn, first spawn and fall time are × the pace factor `(35/Pace)^0.7`, and the Doom cadence is × max(1, factor). Identical at Pace 35. `SIM_VERSION` stays 1 (pre-release).
+  - Content: `ENC_HP_MULT 1.2` and `HIT_MULT 1.34` on L1–L9 (see `docs/balance-ch1.md`). "Active time" in balance targets = sim time + the 10 s level-end screen, matching economy_sim.
+  - `EncounterStarted.encounterIndex` is 0-based; layout encounter numbers are 1-based (the client converts).
 - **1.5** (2026-10-09): T1.5/T1.6 implementations, recorded by the orchestrator.
   - `ResolvedLevel.foldSentences: boolean` (PO decision): chapter ≤ `BALANCE.SENTENCE_FOLD_CASE_MAX_CHAPTER` (1) makes doom/finisher/secondWind/minigame plates case-insensitive (punctuation and spaces stay exact). The player's `caseMode: "strict"` still wins. Word plates and the Trial are unchanged.
   - **Not additive:** `ResolvedLevel.star3` is `ResolvedStar`, and parTime carries integer `slackBp` (a float broke hashing). `resolveStar3()` converts; `evaluateStars` accepts either form and an optional `difficulty` ("zen" earns ★ only).
