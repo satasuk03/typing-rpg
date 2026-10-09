@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --local --port 8787",
+    "migrate:local": "wrangler d1 migrations apply DB --local",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -13,6 +14,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260101.0",
+    "miniflare": "5.20261006.1-alpha",
     "wrangler": "4.149.0"
   }
 }
