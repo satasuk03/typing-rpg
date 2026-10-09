@@ -8,6 +8,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T0.2 `scripts/check.sh` gate | Platform (sonnet) | **done** | CHECK PASS on main; determinism 1000-run test; purity guard (Biome + Math.random grep) shown failing on violation |
 | interfaces.md | Deep reasoner (opus) | v1.0 merged (58b9993); Reviewer (opus): approve-with-fixes (1 blocker, 10 major); v1.1 revision in progress | review findings relayed to author |
 | T2.1 Render core | Render (sonnet) | **done** (merged, 94a9857) | side-by-sides `apps/game/tests/render/__shots__/side-by-side/*-1280x720.png` (all 4 biomes match the POC; checked by orchestrator after 1 rework); render specs 19/19; CHECK PASS; perf (SwiftShader, indicative only): tier 2 ≈45% of tier 0 cost. Gap: real-GPU fps not yet measured |
+| T2.2 World from data | Render (sonnet) | in progress | — |
+| T2.5 Audio | Audio (sonnet) | in progress | — |
 
 ## Notes
 - Stack pins: three 0.186.1, vite 8.3.4, typescript 7.0.2 (native tsc), vitest 5.0.3, playwright 1.64.0, biome 2.5.15, hono 4.13.13, wrangler 4.149.0, zod 4.
