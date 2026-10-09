@@ -1,6 +1,8 @@
 // T1.5 acceptance: the reference bot plays the real content (resolveLevel on the content bundle) end to end at 20 / 40 / 75
 // WPM (accuracy 88 / 94 / 97 %), 30 seeds each, with the Chapter 1 starter kit. Boss level ch1-l10 and normal levels L1, L5, L9
 // are compared with plan §9. The numbers are printed (run with --silent=false); the assertions pin the measured bands.
+// This bot guards every guard word and has no WPM noise: the economy_sim personas (noise, calibrated guard rates, every
+// level, the §9 verdicts) live in tools/balance (`pnpm balance`, docs/balance-ch1.md).
 //
 // Bot model notes (see refBot.ts): gimmick words cost the bot nothing extra (it reads the answer and types it; a human has
 // to decode a scramble or remember a faded word), every Doom Spell / falling word is attempted after a 0.25 s reaction.
@@ -104,7 +106,12 @@ describe("boss level ch1-l10 (starter kit, 30 seeds per tier) vs plan §9", () =
       say(`BOSS ${row(tier.name, m)}   [target ${t.min} min, >= ${t.clear}%]`);
       say(`BOSS ${row(`${tier.name} guard 60%`, p)}`);
       expect(m.cleared / m.n).toBeGreaterThanOrEqual(t.clear / 100);
-      // the 40 WPM level time lands in the plan's window (4.2 min +-15%); 20 and 75 WPM deltas are explained in the T1.5 report
+      // T6.1 BOSS_SCRIPT_PACE_SCALE: rubble timing follows the pace, so even 20 WPM misses (almost) no falling word
+      // (T1.5 without it: 43% missed, 63% clears). Before: 458/1056 missed at 20 WPM.
+      expect(m.rubbleMissed / Math.max(1, m.rubbleSpawned)).toBeLessThan(0.05);
+      // the 40 WPM level time lands in the plan's window (4.2 min +-15%). The 20 and 75 WPM times (~8.2 / ~2.7 min here,
+      // without the level-end screen) are the structural deltas of docs/balance-ch1.md (plan §9's boss times are
+      // story-wide averages; `pnpm balance` reproduces the persona numbers).
       if (tier.wpm === 40) {
         expect(m.totalMin).toBeGreaterThan(4.2 * 0.85);
         expect(m.totalMin).toBeLessThan(4.2 * 1.15);

@@ -76,8 +76,11 @@ describe("reference bot (35 WPM, 94% accuracy, 24 seeds)", () => {
     const m = measure(contentLevel(id));
     say(line(id, m));
     expect(m.cleared).toBe(SEEDS.length);
-    expect(mean(m.attacks)).toBeGreaterThan(10.5);
-    expect(mean(m.attacks)).toBeLessThan(14);
+    // T6.1: content HP is the authored pool x ENC_HP_MULT 1.2 (restores the 36 s TTK the weakness / BREAK / counter
+    // bonus damage took away), so this NO-SKILL run lands at ~14-15 auto-attacks per encounter; with the starter kit the
+    // reference typist does ~11.6 (tools/balance, plan §9 "~11").
+    expect(mean(m.attacks)).toBeGreaterThan(12.5);
+    expect(mean(m.attacks)).toBeLessThan(16.5);
     if (id !== "ch1-l01") {
       // a normal 3-encounter level lasts about 2:45 +- 15% (140.25..189.75 s)
       expect(mean(m.duration)).toBeGreaterThan(165 * 0.85);

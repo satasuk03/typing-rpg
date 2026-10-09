@@ -29,8 +29,8 @@ describe("resolveLevel", () => {
     expect(enc2).toMatchObject({
       kind: "encounter",
       name: "The Fading Sign",
-      hpPoolM: 211_300,
-      gruntHitM: 4460,
+      hpPoolM: 253_560, // T6.1: 211.3 x ENC_HP_MULT 1.2
+      gruntHitM: 5980, // T6.1: 4.46 x HIT_MULT 1.34
     });
     expect(enc2?.kind === "encounter" && enc2.waves[0]?.map((r) => r.gimmick)).toEqual([
       null,

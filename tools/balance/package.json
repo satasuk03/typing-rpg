@@ -4,8 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "start": "node src/cli.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "solve-hits": "node src/solveHits.ts"
+  },
+  "dependencies": {
+    "@hd2d/content": "workspace:*",
+    "@hd2d/sim": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

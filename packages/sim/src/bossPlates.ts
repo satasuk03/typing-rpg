@@ -1,10 +1,40 @@
 // Boss plates across a freeze (T1.5). A Second Wind removes every plate and later resumes the encounter; the boss script's
 // Doom Spell and Falling Rubble words must come back with their remaining time ("freeze the phase timers during Second
 // Wind"). Kept free of combat.ts imports so combat.ts (which owns the freeze) can use it without an import cycle.
+import { K } from "./balance.ts";
 import type { Emit } from "./bus.ts";
+import { BP, mulBp } from "./fixed.ts";
 import type { BossState, EncounterState } from "./state.ts";
+import { PACE_FACTOR_BP } from "./tables.generated.ts";
 import type { LevelState, ResolvedBoss } from "./types.ts";
 import { addPlate } from "./typing.ts";
+
+// ---- T6.1 knob BALANCE.BOSS_SCRIPT_PACE_SCALE: the boss script's own timers follow the enemy-interval pace factor ----
+// (35/pace)^0.7 in 0.6..1.8 (PACE_FACTOR_BP, doc 01 §1.6), like every enemy attack interval and the guard window:
+//  - Falling Rubble spawn period, first-spawn delay and fall time: x pace factor (both ways);
+//  - Doom Spell cadence (doomEvery, from the previous spell's resolution): x max(1, pace factor), i.e. only lengthened for
+//    typists slower than the reference. A slow typist spends far longer typing each spell (which pays no ATB), so the
+//    authored 16 s damage window between spells would otherwise shrink to a sliver of phase 2; a fast typist keeps the
+//    authored window (their phase 2 is already at the minDoomSpells floor).
+// Off (false) = the T1.5 behaviour: authored ticks at every pace.
+const scriptPaceBp = (state: Readonly<LevelState>): number =>
+  K.BOSS_SCRIPT_PACE_SCALE
+    ? (PACE_FACTOR_BP[
+        Math.min(K.PACE_MAX, Math.max(K.PACE_MIN, state.run.options.pace)) - K.PACE_MIN
+      ] as number)
+    : BP;
+/** Ticks from a Doom Spell's resolution (or the breather's end) to the next spell. */
+export const doomEveryTicks = (state: Readonly<LevelState>, boss: ResolvedBoss): number =>
+  mulBp(boss.phase2.doomEveryTicks, Math.max(BP, scriptPaceBp(state)));
+/** Ticks between two Falling Rubble spawns. */
+export const rubbleSpawnTicks = (state: Readonly<LevelState>, boss: ResolvedBoss): number =>
+  Math.max(1, mulBp(boss.phase3.minigame.spawnEveryTicks, scriptPaceBp(state)));
+/** Ticks from the minigame's start to the first Falling Rubble word. */
+export const rubbleFirstSpawnTicks = (state: Readonly<LevelState>): number =>
+  Math.max(1, mulBp(K.MINIGAME_FIRST_SPAWN_T, scriptPaceBp(state)));
+/** Ticks a Falling Rubble word takes to land. */
+export const rubbleFallTicks = (state: Readonly<LevelState>, boss: ResolvedBoss): number =>
+  Math.max(1, mulBp(boss.phase3.minigame.fallTicks, scriptPaceBp(state)));
 
 /** The boss's own attacks are suspended in phase 3 (the Falling Rubble minigame replaces them, interfaces §3.4). */
 export const bossAttacksSuspended = (
@@ -61,7 +91,7 @@ export function restoreBossPlates(state: LevelState, emit: Emit): void {
         text: w.text,
         lane: w.lane,
         expiresAt: w.landTick,
-        totalTicks: boss.phase3.minigame.fallTicks,
+        totalTicks: rubbleFallTicks(state, boss),
       },
       emit,
     );
