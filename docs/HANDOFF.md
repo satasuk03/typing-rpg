@@ -20,6 +20,11 @@ For the next orchestrator session. Read this, then `docs/STATUS.md` (task table,
 
 **Gate:** `bash scripts/check.sh` → CHECK PASS (~1,330 tests: typecheck, Biome lint, vitest, content validate, sim determinism, sim purity, Node↔Chromium parity, bot quick).
 
+## Session 2026-10-10 summary
+- Quiet re-measure done (`docs/perf.md`). The first typingPerf reading of 0.74 came from a stale dev server on port 5173: **always pass a unique `PW_PORT`**.
+- Merged: Opus review round 2 (`docs/qa/t6.3-review-2.md`, with a round-3 check appended), HUD perf batching, H3 HUD keep-out, W3/W4/W5 world glare and shape fixes, the orb keep-out leak fix, and the PO streak rule (typo drops one tier, interfaces v1.7).
+- The sign-off deck (`docs/qa/po-signoff/`, published as a private artifact, linked in STATUS) is ready. **Next:** apply the PO's juicy feedback; minor leftovers are P3-3 (the title pulse), the small-enemy BREAK pop offset in crowded frames, and the enemy sprite white hit-flash.
+
 ## Remaining work (in priority order)
 
 1. **PO sign-off "typing feels juicy" (T2.6 AC)** — not yet given. Point the PO at `pnpm dev` → `http://localhost:5173/?scene=play&level=ch1-l05` (add `&wpm-bot=60` to watch) and the sheets in `apps/game/tests/vfx/__shots__/sheets/*.jpg`. Apply their feedback.
