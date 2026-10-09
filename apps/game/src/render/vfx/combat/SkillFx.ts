@@ -112,13 +112,13 @@ export class SkillFx {
       kit.emitA(sp);
     }
     kit.flash(hx - 0.2, hy + 0.2, kit.hero.z - 0.6, st.light, 1.3, HERO_LIGHT_R, 0.3);
-    kit.star(hx, hy, hz + 0.3, 0.5, 1.9, 0.25, st.core, 0.7);
+    kit.star(hx, hy, hz + 0.3, 0.5, 1.9, 0.25, kit.warm(st.core), 0.7);
 
     switch (e.skillId) {
       case "fireball": {
         const tid = e.targetIds[0] ?? -1;
         const delay = Math.min(0.15, total * 0.35);
-        this.proj.launch(P_FIRE, hx, hy, hz, tid, delay, total - delay - 0.02, 1.6, st.core);
+        this.proj.launch(P_FIRE, hx, hy, hz, tid, delay, total - delay - 0.02, 1.6, kit.warm(st.core));
         break;
       }
       case "slashWave": {
@@ -316,8 +316,8 @@ export class SkillFx {
   /** POC `explode`: star, fire glow, ground shockwave, spark burst, smoke puffs, light. */
   private explode(x: number, y: number, z: number): void {
     const kit = this.kit;
-    kit.star(x, y, z + 0.6, 4.5, 0.5, 0.28, [2.4, 1.2, 0.4], 1.0, 0.3);
-    kit.glow(x, y, z + 0.4, 1.5, 5, 0.45, [1.6, 0.6, 0.12], 1.0);
+    kit.star(x, y, z + 0.6, 4.5, 0.5, 0.28, kit.warm([2.4, 1.2, 0.4]), 1.0, 0.3);
+    kit.glow(x, y, z + 0.4, 1.5, 5, 0.45, kit.warm([1.6, 0.6, 0.12]), 1.0);
     kit.ring(x, 0.06, z, 0.5, 8, 0.55, [3, 1.4, 0.4], [1.5, 0.3, 0.05], 1.4, true);
     kit.sparks(x, y, z, kit.n(70), FIRE_HOT, 10, { life: 0.7, grav: 5, st: 0.07 });
     for (let i = 0; i < kit.n(24); i++) {
@@ -346,7 +346,7 @@ export class SkillFx {
       grav: -2.5,
       st: 0,
     });
-    kit.flash(x, y, z + 1.2, [1, 0.55, 0.2], 3.2, 7, 0.5);
+    kit.flash(x, y, z + 1.2, kit.warm([1, 0.55, 0.2]), 3.2, 7, 0.5);
     kit.postFlash(0.08, [1, 0.6, 0.25], 120, 0.12);
   }
 

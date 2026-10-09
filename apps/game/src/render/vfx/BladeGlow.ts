@@ -161,11 +161,15 @@ export class BladeGlow {
 
   /** @hot */
   update(dt: number, time: number, aura: HeroAura, set: TypingFxSettings): void {
-    const k = set.effectsIntensity;
-    if (k <= 0) {
+    const k0 = set.effectsIntensity;
+    if (k0 <= 0) {
       this.hide();
       return;
     }
+    // bright worlds (forest): the flare / strike impact stack with the backdrop and clip to a white blob, so the
+    // additive stars are scaled by biome brightness (1 in the cave, 0.4 on the forest)
+    const gl = 0.4 + 0.6 * Math.min(1, Math.max(0, this.world.currentMood.caveK));
+    const k = k0;
     // charge decays when no fragment arrives for a moment (after the flare, quickly)
     if (this.hold > 0) this.hold -= dt;
     else this.chargeV = Math.max(0, this.chargeV - dt * 2.4);
@@ -202,13 +206,13 @@ export class BladeGlow {
           .color(c[0], c[1], c[2])
           .at(this.x, this.y, this.z + 0.2)
           .size(s, s)
-          .intensity(1.7 * f * k);
+          .intensity(1.7 * f * k * gl);
         this.flareStar.mesh.rotation.z = u * 0.9;
         this.flareCore
           .color(c[0], c[1], c[2])
           .at(this.x, this.y, this.z + 0.15)
           .size(s * 1.3)
-          .intensity(0.9 * f * k);
+          .intensity(0.9 * f * k * gl);
       }
     }
 
@@ -240,7 +244,7 @@ export class BladeGlow {
           )
           .at(mx, my, this.z + 0.1)
           .size(w, len)
-          .intensity(1.35 * f * k);
+          .intensity(1.35 * f * k * (0.5 + 0.5 * gl));
         this.beam.mesh.rotation.z = rot;
         this.beamHalo
           .color(c[0], c[1], c[2])
@@ -256,13 +260,13 @@ export class BladeGlow {
           .color(c[0], c[1], c[2])
           .at(this.ex, this.ey, this.z + 0.35)
           .size(si)
-          .intensity(2.0 * (1 - ui) * k);
+          .intensity(2.0 * (1 - ui) * k * gl);
         this.hitStar.mesh.rotation.z = u * 0.7;
         this.hitCore
           .color(c[0], c[1], c[2])
           .at(this.ex, this.ey, this.z + 0.3)
           .size(si * 1.1)
-          .intensity(1.0 * (1 - ui) * k);
+          .intensity(1.0 * (1 - ui) * k * gl);
       }
     } else {
       this.hitStar.intensity(0);

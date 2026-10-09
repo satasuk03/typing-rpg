@@ -63,7 +63,9 @@ void main(){
   vec3 rimTint = mix(uHiTint / max(max(uHiTint.r, uHiTint.g), max(uHiTint.b, 1e-3)), vec3(1.0), 0.35);
   col += c.rgb * uTint * rimTint * (CAVE_FILL * caveLift);
   col += texture2D(emap, vUv).rgb * uEmis;
-  col = mix(col, uFlashCol, uFlash);
+  // hit flash: on the bright forest a full white sprite (plus bloom) is a 100 px glare blob, so the flash is weaker and
+  // a little dimmer there; in the cave (caveK 1) it is unchanged
+  col = mix(col, uFlashCol * mix(0.8, 1.0, uCaveK), uFlash * mix(0.55, 1.0, uCaveK));
   col += edge * uEdgeCol;
   col = applyFog(col, vWP);
   if (uRimFlash > 0.0 || caveLift > 0.0) {

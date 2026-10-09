@@ -82,12 +82,14 @@ export class BossFx {
     // the star sits BEHIND the golem's head and is kept cool and modest: at 5 u x [1, 3, 3.4] it blew the head out
     kit.star(INFO.x + 0.3, cy + 1.2, INFO.z - 0.4, 3.2, 0.5, 0.5, [0.3, 1.0, 1.25], 0.7);
     kit.ring(INFO.x, 0.06, INFO.z, 0.5, 11, 0.9, [0.5, 2.4, 2.6], [0.2, 0.8, 1.2], 1.4, true);
-    kit.flash(INFO.x, cy, INFO.z + 1.5, [0.4, 0.95, 1], 1.5, 8, 1.0);
-    kit.sparks(INFO.x, cy, INFO.z, kit.n(60), [0.8, 2.8, 3.2], 7, {
+    // a front light of 1.5 washed the Golem white-blue: keep it a faint, high, rim-ish lift
+    kit.flash(INFO.x, cy + 2.2, INFO.z - 0.8, [0.3, 0.8, 1], 0.5, 8, 1.0);
+    // motes burst from the rune circle at the feet (never from the body centre: they sat on the sprite as white dots)
+    kit.sparks(INFO.x, 0.2, INFO.z, kit.n(16), [0.3, 1.2, 1.4], 5, {
       kind: PK_PIXEL,
-      size: 0.08,
-      life: 1.2,
-      grav: -1,
+      size: 0.07,
+      life: 0.9,
+      grav: -0.5,
       st: 0,
     });
     kit.shake(0.8, 1.4);
@@ -253,7 +255,7 @@ export class BossFx {
       this.rune.mesh.rotation.z = sc.reducedMotion ? 0 : kit.time * 0.08;
       this.rune.intensity((1.5 * this.runeLevel + 1.4 * this.surge) * g);
       if (sc.k > 0 && this.runeLevel > 0.3) {
-        this.runeAcc += dt * 18 * sc.k * sc.q * this.runeLevel;
+        this.runeAcc += dt * 7 * sc.k * sc.q * this.runeLevel;
         while (this.runeAcc >= 1) {
           this.runeAcc -= 1;
           const sp = kit.p(
@@ -266,7 +268,7 @@ export class BossFx {
             1.4,
             0.06,
             PK_PIXEL,
-            [0.5, 2.2, 2.4],
+            [0.25, 1.1, 1.3],
           );
           sp.sway = 0.4;
           sp.ph = kit.rnd() * 6;

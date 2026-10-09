@@ -134,6 +134,21 @@ export class FxKit {
     return b === "cave" || b === "boss";
   }
 
+  /**
+   * Additive glare scale by biome brightness: 1 in the dark cave / boss hollow (caveK 1), 0.4 on the bright forest
+   * (caveK 0), where stacked additive flares otherwise clip to a white blob and lose their hue.
+   */
+  get glare(): number {
+    const k = this.deps.world.currentMood.caveK;
+    return 0.4 + 0.6 * Math.min(1, Math.max(0, k));
+  }
+
+  /** A hot colour kept amber on bright worlds: drops green / blue so the sum with the backdrop does not clip to white. */
+  warm(c: Rgb): Rgb {
+    const w = 1 - this.glare; // 0 cave .. 0.6 forest
+    return [c[0], c[1] * (1 - 0.35 * w), c[2] * (1 - 0.8 * w)];
+  }
+
   n(base: number): number {
     return scaled(base, this.scale);
   }
@@ -301,7 +316,9 @@ export class FxKit {
     rot = 0,
   ): void {
     const g =
-      this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * (this.scale.reducedFlash ? 0.5 : 1);
+      this.scale.k <= 0
+        ? 0
+        : (0.5 + 0.5 * this.scale.k) * (this.scale.reducedFlash ? 0.5 : 1) * this.glare;
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;
@@ -363,7 +380,7 @@ export class FxKit {
     c: Rgb,
     i: number,
   ): void {
-    const g = this.scale.k <= 0 ? 0 : 0.5 + 0.5 * this.scale.k;
+    const g = this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * this.glare;
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;
@@ -391,7 +408,7 @@ export class FxKit {
     c: Rgb,
     i: number,
   ): void {
-    const g = this.scale.k <= 0 ? 0 : 0.5 + 0.5 * this.scale.k;
+    const g = this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * this.glare * this.glare; // the lattice shader boosts x3.5 late in its life
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;
@@ -435,7 +452,7 @@ export class FxKit {
     life: number,
   ): void {
     if (this.scale.k <= 0) return;
-    this.lights.flash(x, y, z, c[0], c[1], c[2], intensity, radius, life);
+    this.lights.flash(x, y, z, c[0], c[1], c[2], intensity * this.glare, radius, life);
   }
 
   /** Camera shake scaled by the settings (0 under reduced motion / k = 0). */
@@ -447,7 +464,7 @@ export class FxKit {
   /** Capped full-screen flash. No-op without the typing world fx, or under reduced flash / k = 0. */
   postFlash(amount: number, c: Rgb, ms: number, cap: number): void {
     if (this.scale.reducedFlash || this.scale.k <= 0) return;
-    this.deps.postFlash?.(amount, c, ms, cap);
+    this.deps.postFlash?.(amount * this.glare, c, ms, cap * this.glare);
   }
 
   // ------------------------------------------------------------------------------- per frame
@@ -455,6 +472,7 @@ export class FxKit {
   /** @hot `dt` is the stage's dilated dt. */
   update(dt: number): void {
     this.time += dt;
+    this.arcs.gain = 1 - (1 - this.glare) * (2 / 3);
     this.arcs.update(dt);
     this.ghosts.update(dt);
     this.stars.update(dt);
