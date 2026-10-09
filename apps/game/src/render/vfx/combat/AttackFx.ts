@@ -224,7 +224,7 @@ export class AttackFx {
       0.3,
       crit ? 0.2 : 0.14,
       arche === "staff" ? ARCANE : [1.4, 1.3, 1.1],
-      0.9,
+      0.9 * kit.glareSoft,
       kit.rnd() * 0.8,
     );
     kit.flash(
@@ -413,7 +413,7 @@ export class AttackFx {
       w * 1.15,
       0.28,
       [0.22, 0.42, 0.75],
-      big ? 0.3 : 0.5,
+      big ? 0.2 : 0.5,
     );
     // 12 solid hex shards (>= 0.38 u: >= 20 px), normal blend with a dark rim so they read on bright bokeh,
     // spawned on the enemy's focus plane (z) so the tilt-shift blur does not soften them
@@ -439,16 +439,22 @@ export class AttackFx {
       sp.spin = 6 + kit.rnd() * 10;
       kit.emitN(sp);
     }
-    kit.sparks(cx, cy, cz, kit.n(34), SHARD_BLUE, 9, {
+    // boss: fewer, dimmer pixels / streaks (they pile up on the pale stone), and the ring starts outside the body so
+    // its line never crosses the golem (it expands from 0.6x to ~1.8x the body width)
+    kit.sparks(cx, cy, cz, kit.n(big ? 20 : 34), big ? [0.3, 0.7, 1.1] : SHARD_BLUE, 9, {
       kind: PK_PIXEL,
       size: 0.08,
       life: 0.8,
       grav: 8,
       st: 0,
     });
-    kit.sparks(cx, cy, cz, kit.n(12), [1.6, 2.4, 3.2], 6, { life: 0.4, grav: 4 });
+    kit.sparks(cx, cy, cz, kit.n(big ? 6 : 12), big ? [0.8, 1.2, 1.6] : [1.6, 2.4, 3.2], 6, {
+      life: 0.4,
+      grav: 4,
+    });
     // a crisp thin outline ring (~3 px line), expanding to 2.2 u radius in 0.35 s, never scaled down by the biome
-    kit.lineRing(cx, cy, cz + 0.5, 0.8, 4.4, 0.35, [0.6, 1.2, 2.0], [0.4, 0.9, 1.8], 1.5);
+    if (big) kit.lineRing(cx, cy, cz + 0.5, 3.2, 7.2, 0.4, [0.3, 0.7, 1.3], [0.25, 0.6, 1.2], 1.2);
+    else kit.lineRing(cx, cy, cz + 0.5, 0.8, 4.4, 0.35, [0.6, 1.2, 2.0], [0.4, 0.9, 1.8], 1.5);
     kit.star(cx, cy, cz + 0.8, big ? 1.6 : 2.4, 0.5, 0.25, [0.9, 1.4, 2.0], 0.7, 0.785);
     kit.flash(cx, cy, cz + 1, [0.6, 0.8, 1], big ? 0.7 : 1.4, 6, 0.3);
     if (!big) kit.postFlash(0.05, [0.7, 0.85, 1], 120, 0.08);

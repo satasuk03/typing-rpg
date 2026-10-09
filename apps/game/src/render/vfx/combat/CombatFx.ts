@@ -197,7 +197,10 @@ export class CombatFx implements CombatFxSink {
     this.attackFx.shieldDamaged(e);
   }
   breakStarted(e: EventOf<"Break">): void {
+    // W4: a big pale target (the Golem) takes the dimmed (x0.5) lights / stars / flashes for the whole break burst too
+    this.kit.localK = this.kit.bigTargetK(e.enemyId);
     this.attackFx.brk(e);
+    this.kit.localK = 1;
   }
   statusApplied(e: EventOf<"StatusApplied">): void {
     this.skillFx.statusApplied(e);
@@ -245,7 +248,9 @@ export class CombatFx implements CombatFxSink {
     this.bossFx.bossIntro(e);
   }
   bossPhase(e: EventOf<"BossPhaseChanged">): void {
+    this.kit.localK = this.kit.bigTargetK(e.enemyId);
     this.bossFx.bossPhase(e);
+    this.kit.localK = 1;
   }
   doomStarted(e: EventOf<"DoomSpellStarted">): void {
     this.bossFx.doomStarted(e);

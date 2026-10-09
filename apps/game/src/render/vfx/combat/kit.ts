@@ -145,6 +145,16 @@ export class FxKit {
     return (0.4 + 0.6 * Math.min(1, Math.max(0, k))) * this.localK;
   }
 
+  /** W4: a softer biome factor for things that must keep their shape (rings, spark HDR, chest beams): 0.7 forest .. 1 cave. */
+  get glareSoft(): number {
+    return 0.5 + 0.5 * Math.min(1, this.glare);
+  }
+
+  /** W4: HDR factor for overlapping additive glow puffs (24 of them stack): 0.61 forest .. 1 cave. */
+  get puffHdr(): number {
+    return 0.35 + 0.65 * Math.min(1, this.glare);
+  }
+
   /** Extra additive scale while one hit plays (1 normally; `bigTargetK` for a boss). */
   localK = 1;
 
@@ -228,7 +238,12 @@ export class FxKit {
     } = {},
   ): void {
     const dir = o.dir ?? 0;
-    for (let i = 0; i < n; i++) {
+    const hdr = 0.6 + 0.4 * Math.min(1, this.glare); // forest: spark HDR 0.76x, so a crowd of them does not clip to white
+    const c0 = col[0] * hdr;
+    const c1 = col[1] * hdr;
+    const c2 = col[2] * hdr;
+    const cnt = Math.round(n * (0.55 + 0.45 * Math.min(1, this.glare))); // forest: 0.73x the sparks
+    for (let i = 0; i < cnt; i++) {
       const a = this.rnd() * Math.PI * 2;
       const e = (this.rnd() - 0.3) * 1.6;
       const s = spd * (0.3 + this.rnd() * 0.9);
@@ -244,6 +259,9 @@ export class FxKit {
         o.kind ?? PK_STREAK,
         col,
       );
+      sp.r = c0;
+      sp.g = c1;
+      sp.b = c2;
       sp.st = o.st ?? 0.05;
       sp.grav = o.grav ?? 6;
       sp.drag = 2.5;
@@ -370,7 +388,7 @@ export class FxKit {
     i: number,
     ground = false,
   ): void {
-    const g = this.scale.k <= 0 ? 0 : 0.5 + 0.5 * this.scale.k;
+    const g = this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * this.glareSoft;
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;
@@ -526,7 +544,7 @@ export class FxKit {
   /** @hot `dt` is the stage's dilated dt. */
   update(dt: number): void {
     this.time += dt;
-    this.arcs.gain = 0.4 + 0.6 * Math.min(1, (this.glare - 0.4) / 0.6); // 0.4 forest .. 1 cave
+    this.arcs.gain = 0.3 + 0.7 * Math.min(1, (this.glare - 0.4) / 0.6); // 0.3 forest .. 1 cave (W4: 0.4 clipped the crit arc core)
     this.arcs.update(dt);
     this.ghosts.update(dt);
     this.stars.update(dt);

@@ -41,7 +41,7 @@ ${GLSL_COMMON}
 #define CAVE_FILL ${CAVE_FILL}
 #define CAVE_RIM ${CAVE_RIM}
 uniform sampler2D map, nmap, emap; uniform vec2 uTexSize; uniform vec3 uTint, uFlashCol, uEdgeCol, uRimFlashCol;
-uniform float uFlash, uDissolve, uEmis, uRim, uWrap, uDark, uGhost, uRimFlash, uLumCap, uCaveRim, uCaveK;
+uniform float uFlash, uDissolve, uEmis, uRim, uWrap, uDark, uGhost, uRimFlash, uLumCap, uForestCap, uCaveRim, uCaveK;
 uniform vec3 uHiTint;
 varying vec2 vUv; varying vec3 vWP;
 void main(){
@@ -79,7 +79,9 @@ void main(){
   }
   // hard luminance cap (hero while typing FX are up): the silhouette never washes out
   float lm = max(col.r, max(col.g, col.b));
-  if (lm > uLumCap) col *= uLumCap / lm;
+  // W4: enemies keep a soft ceiling on the bright forest (caveK 0) so flash lights + hit flash do not clip the sprite white
+  float cap = min(uLumCap, mix(uForestCap, 1e3, uCaveK));
+  if (lm > cap) col *= cap / lm;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -213,6 +215,7 @@ export class SpriteResources {
           uRimFlash: { value: 0 },
           uRimFlashCol: { value: new Vector3(1.6, 1.6, 1.6) },
           uLumCap: { value: 1e3 },
+          uForestCap: { value: 1e3 },
           uCaveRim: { value: o.caveRim ?? 0 },
         },
         vertexShader: VS_WORLD,
@@ -398,6 +401,11 @@ export class SpriteActor {
   /** Hard cap on the sprite's final HDR brightness (1e3 = off). Keeps a hero legible under strong light FX. */
   setLumCap(cap: number): void {
     (this.material.uniforms.uLumCap as { value: number }).value = cap;
+  }
+
+  /** Max-channel ceiling that applies only on the bright forest (fades out toward the cave); 1e3 = off. */
+  setForestCap(cap: number): void {
+    (this.material.uniforms.uForestCap as { value: number }).value = cap;
   }
 
   setDissolve(v: number): void {
