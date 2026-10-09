@@ -9,16 +9,35 @@
  * `hud.onUpdate`, so the caller needs nothing else.
  */
 import type { LevelView, SimEvent } from "@hd2d/sim";
-import { elementIndex, QUALITY_Q, STREAK_STYLE } from "../../../level/typingFxParams";
+import {
+  elementIndex,
+  fragmentArrivalSec,
+  QUALITY_Q,
+  STREAK_STYLE,
+} from "../../../level/typingFxParams";
 import type { HudEffect } from "../../fx";
 import type { Hud } from "../../hud";
-import { buildGlowSprites, type GlowSprites } from "./glowSprites";
-import { accentIndex, I_ELEMENT, sparkIndex } from "./palette";
+import { buildGlowSprites, buildHaloSprites, type GlowSprites } from "./glowSprites";
+import {
+  accentIndex,
+  I_CYAN,
+  I_ELEMENT,
+  I_TEAL,
+  I_TIER,
+  I_WHITE,
+  sparkIndex,
+  TINT_KINDS,
+} from "./palette";
 import { mulberry32 } from "./pool";
+import { PlateShatter } from "./shatter";
 import {
   emitLetterSparks,
+  K_EMBER,
   K_FLARE,
+  K_GLINT,
+  K_NOTE,
   K_SQ2,
+  K_SQ3,
   L_ABOVE,
   L_BEHIND,
   type RectLike,
@@ -40,6 +59,7 @@ export interface TypingFxStats {
   streaks: number;
   embers: number;
   rings: number;
+  fragments: number;
   tier: number;
   heat: number;
   keys: number;
@@ -55,6 +75,8 @@ export interface TypingFxStats {
 
 const R: RectLike = { x: 0, y: 0, w: 0, h: 0 };
 const TIP = { x: 0, y: 0 };
+const WTIP = { x: 0, y: 0 };
+const ATBR = { x: 0, y: 0, w: 0, h: 0 };
 const SAMPLES = 4096;
 
 export class TypingHudFx {
@@ -62,7 +84,11 @@ export class TypingHudFx {
   private readonly streaks = new AtbStreaks();
   private readonly tierFx = new StreakTierFx();
   private readonly speed = new SpeedFx();
+  readonly shatter = new PlateShatter();
   private sprites: GlowSprites = [];
+  private halos: GlowSprites = [];
+  /** ATB-filled white line flash age (s); -1 = idle. */
+  private atbFlash = -1;
   private readonly env: SparkEnv;
   private view: LevelView | null = null;
   private enabled = true;
@@ -112,6 +138,8 @@ export class TypingHudFx {
     if (this.attached) return () => {};
     this.attached = true;
     this.sprites = buildGlowSprites();
+    this.halos = buildHaloSprites();
+    this.hud.setGhostOnComplete(false);
     const behind: HudEffect = {
       layer: "behind",
       life: Number.POSITIVE_INFINITY,
@@ -132,6 +160,7 @@ export class TypingHudFx {
       this.hud.fx.remove(above);
       off();
       this.hud.setTypingFxAttached(false);
+      this.hud.setGhostOnComplete(true);
       this.attached = false;
     };
     this.cleanups.push(detach);
@@ -163,6 +192,8 @@ export class TypingHudFx {
     this.streaks.clear();
     this.tierFx.clear();
     this.speed.clear();
+    this.shatter.clear();
+    this.atbFlash = -1;
   }
 
   // ---------------------------------------------------------------- events
@@ -188,6 +219,13 @@ export class TypingHudFx {
       case "Typo":
         applyTypo(this.hud, e, this.view?.comboMode === "zen");
         this.speed.onTypo();
+        if (e.kind === "guard" && e.plateId !== null) this.guardTypo(e.plateId);
+        break;
+      case "WordCompleted":
+        if (e.kind !== "guard") this.wordCompleted(e);
+        break;
+      case "AtbFilled":
+        this.atbFilledHud();
         break;
       case "KeyStreakTierChanged":
         this.tierChanged(e.from, e.to);
@@ -261,6 +299,215 @@ export class TypingHudFx {
     } else this.tierFx.setTier(to);
   }
 
+  /**
+   * Word complete (5.1): frame flash, glyph fragments that burst and converge on the weapon, frame
+   * shards, ring shockwave(s) (+ rays and glints when PERFECT), the fat ATB streak and the sparks that
+   * the arrivals throw off at the weapon. The plate's ghost fade is suppressed (`setGhostOnComplete`).
+   */
+  private wordCompleted(e: Extract<SimEvent, { type: "WordCompleted" }>): void {
+    const hud = this.hud;
+    const env = this.env;
+    const k = env.k;
+    if (k <= 0) return;
+    const PR: RectLike = { x: 0, y: 0, w: 0, h: 0 };
+    if (!hud.getPlateRectInto(e.plateId, PR)) return;
+    const S = env.S;
+    const set = hud.getSettings();
+    const tier = this.view?.keyStreakTier ?? 0;
+    const perfect = e.perfect;
+    const sentence = e.text.indexOf(" ") >= 0;
+    const cx = PR.x + PR.w / 2;
+    const cy = PR.y + PR.h / 2;
+    const tinted = TINT_KINDS.has(e.kind);
+    const mode = e.kind === "minigame" ? 1 : 0;
+    const secondWind = e.kind === "secondWind";
+    if (secondWind) hud.getHeroBodyInto(WTIP);
+    else hud.getWeaponAnchorInto(WTIP);
+    const plateId = e.plateId;
+    const n = this.shatter.burst(
+      PR,
+      e.text,
+      (i, out) => hud.getLetterRectInto(plateId, i, out),
+      perfect,
+      tier,
+      tinted,
+      { x: WTIP.x, y: WTIP.y, mode },
+      sentence,
+      env,
+      secondWind ? I_TEAL : -1,
+    );
+    if (!set.reducedFlash) this.shatter.frameFlash(PR);
+    const rings = this.tierFx;
+    const accent = accentIndex(tier, env.time, 0, env.reducedMotion);
+    const ra = k * (set.reducedFlash ? 0.5 : 1);
+    if (perfect) {
+      for (let i = 0; i < 3; i++)
+        rings.addRing(cx, cy, 0.3 * PR.w, 1.9 * PR.w, i * 0.05, 0.38, 6, 1, 0.9 * ra, I_TIER + 1);
+      this.shatter.rayBurst(
+        PR,
+        set.reducedFlash ? 0 : Math.round(16 * Math.max(0.5, k)),
+        S,
+        env.rng,
+      );
+    } else {
+      rings.addRing(
+        cx,
+        cy,
+        0.3 * PR.w,
+        1.25 * PR.w,
+        0,
+        0.38,
+        6,
+        1,
+        0.9 * 0.6 * ra,
+        secondWind ? I_TEAL : accent,
+      );
+    }
+    if (perfect) {
+      const R: RectLike = { x: 0, y: 0, w: 0, h: 0 };
+      for (let i = 0; i < e.text.length; i++) {
+        if (e.text.charCodeAt(i) === 32 || !hud.getLetterRectInto(plateId, i, R)) continue;
+        const a = -Math.PI / 2 + (env.rng() * 2 - 1) * 1.2;
+        const sp = (90 + env.rng() * 110) * S;
+        this.sparks.add(
+          R.x + R.w / 2,
+          R.y + R.h / 2,
+          Math.cos(a) * sp,
+          Math.sin(a) * sp,
+          0,
+          0.4,
+          6,
+          K_GLINT,
+          I_TIER + 1,
+          L_ABOVE,
+        );
+      }
+    }
+    if (!secondWind) {
+      hud.getAtbTipInto(TIP);
+      this.streaks.launch(cx, cy, tier, e.plateId * 31 + 977, true, TIP.x, TIP.y);
+    }
+    if (mode === 0) {
+      const col = perfect
+        ? I_TIER + 1
+        : sparkIndex(tier, elementIndex(this.view?.hero.weaponDamageType));
+      for (let i = 0; i < n; i++) {
+        const t = fragmentArrivalSec(i);
+        for (let j = 0; j < 2; j++) {
+          const a = env.rng() * Math.PI * 2;
+          const sp = (110 + env.rng() * 150) * S;
+          this.sparks.add(
+            WTIP.x,
+            WTIP.y,
+            Math.cos(a) * sp,
+            Math.sin(a) * sp - 40 * S,
+            -t,
+            0.26,
+            j === 0 ? 4 : 6,
+            j === 0 ? K_SQ2 : K_SQ3,
+            col,
+            L_ABOVE,
+          );
+        }
+        this.sparks.add(
+          WTIP.x,
+          WTIP.y,
+          0,
+          0,
+          -t,
+          0.14,
+          12 * (perfect ? 1.4 : 1),
+          K_FLARE,
+          perfect ? I_TIER + 1 : I_WHITE,
+          L_BEHIND,
+        );
+      }
+      this.sparks.add(
+        WTIP.x,
+        WTIP.y,
+        0,
+        0,
+        -fragmentArrivalSec(Math.max(0, n - 1)),
+        0.26,
+        perfect ? 46 : 34,
+        K_NOTE,
+        perfect ? I_TIER + 1 : accent,
+        L_ABOVE,
+      );
+    }
+  }
+
+  /** Guard typo cue (spec 6, art-direction fix): white-cyan sparks and a ring from the plate frame. */
+  private guardTypo(plateId: number): void {
+    const hud = this.hud;
+    const env = this.env;
+    const k = env.k;
+    if (k <= 0) return;
+    const PR: RectLike = { x: 0, y: 0, w: 0, h: 0 };
+    if (!hud.getPlateRectInto(plateId, PR)) return;
+    const S = env.S;
+    const n = Math.round(16 * k * env.q);
+    for (let i = 0; i < n; i++) {
+      const top = i % 2 === 0;
+      const x = PR.x + env.rng() * PR.w;
+      const y = top ? PR.y : PR.y + PR.h;
+      const a = (top ? -Math.PI / 2 : Math.PI / 2) + (env.rng() * 2 - 1) * 0.9;
+      const sp = (140 + env.rng() * 180) * S;
+      this.sparks.add(
+        x,
+        y,
+        Math.cos(a) * sp,
+        Math.sin(a) * sp,
+        0,
+        0.3,
+        6,
+        i % 4 === 0 ? K_GLINT : K_SQ3,
+        I_CYAN,
+        L_ABOVE,
+      );
+    }
+    if (!hud.getSettings().reducedFlash)
+      this.tierFx.addRing(
+        PR.x + PR.w / 2,
+        PR.y + PR.h / 2,
+        0.4 * PR.w,
+        1.05 * PR.w,
+        0,
+        0.3,
+        5,
+        1,
+        0.85 * k,
+        I_CYAN,
+      );
+  }
+
+  /** ATB filled (HUD half of spec 7): a white line flash along the bar and 10 rising embers. */
+  private atbFilledHud(): void {
+    const env = this.env;
+    if (env.k <= 0) return;
+    this.atbFlash = 0;
+    const hud = this.hud;
+    hud.getAtbRectInto(ATBR);
+    const S = env.S;
+    const el = I_ELEMENT + elementIndex(this.view?.hero.weaponDamageType);
+    const n = Math.round(10 * env.k);
+    for (let i = 0; i < n; i++) {
+      const x = ATBR.x + ATBR.w * (0.15 + 0.85 * ((i + env.rng() * 0.8) / n));
+      this.sparks.add(
+        x,
+        ATBR.y,
+        (env.rng() - 0.5) * 16 * S,
+        -(40 + env.rng() * 50) * S,
+        0,
+        0.5,
+        4,
+        K_EMBER,
+        el,
+        L_BEHIND,
+      );
+    }
+  }
+
   /** A streak reached the ATB bar: pulse, tip flare and tip sparks (§2.3). */
   private arrive(tier: number, x: number, y: number, fat: boolean): void {
     const env = this.env;
@@ -311,10 +558,15 @@ export class TypingHudFx {
     let id = view.targetPlateId ?? -1;
     if (id < 0 && this.clock - this.lastTypedAt < 1.5) id = this.lastTyped;
     let plateKind = "";
+    let alive = false;
     for (let i = 0; i < view.plates.length; i++) {
       const p = view.plates[i];
-      if (p && p.id === id) plateKind = p.kind;
+      if (p && p.id === id) {
+        plateKind = p.kind;
+        alive = true;
+      }
     }
+    this.tierFx.plateAlive = alive;
     this.tierFx.hasRect =
       id >= 0 && plateKind !== "guard" && hud.getPlateRectInto(id, this.tierFx.rect);
 
@@ -329,6 +581,12 @@ export class TypingHudFx {
     this.streaks.update(dt, TIP.x, TIP.y);
     this.tierFx.update(dt, env, set.reducedMotion, () => hud.triggerTierFlash());
     this.speed.update(dt);
+    this.shatter.update(dt, env.S);
+    if (this.atbFlash >= 0) {
+      this.atbFlash += dt;
+      if (this.atbFlash > 0.12) this.atbFlash = -1;
+    }
+    hud.setGhostOnComplete(env.k <= 0);
     if (this.benching) this.updateMs += performance.now() - t0;
   }
 
@@ -352,11 +610,20 @@ export class TypingHudFx {
       set.reducedMotion,
     );
     if (this.benching) tp = this.lap("edges", tp);
-    this.tierFx.draw(c, S, time, this.sprites, !set.reducedFlash, set.reducedMotion);
+    this.tierFx.draw(c, S, time, this.sprites, this.halos, !set.reducedFlash, set.reducedMotion);
     if (this.benching) tp = this.lap("tier", tp);
     this.sparks.draw(c, L_BEHIND, S, this.sprites);
     if (this.benching) tp = this.lap("sparksBehind", tp);
     c.globalCompositeOperation = "source-over";
+    this.shatter.drawBehind(c, S, set.reducedFlash, set.effectsIntensity);
+    if (this.benching) tp = this.lap("shatterBehind", tp);
+    if (this.atbFlash >= 0 && !set.reducedFlash) {
+      const u = this.atbFlash / 0.12;
+      hud.getAtbRectInto(ATBR);
+      c.globalAlpha = (1 - u) * Math.min(1, set.effectsIntensity + 0.2);
+      c.fillStyle = "#ffffff";
+      c.fillRect(ATBR.x - 2 * S, ATBR.y - 1 * S, ATBR.w + 4 * S, ATBR.h + 2 * S);
+    }
     c.globalAlpha = 1;
     if (this.speed.plateLive) {
       c.save();
@@ -377,6 +644,9 @@ export class TypingHudFx {
     c.globalCompositeOperation = "source-over";
     this.sparks.draw(c, L_ABOVE, S, this.sprites);
     if (this.benching) tp = this.lap("sparksAbove", tp);
+    this.shatter.drawAbove(c, S, this.sprites, set.effectsIntensity);
+    c.globalCompositeOperation = "source-over";
+    if (this.benching) tp = this.lap("shatter", tp);
     if (this.streaks.count > 0)
       this.streaks.draw(
         c,
@@ -412,6 +682,7 @@ export class TypingHudFx {
       streaks: this.streaks.count,
       embers: this.tierFx.embers.count,
       rings: this.tierFx.rings.count,
+      fragments: this.shatter.fragments,
       tier: this.tierFx.tier,
       heat: this.speed.heat,
       keys: this.keys,

@@ -22,11 +22,15 @@ export function applyTypo(hud: Hud, e: TypoEvent, zen: boolean): void {
   }
   fx.glitch(e.plateId, e.index, false);
   // a brief red frame flash on top of the spec'd glitch / shake / crack: makes "which plate" obvious at a glance
-  if (warn) fx.flashBorder(e.plateId, TYPO.holdMs, TYPO.fadeMs, TYPO.red);
   if (e.kind === "guard") {
+    // the guard plate is red: a red flash would vanish, so its cue is a white-cyan frame flash,
+    // a bigger shake and cyan-white cracks (plates.ts), plus the spark burst from TypingHudFx
+    if (warn) fx.flashBorder(e.plateId, 140, 280, TYPO.guardCue);
+
     fx.shake(e.plateId, TYPO.guardShake.mag, TYPO.guardShake.sec);
     hud.flashTypoVignette(TYPO.guardVignette);
   } else {
+    if (warn) fx.flashBorder(e.plateId, TYPO.holdMs, TYPO.fadeMs, TYPO.red);
     fx.shake(e.plateId, TYPO.shake.mag, TYPO.shake.sec);
     hud.flashTypoVignette(TYPO.vignette);
   }

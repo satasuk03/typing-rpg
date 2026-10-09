@@ -49,7 +49,7 @@ import {
 
 // ---------------------------------------------------------------- public types
 
-export type HudAnchorPart = "head" | "body" | "feet";
+export type HudAnchorPart = "head" | "body" | "feet" | "weapon";
 /** What the HUD asks the renderer to project: an enemy/hero body part. */
 export type HudAnchor =
   | { kind: "enemy"; id: number; slot: number; part: HudAnchorPart }
@@ -142,6 +142,8 @@ export class Hud {
   private updateHooks: ((dt: number, view: LevelView) => void)[] = [];
   /** True while `TypingHudFx` owns the per-key reactions (pop, bounce, typo, tier flash). */
   private typingFxAttached = false;
+  /** False while the typing shatter replaces the completed-plate ghost (spec 5.1). */
+  private ghostOnComplete = true;
   private quality: 0 | 1 | 2 = 0;
 
   private time = 0;
@@ -221,6 +223,10 @@ export class Hud {
    */
   setTypingFxAttached(on: boolean): void {
     this.typingFxAttached = on;
+  }
+  /** The word shatter replaces the old completed-plate ghost fade when set to false. */
+  setGhostOnComplete(on: boolean): void {
+    this.ghostOnComplete = on;
   }
   isTypingFxAttached(): boolean {
     return this.typingFxAttached;
@@ -319,6 +325,14 @@ export class Hud {
     out.x = (r.x + r.w * clamp(frac, 0, 1)) * this.s;
     out.y = (r.y + r.h / 2) * this.s;
   }
+  /** Allocation-free ATB bar rect (CSS px). */
+  getAtbRectInto(out: { x: number; y: number; w: number; h: number }): void {
+    const r = heroAtbRect();
+    out.x = r.x * this.s;
+    out.y = r.y * this.s;
+    out.w = r.w * this.s;
+    out.h = r.h * this.s;
+  }
   /** Screen anchor of the hero ATB gauge: fill tip (for streaks that "arrive" at the bar) + the bar rect. */
   getAtbAnchor(): { x: number; y: number; rect: Rect; frac: number } {
     const r = heroAtbRect();
@@ -333,6 +347,27 @@ export class Hud {
   getSkillAnchor(slot: 0 | 1): { x: number; y: number; r: number } {
     const c = skillCenter(slot, this.H);
     return { x: c.x * this.s, y: c.y * this.s, r: 32 * this.s };
+  }
+  /**
+   * Allocation-free weapon-tip anchor (CSS px) from the projector's `{kind: "hero", part: "weapon"}`;
+   * falls back to a point beside the hero body when the projector does not know the weapon.
+   */
+  getWeaponAnchorInto(out: { x: number; y: number }): void {
+    const p = this.projector ? this.projector({ kind: "hero", part: "weapon" }) : null;
+    if (p) {
+      out.x = p.x;
+      out.y = p.y;
+      return;
+    }
+    const b = this.resolveAnchor({ kind: "hero" });
+    out.x = (b ? b.x : 360 * this.s) + 40 * this.s;
+    out.y = (b ? b.y : 440 * this.s) - 10 * this.s;
+  }
+  /** Hero body anchor, allocation-free (CSS px). */
+  getHeroBodyInto(out: { x: number; y: number }): void {
+    const b = this.resolveAnchor({ kind: "hero" });
+    out.x = b ? b.x : 360 * this.s;
+    out.y = b ? b.y : 440 * this.s;
   }
   getHeroAnchor(): { x: number; y: number } {
     return this.resolveAnchor({ kind: "hero" }) ?? { x: 360 * this.s, y: 440 * this.s };
@@ -447,7 +482,7 @@ export class Hud {
       case "PlateRemoved": {
         const entry = this.entries.get(e.plateId);
         const rect = this.getPlateRect(e.plateId);
-        if (entry && (e.reason === "completed" || e.reason === "expired"))
+        if (entry && ((e.reason === "completed" && this.ghostOnComplete) || e.reason === "expired"))
           this.ghosts.push({ geom: entry.geom, box: { ...entry.box }, age: 0, dur: 0.16 });
         this.emit({ type: "plateRemoved", plateId: e.plateId, reason: e.reason, rect });
         break;

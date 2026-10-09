@@ -27,7 +27,10 @@ export const I_RED = 25;
 export const I_AMBER = 26;
 export const I_TEAL = 27;
 export const I_SPARK = 28; // 28 + tier*7 + element  (35 entries)
-export const FILL_COUNT = I_SPARK + 5 * 7;
+export const I_TYPED = I_SPARK + 5 * 7; // 63..67: typed-letter colour per tier (shatter fragments)
+export const I_SHARD = I_TYPED + 5; // dark frame-shard fill
+export const I_CYAN = I_SHARD + 1; // guard typo cue
+export const FILL_COUNT = I_CYAN + 1;
 
 export function mixHex(a: string, b: string, t: number): string {
   const [ar, ag, ab] = parseHex(a);
@@ -55,6 +58,9 @@ function buildFill(): string[] {
         ELEMENT_HEX[e] as string,
         0.35,
       );
+  for (let t = 0; t < 5; t++) out[I_TYPED + t] = TIER_TYPED_HEX[t] as string;
+  out[I_SHARD] = "#1a1220";
+  out[I_CYAN] = "#bff4ff";
   return out;
 }
 /** Every fill colour of the typing VFX, as ready-to-use style strings. */
@@ -69,6 +75,7 @@ export const GLOW_INDICES: readonly number[] = [
   I_RED,
   I_AMBER,
   I_TEAL,
+  I_CYAN,
 ];
 
 export function sparkIndex(tier: number, element: number): number {

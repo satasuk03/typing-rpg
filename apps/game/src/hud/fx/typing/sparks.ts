@@ -32,6 +32,8 @@ export const K_LINE = 3;
 export const K_FLARE = 4;
 export const K_NOTE = 5;
 export const K_RING = 6;
+/** Rises without gravity or drag (ATB-filled embers). */
+export const K_EMBER = 7;
 export const L_BEHIND = 0;
 export const L_ABOVE = 1;
 
@@ -117,6 +119,11 @@ export class SparkField {
       }
       const kd = kind[i] as number;
       if (kd === K_NOTE || kd === K_FLARE) continue;
+      if (kd === K_EMBER) {
+        x[i] = (x[i] as number) + (vx[i] as number) * dt;
+        y[i] = (y[i] as number) + (vy[i] as number) * dt;
+        continue;
+      }
       vx[i] = (vx[i] as number) * drag;
       vy[i] = (vy[i] as number) * drag + (kd === K_RING ? 0 : g);
       x[i] = (x[i] as number) + (vx[i] as number) * dt;

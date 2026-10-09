@@ -14,6 +14,22 @@ import {
 } from "three";
 import { lerp } from "../util";
 
+/** Shared with `render/vfx/PooledParticles` (the allocation-free typing VFX pools). */
+export const PARTICLE_VS = `attribute vec3 iPos, iVel; attribute vec4 iCol, iSz; varying vec4 vCol; varying vec2 vUv; varying float vKind;
+        void main(){ vec4 vp = viewMatrix * vec4(iPos, 1.0); vec3 vv = (viewMatrix * vec4(iVel, 0.0)).xyz; float sp = length(vv.xy);
+          vec2 dir = (sp > 1e-4 && iSz.y > 0.0) ? vv.xy / sp : vec2(1.0, 0.0);
+          float sx = iSz.x * (1.0 + iSz.y * sp), sy = iSz.x;
+          if (iSz.w != 0.0) sx = iSz.x * max(abs(cos(iSz.w)), 0.15);
+          vec2 perp = vec2(-dir.y, dir.x); vp.xy += dir * position.x * sx + perp * position.y * sy;
+          gl_Position = projectionMatrix * vp; vUv = position.xy + 0.5; vCol = iCol; vKind = iSz.z; }`;
+export const PARTICLE_FS = `uniform float uAdd; varying vec4 vCol; varying vec2 vUv; varying float vKind;
+        void main(){ vec2 p = vUv - 0.5; float a;
+          if (vKind < 0.5) { a = smoothstep(0.5, 0.0, length(p)); a *= a; }
+          else if (vKind < 1.5) { a = 1.0; }
+          else { a = smoothstep(0.5, 0.0, abs(p.y)) * smoothstep(0.5, 0.15, abs(p.x)); }
+          if (uAdd > 0.5) gl_FragColor = vec4(vCol.rgb * vCol.a * a, 1.0);
+          else { if (vCol.a * a < 0.02) discard; gl_FragColor = vec4(vCol.rgb, vCol.a * a); } }`;
+
 export interface ParticleSpawn {
   x: number;
   y: number;
@@ -115,20 +131,8 @@ export class Particles {
     g.instanceCount = 0;
     this.geo = g;
     this.material = new ShaderMaterial({
-      vertexShader: `attribute vec3 iPos, iVel; attribute vec4 iCol, iSz; varying vec4 vCol; varying vec2 vUv; varying float vKind;
-        void main(){ vec4 vp = viewMatrix * vec4(iPos, 1.0); vec3 vv = (viewMatrix * vec4(iVel, 0.0)).xyz; float sp = length(vv.xy);
-          vec2 dir = (sp > 1e-4 && iSz.y > 0.0) ? vv.xy / sp : vec2(1.0, 0.0);
-          float sx = iSz.x * (1.0 + iSz.y * sp), sy = iSz.x;
-          if (iSz.w != 0.0) sx = iSz.x * max(abs(cos(iSz.w)), 0.15);
-          vec2 perp = vec2(-dir.y, dir.x); vp.xy += dir * position.x * sx + perp * position.y * sy;
-          gl_Position = projectionMatrix * vp; vUv = position.xy + 0.5; vCol = iCol; vKind = iSz.z; }`,
-      fragmentShader: `uniform float uAdd; varying vec4 vCol; varying vec2 vUv; varying float vKind;
-        void main(){ vec2 p = vUv - 0.5; float a;
-          if (vKind < 0.5) { a = smoothstep(0.5, 0.0, length(p)); a *= a; }
-          else if (vKind < 1.5) { a = 1.0; }
-          else { a = smoothstep(0.5, 0.0, abs(p.y)) * smoothstep(0.5, 0.15, abs(p.x)); }
-          if (uAdd > 0.5) gl_FragColor = vec4(vCol.rgb * vCol.a * a, 1.0);
-          else { if (vCol.a * a < 0.02) discard; gl_FragColor = vec4(vCol.rgb, vCol.a * a); } }`,
+      vertexShader: PARTICLE_VS,
+      fragmentShader: PARTICLE_FS,
       uniforms: { uAdd: { value: additive ? 1 : 0 } },
       transparent: true,
       depthWrite: false,

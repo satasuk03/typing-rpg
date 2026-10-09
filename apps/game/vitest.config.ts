@@ -9,6 +9,7 @@ export default defineConfig({
       "tests/audio/**/*.test.ts",
       "tests/hud/**/*.test.ts",
       "tests/level/**/*.test.ts",
+      "tests/vfx/**/*.test.ts",
       "tests/net/**/*.test.ts",
     ],
   },
