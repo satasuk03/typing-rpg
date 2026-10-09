@@ -193,16 +193,25 @@ export class PlaySession {
     if (opts.fonts !== false) await loadHudFonts();
     const layout = loadLevel(opts.levelId);
     const tier: QualityTier = isQualityTier(opts.tier ?? 0) ? ((opts.tier ?? 0) as QualityTier) : 0;
+    // GL context loss (T6.4): pause the sim while the context is gone, resume once it is restored.
+    const holder: { s: PlaySession | null } = { s: null };
     const world = new RenderWorld({
       biome: toRenderBiome(layout.biome),
       quality: tier,
       autoQuality: false,
+      hooks: {
+        onContextLost: () => holder.s?.openPause("overlay"),
+        onContextRestored: () => {
+          if (holder.s?.runner.pauseReason === "overlay") holder.s.resume();
+        },
+      },
     });
     world.init(opts.glCanvas);
     const handle = buildWorld(layout, world, world.source);
     const enemies = new Map(contentBundle.enemies.map((e) => [e.id, e]));
     const stage = new LevelStage(world, handle, { enemies });
     const s = new PlaySession(opts, world, stage);
+    holder.s = s;
     s.attach();
     return s;
   }
@@ -214,6 +223,7 @@ export class PlaySession {
       this.hud.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
     };
     window.addEventListener("resize", resize);
+    this.hud.setQuality(this.world.qualityTier); // caps the HUD backing-store DPR per tier
     resize();
     this.keyboard.attach();
     this.setBiomeFromWorld(true);

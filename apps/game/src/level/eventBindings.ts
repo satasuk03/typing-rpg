@@ -49,7 +49,7 @@ export interface RenderActions {
 
 /** DOM overlay hooks (screens.ts). */
 export interface UiActions {
-  hint(text: string, sec: number): void;
+  hint(text: string, sec: number, cue?: "target" | "atb" | "combo" | "skill" | "guard"): void;
   secondWind(on: boolean): void;
 }
 
@@ -167,7 +167,7 @@ export const BINDINGS: BindingTable = {
     fxNone: "the slow-mo is the render column; the defeat banner and results are HUD / screens",
   }),
   TutorialCue: b("TutorialCue", {
-    render: (e, c) => c.ui.hint(TUTORIAL_TEXT[e.cue], 6),
+    render: (e, c) => c.ui.hint(TUTORIAL_TEXT[e.cue], 6, e.cue),
     fxNone: "a DOM hint (UiActions.hint), not a world effect",
   }),
 

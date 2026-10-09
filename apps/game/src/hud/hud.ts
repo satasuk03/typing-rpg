@@ -55,6 +55,9 @@ export type HudAnchor =
   | { kind: "enemy"; id: number; slot: number; part: HudAnchorPart }
   | { kind: "hero"; part: HudAnchorPart };
 /** Returns CSS-pixel screen position (canvas space) or null when off-screen / unknown. */
+/** Max HUD canvas device pixel ratio per quality tier. Tier 2 matches the WebGL cap (QUALITY_TIERS maxDpr). */
+export const HUD_MAX_DPR: readonly [number, number, number] = [2, 1.5, 1];
+
 export type HudProjector = (a: HudAnchor) => { x: number; y: number } | null;
 
 /** Notices for T2.6: fired AFTER the HUD resolved the rects, so effects can anchor to them. */
@@ -131,6 +134,8 @@ export class Hud {
 
   private c: Ctx;
   private dpr = 1;
+  /** Device pixel ratio as reported by the window (before the per-tier cap). */
+  private rawDpr = 1;
   private cssW = 1280;
   private cssH = 720;
   private s = 1;
@@ -167,6 +172,8 @@ export class Hud {
   private frameMs: number[] = [];
   private popRects: Rect[] = [];
   private bannerRects: Rect[] = [];
+  /** DOM overlays (tutorial cards) the plates must stay clear of, in CSS px. */
+  private reserved: Rect[] = [];
   private nextIndexByPlate = new Map<number, number>();
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -184,7 +191,8 @@ export class Hud {
 
   /** CSS size of the canvas and device pixel ratio. Call on window resize. */
   resize(cssW: number, cssH: number, dpr: number): void {
-    this.dpr = Math.min(2, Math.max(1, dpr));
+    this.rawDpr = dpr;
+    this.dpr = Math.min(HUD_MAX_DPR[this.quality], Math.max(1, dpr));
     this.cssW = cssW;
     this.cssH = cssH;
     this.canvas.width = Math.round(cssW * this.dpr);
@@ -193,6 +201,11 @@ export class Hud {
     this.W = 1280;
     this.H = cssH / this.s;
     this.layoutState = newLayoutState();
+  }
+
+  /** Reserve screen rects (CSS px) for DOM overlays: the plate layout solver treats them like panels and banners. */
+  setReserved(rects: readonly Rect[]): void {
+    this.reserved = rects.map((r) => ({ ...r }));
   }
 
   setSettings(s: Partial<HudSettings>): void {
@@ -214,7 +227,12 @@ export class Hud {
   }
   /** Quality tier 0..2 (typing VFX and the tier border read it). */
   setQuality(q: 0 | 1 | 2): void {
+    if (q === this.quality) return;
     this.quality = q;
+    // The backing store is capped per tier (a 3840x2160 2D canvas dominates the frame on Retina at tier 2).
+    if (this.cssW > 0 && Math.min(HUD_MAX_DPR[q], Math.max(1, this.rawDpr)) !== this.dpr) {
+      this.resize(this.cssW, this.cssH, this.rawDpr);
+    }
   }
   getQuality(): 0 | 1 | 2 {
     return this.quality;
@@ -673,6 +691,9 @@ export class Hud {
       if (!e.alive || e.isBoss || introHold) continue;
       const f = this.anchorDesign(e, "feet");
       avoid.push(enemyBarsRect(f.x, f.y));
+    }
+    for (const r of this.reserved) {
+      avoid.push({ x: r.x / this.s, y: r.y / this.s, w: r.w / this.s, h: r.h / this.s });
     }
     this.bannerRects.length = 0;
     for (const b of this.banners.banners) {

@@ -24,7 +24,8 @@ export const APP_CSS = `
 
 /* ---------------------------------------------------------------- title */
 .title .title-logo{position:absolute;left:0;right:0;top:11%;text-align:center}
-.title-logo .hd-sub{color:#fff0c8;text-shadow:0 2px 0 #000,0 0 8px #000,0 0 16px rgba(0,0,0,.8);font-size:14px}
+.title-logo .hd-sub{display:inline-block;color:#fff6d8;font-size:15px;letter-spacing:.14em;padding:7px 22px;
+  background:rgba(8,6,11,.82);border:1px solid #8a6f3e;box-shadow:0 0 0 2px rgba(0,0,0,.6),0 4px 18px rgba(0,0,0,.6);text-shadow:0 1px 0 #000}
 .title-logo .hd-eyebrow{text-shadow:0 2px 0 #000,0 0 8px #000}
 .logo-main{font:900 148px/1 var(--f-disp);letter-spacing:.12em;margin:6px 0 0 .12em;color:#ffe9a8;
   background:linear-gradient(180deg,#fff6d0 0%,#f2c866 48%,#b9791f 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
@@ -41,6 +42,30 @@ export const APP_CSS = `
 .title-foot{position:absolute;left:40px;right:40px;bottom:16px;display:flex;justify-content:space-between;color:var(--dim);font-size:12px;letter-spacing:.1em}
 @keyframes blink{50%{opacity:.15}}
 .app-confirm{width:480px}
+.story,.calibrate{align-items:center;justify-content:center}
+.story-card{width:760px;text-align:center;padding:34px 44px 22px}
+.story-card .story-t{font-size:38px;margin:8px 0 6px}
+.story-card .story-p{font:18px/1.6 var(--f-ui);color:#efe6cf;margin:16px auto 22px;max-width:620px}
+.story-dots{display:flex;gap:10px;justify-content:center;margin-bottom:14px}
+.story-dots i{width:10px;height:10px;background:#3a3550;transform:rotate(45deg)}
+.story-dots i.on{background:var(--gold);box-shadow:0 0 8px rgba(255,200,90,.7)}
+.story-keys{display:flex;justify-content:center;gap:28px;font:11px var(--f-pix);letter-spacing:.1em;color:var(--muted)}
+.cal-card{width:820px;text-align:center;padding:26px 40px 20px}
+.cal-card .cal-why{font:14px/1.5 var(--f-ui);color:#efe6cf;margin:12px auto 16px;max-width:640px}
+.cal-card .hd-title{margin-top:6px}
+.cal-word{font:900 54px/1.1 var(--f-disp);letter-spacing:.14em;color:#8e8470;margin:6px 0 10px;min-height:64px}
+.cal-word .ok{color:var(--good)}
+.cal-word .cur{color:var(--gold-hi);border-bottom:4px solid var(--gold-hi)}
+.cal-word.bad{animation:calBad .25s}
+@keyframes calBad{0%,100%{transform:none}25%{transform:translateX(-6px);color:#ff8a7a}75%{transform:translateX(6px)}}
+.cal-next{font:18px/1.5 var(--f-pix);letter-spacing:.12em;color:#a99f88;min-height:56px}
+.cal-bar{height:10px;background:#0a0710;border:1px solid #3a3550;margin:12px 0 8px}
+.cal-bar i{display:block;height:100%;background:linear-gradient(90deg,#c99a3c,#ffe08a);transition:width .1s linear}
+.cal-foot{display:flex;justify-content:space-between;font:12px var(--f-pix);letter-spacing:.1em;color:var(--muted)}
+.cal-res{display:flex;justify-content:center;gap:46px;margin:14px 0 10px}
+.cal-res div{display:flex;flex-direction:column;align-items:center}
+.cal-res b{font:900 52px var(--f-disp);color:var(--gold-hi);text-shadow:0 2px 0 #5b3d12}
+.cal-res span{font:11px var(--f-pix);letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
 
 /* ---------------------------------------------------------------- map */
 .map-body{position:relative;flex:1}
@@ -185,7 +210,10 @@ export const APP_CSS = `
 .odds-pity b{color:var(--gold-hi)}
 
 /* ---------------------------------------------------------------- settings */
-.set-body{flex:1;display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:22px;min-height:0}
+.set-body{flex:1;display:grid;grid-template-columns:1fr 1fr 1.15fr;grid-template-rows:minmax(0,1fr) auto;gap:22px;min-height:0}
+.set-body>.set-help{grid-column:1/-1;display:flex;gap:48px;align-items:center;padding-top:12px;padding-bottom:12px}
+.set-body>.set-help .hd-h{margin:0}
+.set-body>.set-help .set-row{border:0;padding:0;gap:18px}
 .set-body>.hd-panel{overflow:auto}
 .set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}
 .set-row:last-child{border-bottom:0}

@@ -12,6 +12,8 @@ export interface Run {
 
 /** Opens the real game (title screen). Fonts load, the local save is the IndexedDB of this browser context. */
 export async function openApp(page: Page, query = "api=off&audio=0&dev=1"): Promise<Run> {
+  // the first-run flow (story, calibration) is off unless a spec asks for it with `onboard=1`
+  if (!query.includes("onboard=")) query += "&onboard=0";
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -64,6 +66,39 @@ export const save = (page: Page) => page.evaluate(() => (window.__app as AppDebu
 
 export async function settle(page: Page, ms = 450): Promise<void> {
   await page.waitForTimeout(ms);
+}
+
+/** Types the calibration text at `wpm` until the result card shows. Returns the characters typed. */
+export async function typeCalibration(
+  page: Page,
+  wpm: number,
+  onMid?: () => Promise<void>,
+): Promise<number> {
+  const delay = Math.round(60_000 / (wpm * 5));
+  let typed = 0;
+  let midDone = false;
+  for (let guard = 0; guard < 2000; guard++) {
+    const st = await page.evaluate(() => {
+      const root = document.querySelector<HTMLElement>(".calibrate");
+      const word = document.querySelector<HTMLElement>("#cal-word")?.textContent ?? "";
+      const ok = document.querySelector<HTMLElement>("#cal-word .ok")?.textContent ?? "";
+      return { state: root?.dataset.state ?? "", word, ci: ok.length };
+    });
+    if (st.state === "done") break;
+    const ch = st.word[st.ci];
+    if (!ch) {
+      await page.waitForTimeout(50);
+      continue;
+    }
+    await page.keyboard.press(ch);
+    typed++;
+    if (!midDone && typed === 28 && onMid) {
+      midDone = true;
+      await onMid();
+    }
+    await page.waitForTimeout(delay);
+  }
+  return typed;
 }
 
 export { expect };

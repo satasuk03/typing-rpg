@@ -17,6 +17,12 @@ export interface VoiceOpts {
   rate?: number;
 }
 
+/** Web Audio nominal frequency range (Chrome warns outside [0, Nyquist]); high partials of bells and tier-up arpeggios can exceed it. */
+export const FREQ_MIN = 20;
+export const FREQ_MAX = 20000;
+export const clampHz = (hz: number): number =>
+  Number.isFinite(hz) ? Math.min(FREQ_MAX, Math.max(FREQ_MIN, hz)) : FREQ_MIN;
+
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 /**
@@ -81,8 +87,10 @@ export class Synth {
     const s = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     s.type = type;
-    s.frequency.setValueAtTime(f0, t);
-    if (f1 !== f0) s.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + (o.slide ?? dur));
+    const hz0 = clampHz(f0);
+    const hz1 = clampHz(f1);
+    s.frequency.setValueAtTime(hz0, t);
+    if (hz1 !== hz0) s.frequency.exponentialRampToValueAtTime(hz1, t + (o.slide ?? dur));
     if (o.detune) s.detune.value = o.detune;
     const a = o.a ?? 0.004;
     this.env(g, t, a, gain, dur, o.hold ?? 0);
@@ -90,7 +98,7 @@ export class Synth {
     if (o.lp) {
       const f = this.ctx.createBiquadFilter();
       f.type = "lowpass";
-      f.frequency.value = o.lp;
+      f.frequency.value = clampHz(o.lp);
       f.Q.value = o.q ?? 0.7;
       s.connect(f);
       n = f;
@@ -117,8 +125,10 @@ export class Synth {
     s.playbackRate.value = o.rate ?? 1;
     const f = this.ctx.createBiquadFilter();
     f.type = type;
-    f.frequency.setValueAtTime(f0, t);
-    if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + (o.slide ?? dur));
+    const hz0 = clampHz(f0);
+    const hz1 = clampHz(f1);
+    f.frequency.setValueAtTime(hz0, t);
+    if (hz1 !== hz0) f.frequency.exponentialRampToValueAtTime(hz1, t + (o.slide ?? dur));
     f.Q.value = o.q ?? 0.8;
     const g = this.ctx.createGain();
     const a = o.a ?? 0.003;

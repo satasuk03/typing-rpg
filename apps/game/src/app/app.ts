@@ -10,11 +10,12 @@
 import { contentBundle } from "@hd2d/content";
 import type { LevelResult } from "@hd2d/sim";
 import type { AudioEngine, Sfx } from "../audio";
+import { HOW_TO_PLAY_CSS } from "../hud/howToPlay";
 import { injectUiTheme } from "../hud/uiTheme";
 import type { RunConfig } from "../level/runner";
 import type { ResultExtras } from "../level/screens";
 import { PlaySession } from "../level/session";
-import type { LevelCommit } from "../meta/ops";
+import { isFirstRun, type LevelCommit } from "../meta/ops";
 import type { SaveStore } from "../meta/save";
 import type { Net } from "../net";
 import type { QualityTier } from "../render";
@@ -40,7 +41,9 @@ export type ScreenName =
   | "cache"
   | "journal"
   | "settings"
-  | "complete";
+  | "complete"
+  | "story"
+  | "calibrate";
 
 export interface ScreenArg {
   focus?: string;
@@ -65,6 +68,8 @@ export interface AppDeps {
   bot?: BotParams;
   fonts?: boolean;
   tier: QualityTier;
+  /** First-run flow (story, calibration, tutorial level) for a fresh profile. Default true; `?onboard=0` turns it off. */
+  onboarding?: boolean;
 }
 
 export interface LastRun {
@@ -84,6 +89,8 @@ const PARENT: Record<ScreenName, ScreenName | null> = {
   journal: "map",
   settings: "map",
   complete: "map",
+  story: null,
+  calibrate: null,
 };
 
 declare global {
@@ -130,7 +137,7 @@ export class App {
     injectUiTheme();
     const style = document.createElement("style");
     style.id = "hd-app-css";
-    style.textContent = APP_CSS;
+    style.textContent = APP_CSS + HOW_TO_PLAY_CSS;
     document.head.append(style);
     this.root = document.createElement("div");
     this.root.id = "app-ui";
@@ -140,6 +147,24 @@ export class App {
     this.audio?.unlockOnGesture(window);
     this.applyAudioFromSave();
     window.addEventListener("online", () => this.net.sync.onOnline());
+  }
+
+  // ---------------------------------------------------------------------------------------- onboarding
+
+  get onboardingEnabled(): boolean {
+    return this.deps.onboarding !== false;
+  }
+
+  /**
+   * "Start game" on a fresh profile: story card, then the calibration, then straight into L1 (the tutorial level).
+   * A profile that is already calibrated (it quit during L1) goes directly to L1. Returns false when the flow does not
+   * apply (returning player, or onboarding off): the caller opens the map as usual.
+   */
+  beginFirstRun(): boolean {
+    if (!this.onboardingEnabled || !isFirstRun(this.store.save)) return false;
+    if (this.store.save.pace.calibrationWpm !== null) void this.play("ch1-l01");
+    else this.go("story", {});
+    return true;
   }
 
   // ---------------------------------------------------------------------------------------- helpers
@@ -344,7 +369,10 @@ export class App {
         exit: () => done("exit"),
       },
     });
-    window.__play = this.session.debugApi(this.consoleErrors);
+    const sess = this.session;
+    // the tutorial card's rect is an `avoid` rect for the plate layout (plates never sit under a card)
+    sess.screens.onTutorialRect = (r) => sess.hud.setReserved(r ? [r] : []);
+    window.__play = sess.debugApi(this.consoleErrors);
   }
 
   consoleErrors: string[] = [];

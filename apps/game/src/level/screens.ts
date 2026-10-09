@@ -5,8 +5,12 @@
  * The overlays never sit on top of word plates while typing: the Second Wind prompt and hints are small strips at the
  * very top, and the menu/fail/results panels only exist while the sim is paused or terminal.
  */
+import { contentBundle } from "@hd2d/content";
 import type { LevelResult, LevelView, ResolvedLevel } from "@hd2d/sim";
 import { evaluateStars } from "@hd2d/sim";
+import { HOW_TO_PLAY_CSS, HOW_TO_PLAY_HTML } from "../hud/howToPlay";
+import type { Rect } from "../hud/layout";
+import { TUTORIAL_CSS, TutorialCards, type TutorialCueId } from "../hud/tutorial";
 import { injectUiTheme } from "../hud/uiTheme";
 
 // ---------------------------------------------------------------------------------------------- model (pure)
@@ -38,6 +42,12 @@ export interface ResultExtras {
   gold?: number;
   notes?: string[];
   knownWordKeys?: ReadonlySet<string>;
+}
+
+/** "Level 1 · Sunlit Glade" for the results subtitle (the raw `ch1-l01` id is not for players). */
+export function levelTitle(def: ResolvedLevel): string {
+  const l = contentBundle.levels.find((x) => x.id === def.levelId);
+  return l ? `Level ${l.index} \u00b7 ${l.name}` : `Level ${def.index}`;
 }
 
 export const formatTime = (ticks: number): string => {
@@ -80,7 +90,7 @@ export function buildResultsModel(
     outcome: result.outcome,
     title: cleared ? "LEVEL CLEAR" : "DEFEATED",
     subtitle: cleared
-      ? def.levelId
+      ? levelTitle(def)
       : result.failReason === "abandoned"
         ? "You left the level"
         : result.failReason === "timeout"
@@ -130,6 +140,7 @@ const CSS = `
 #play-ui .words{margin:0 0 14px;color:#cfe8d0;font-size:12px;max-width:520px;margin-left:auto;margin-right:auto}
 #play-ui .btns{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-top:8px;padding-left:16px}
 #play-ui .strip{position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:520px;padding:6px 16px;background:rgba(10,9,18,.78);border:1px solid var(--gold);text-align:center;font-size:12px;letter-spacing:.06em;color:var(--ink)}
+#play-ui .panel.help{max-width:700px;text-align:left}
 #play-ui .sw{top:8px;border-color:#ff8a6a;color:#ffd9c9}
 #play-ui .sw .bar{height:4px;margin-top:5px;background:#3a1d18}
 #play-ui .sw .bar i{display:block;height:100%;background:#ff8a6a}
@@ -145,12 +156,14 @@ export class Screens {
   private readonly swEl: HTMLDivElement;
   private swBar: HTMLElement | null = null;
   private hintTimer = 0;
+  /** L1 tutorial cards (cue-driven). `onTutorialRect` lets the app reserve the card's rect in the HUD layout. */
+  readonly tutorial: TutorialCards;
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(private readonly actions: ScreenActions) {
     injectUiTheme();
     const style = document.createElement("style");
-    style.textContent = CSS;
+    style.textContent = CSS + TUTORIAL_CSS + HOW_TO_PLAY_CSS;
     document.head.append(style);
     this.root = document.createElement("div");
     this.root.id = "play-ui";
@@ -166,6 +179,12 @@ export class Screens {
     this.swBar = this.swEl.querySelector("i");
     this.root.append(this.hintEl, this.swEl);
     document.body.append(this.root);
+    this.tutorial = new TutorialCards(this.root);
+  }
+
+  /** Called with the tutorial card's CSS rect while one is visible, null otherwise. */
+  set onTutorialRect(fn: ((r: Rect | null) => void) | null) {
+    this.tutorial.onRect = fn;
   }
 
   get open(): "pause" | "result" | null {
@@ -174,12 +193,17 @@ export class Screens {
 
   dispose(): void {
     this.closePanel();
+    this.tutorial.dispose();
     this.root.remove();
   }
 
   // ---- strips
 
-  hint(text: string, sec: number): void {
+  hint(text: string, sec: number, cue?: TutorialCueId): void {
+    if (cue) {
+      this.tutorial.cue(cue);
+      return;
+    }
     this.hintEl.textContent = text;
     this.hintEl.style.display = "";
     window.clearTimeout(this.hintTimer);
@@ -208,6 +232,7 @@ export class Screens {
 
   private mount(kind: "pause" | "result", html: string, keys: Record<string, () => void>): void {
     this.closePanel();
+    this.tutorial.clear();
     const p = document.createElement("div");
     p.className = "panel hd-panel";
     p.dataset.kind = kind;
@@ -215,8 +240,11 @@ export class Screens {
     this.root.append(p);
     this.panel = p;
     const buttons = [...p.querySelectorAll<HTMLButtonElement>("button[data-act]")];
+    // The same keydown that opened this panel (Esc opens the pause menu in the capture phase) must not reach it in the
+    // bubble phase: it would close the menu again at once.
+    const born = performance.now();
     const h = (e: KeyboardEvent): void => {
-      if (e.repeat) return;
+      if (e.repeat || e.timeStamp <= born) return;
       // Arrow keys move focus between the buttons (keyboard-only navigation); Enter on a focused button clicks it.
       if (
         e.key === "ArrowLeft" ||
@@ -271,14 +299,34 @@ export class Screens {
     this.mount(
       "pause",
       `<h1 class="hd-title">PAUSED</h1><p class="hd-sub" style="margin-bottom:16px">${esc(why)}</p>
-       <div class="btns"><button class="hd-btn primary" data-act="resume">Resume (Esc)</button><button class="hd-btn" data-act="restart">Restart</button><button class="hd-btn danger" data-act="quit">Quit level</button></div>`,
+       <div class="btns"><button class="hd-btn primary" data-act="resume">Resume (Esc)</button><button class="hd-btn" data-act="help">How to play (H)</button><button class="hd-btn" data-act="restart">Restart</button><button class="hd-btn danger" data-act="quit">Quit level</button></div>`,
       {
         Escape: () => this.actions.resume(),
+        h: () => this.showHelp(reason),
+        H: () => this.showHelp(reason),
+        "act:help": () => this.showHelp(reason),
         "act:resume": () => this.actions.resume(),
         "act:restart": () => this.actions.restart(),
         "act:quit": () => this.actions.quit(),
       },
     );
+  }
+
+  /** The controls help, over the pause menu. Back (Backspace / H) returns to the menu; Esc resumes play as before. */
+  showHelp(reason: string): void {
+    this.mount(
+      "pause",
+      `${HOW_TO_PLAY_HTML}<div class="btns" style="margin-top:12px"><button class="hd-btn primary" data-act="back">Back (Backspace)</button><button class="hd-btn" data-act="resume">Resume (Esc)</button></div>`,
+      {
+        Escape: () => this.actions.resume(),
+        Backspace: () => this.showPause(reason),
+        h: () => this.showPause(reason),
+        H: () => this.showPause(reason),
+        "act:back": () => this.showPause(reason),
+        "act:resume": () => this.actions.resume(),
+      },
+    );
+    this.panel?.classList.add("help");
   }
 
   showResults(m: ResultsModel): void {
