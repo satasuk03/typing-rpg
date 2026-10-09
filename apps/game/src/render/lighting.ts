@@ -155,6 +155,11 @@ export class LightRig {
     return this.addDynamic(def, 1e9, true);
   }
 
+  /** Drop static lights added after the first `n` (used when a level's world is disposed). */
+  truncateStatics(n: number): void {
+    if (this.statics.length > n) this.statics.length = n;
+  }
+
   clearStatic(): void {
     this.statics.length = 0;
   }

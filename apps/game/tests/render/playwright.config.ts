@@ -5,6 +5,8 @@ import { defineConfig, devices } from "@playwright/test";
  *   pnpm exec playwright test -c tests/render/playwright.config.ts
  * Headless WebGL2 runs on ANGLE/SwiftShader (software GL), so frame times are only indicative.
  */
+const PORT = Number(process.env.RENDER_PORT ?? 5173);
+
 export default defineConfig({
   testDir: ".",
   testMatch: /.*\.spec\.ts/,
@@ -12,7 +14,7 @@ export default defineConfig({
   workers: 1,
   timeout: 240_000,
   reporter: "list",
-  use: { baseURL: "http://localhost:5173" },
+  use: { baseURL: `http://localhost:${PORT}` },
   projects: [
     {
       name: "chromium-swiftshader",
@@ -31,8 +33,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:5173",
+    command: `pnpm dev --port ${PORT} --strictPort`,
+    url: `http://localhost:${PORT}`,
     reuseExistingServer: true,
     timeout: 60_000,
     cwd: "../..",

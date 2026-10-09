@@ -253,6 +253,18 @@ export class RenderWorld {
     }
   }
 
+  /**
+   * Apply an explicit (already blended / tweaked) mood immediately, e.g. a level-specific variation of a
+   * biome. `id` only labels the biome for `world.biome`; the mood values are what is rendered.
+   */
+  setMood(m: BiomeMood, id?: BiomeId): void {
+    if (id) this.biomeId = id;
+    this.mood = m;
+    this.fromMood = m;
+    this.fade = 1;
+    if (this.handle) this.applyMood(m);
+  }
+
   setQuality(tier: QualityTier): void {
     this.tier = tier;
     this.auto.setTier(tier);
@@ -495,6 +507,15 @@ export class RenderWorld {
   /** Remove a mesh created by one of the helpers (geometry/material are released by `dispose`). */
   remove(o: Object3D): void {
     o.parent?.remove(o);
+  }
+
+  /** Forget flames/god rays whose meshes were removed from their scene (call after `remove`). */
+  pruneRemoved(): void {
+    const keep = <T extends { mesh: Mesh }>(a: T[]): void => {
+      for (let i = a.length - 1; i >= 0; i--) if (!a[i]?.mesh.parent) a.splice(i, 1);
+    };
+    keep(this.flames);
+    keep(this.rays);
   }
 
   // ---------------------------------------------------------------- per-frame
