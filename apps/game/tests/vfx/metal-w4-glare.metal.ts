@@ -166,7 +166,7 @@ test("L05 60 WPM bot run: max 96 px window", async ({ page }) => {
           const gl = document.getElementById("gl") as HTMLCanvasElement;
           shots.push(`${t.toFixed(1)}_${r.clip.toFixed(2)}|${gl.toDataURL("image/jpeg", 0.85)}`);
         }
-        if (BIS && r.clip > 0.6 && bis < 14 && t - lastBis > 1.5) {
+        if (BIS && r.clip > 0.55 && bis < 20 && t - lastBis > 0.05) {
           bis++;
           lastBis = t;
           const base = r.clip;
@@ -188,7 +188,23 @@ test("L05 60 WPM bot run: max 96 px window", async ({ page }) => {
                 `-${(base - c).toFixed(2)} kind${o.material?.uniforms?.uKind?.value} ord${o.renderOrder} i${o.material?.uniforms?.uI?.value} a${o.material?.uniforms?.uAlpha?.value} y${o.position.y.toFixed(1)} x${o.position.x.toFixed(1)} sc${o.scale.x.toFixed(1)} ${o.name}`,
               );
           }
-          console.log(`W4B ${JSON.stringify(out)}`);
+          // cumulative peel (several overlapping additive layers hide each other in a single-hide bisect)
+          const pm = ms
+            .filter((o) => o.renderOrder >= 6)
+            .sort((x, y) => y.renderOrder - x.renderOrder);
+          let last = base;
+          const peel: string[] = [];
+          for (const o of pm) {
+            o.visible = false;
+            const c = (w.__w96() as { clip: number }).clip;
+            if (last - c > 0.04)
+              peel.push(
+                `${c.toFixed(2)} (-kind${o.material?.uniforms?.uKind?.value} ord${o.renderOrder} i${o.material?.uniforms?.uI?.value?.toFixed?.(2)} y${o.position.y.toFixed(1)} x${o.position.x.toFixed(1)} sc${o.scale.x.toFixed(1)})`,
+              );
+            last = c;
+          }
+          for (const o of pm) o.visible = true;
+          console.log(`W4B ${JSON.stringify(out)} PEEL ${JSON.stringify(peel)}`);
         }
         if (r.clip > res.max) {
           res.max = r.clip;

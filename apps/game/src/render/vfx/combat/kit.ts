@@ -61,6 +61,8 @@ const QUAL = [1.0, 0.8, 0.55] as const;
 export const ENEMY_LIGHT_R = 7;
 export const HERO_LIGHT_R = LIGHT_MAX_RADIUS;
 
+const BIG_TARGET_K = 0.35;
+
 export class FxKit {
   readonly add: PooledParticles;
   readonly norm: PooledParticles;
@@ -158,9 +160,9 @@ export class FxKit {
   /** Extra additive scale while one hit plays (1 normally; `bigTargetK` for a boss). */
   localK = 1;
 
-  /** 0.5 for a big (>= 3.5 u) target such as the Golem, whose pale body clips under full-size hit flares; else 1. */
+  /** 0.35 (W4; was 0.5) for a big (>= 3.5 u) target such as the Golem, whose pale body clips under full-size hit flares; else 1. */
   bigTargetK(id: number): number {
-    return this.deps.enemyInfo(id, this.bigInfo) && this.bigInfo.height >= 3.5 ? 0.5 : 1;
+    return this.deps.enemyInfo(id, this.bigInfo) && this.bigInfo.height >= 3.5 ? BIG_TARGET_K : 1;
   }
   private readonly bigInfo: EnemyInfo = {
     frame: null,
@@ -238,11 +240,12 @@ export class FxKit {
     } = {},
   ): void {
     const dir = o.dir ?? 0;
-    const hdr = 0.6 + 0.4 * Math.min(1, this.glare); // forest: spark HDR 0.76x, so a crowd of them does not clip to white
+    const lk = Math.min(1, this.localK); // a big pale target (the Golem): fewer, dimmer sparks over its stone
+    const hdr = (0.6 + 0.4 * Math.min(1, this.glare)) * (0.5 + 0.5 * lk); // forest: 0.76x, so a crowd does not clip to white
     const c0 = col[0] * hdr;
     const c1 = col[1] * hdr;
     const c2 = col[2] * hdr;
-    const cnt = Math.round(n * (0.55 + 0.45 * Math.min(1, this.glare))); // forest: 0.73x the sparks
+    const cnt = Math.round(n * (0.55 + 0.45 * Math.min(1, this.glare)) * (0.35 + 0.65 * lk)); // forest: 0.73x the sparks
     for (let i = 0; i < cnt; i++) {
       const a = this.rnd() * Math.PI * 2;
       const e = (this.rnd() - 0.3) * 1.6;
@@ -356,12 +359,13 @@ export class FxKit {
         ? 0
         : (0.5 + 0.5 * this.scale.k) * (this.scale.reducedFlash ? 0.5 : 1) * this.glare;
     if (g <= 0) return;
+    const sz = 0.65 + 0.35 * Math.min(1, this.glare); // forest: stars 0.79x the size (a 4.5 u explosion star blanks a 96 px window)
     const q = this.quad();
     q.x = x;
     q.y = y;
     q.z = z;
-    q.s0 = s0;
-    q.s1 = s1;
+    q.s0 = s0 * sz;
+    q.s1 = s1 * sz;
     q.life = life;
     q.i = i * g;
     q.rot = rot;
@@ -388,7 +392,10 @@ export class FxKit {
     i: number,
     ground = false,
   ): void {
-    const g = this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * this.glareSoft;
+    const g =
+      this.scale.k <= 0
+        ? 0
+        : (0.5 + 0.5 * this.scale.k) * this.glareSoft * (0.45 + 0.55 * Math.min(1, this.localK));
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;

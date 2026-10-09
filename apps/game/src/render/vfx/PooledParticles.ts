@@ -136,6 +136,9 @@ export class PooledParticles {
   private readonly spn: Float32Array;
   private readonly rot: Float32Array;
 
+  /** W4: alpha gain applied at upload; TypingWorldFx sets the additive pool to `world.additiveGain` (0.75 forest .. 1 cave). */
+  gain = 1;
+
   constructor(
     cap: number,
     additive: boolean,
@@ -337,12 +340,13 @@ export class PooledParticles {
     const V = this.aVel.array as Float32Array;
     const C = this.aCol.array as Float32Array;
     const S = this.aSz.array as Float32Array;
+    const gain = this.gain;
     let n = 0;
     for (let i = 0; i < this.count; i++) {
       if ((this.delay[i] as number) > 0) continue;
       const mx = this.max[i] as number;
       const k = 1 - (this.life[i] as number) / mx;
-      let a = (this.col[i * 4 + 3] as number) * Math.min(1, (1 - k) * 2.2);
+      let a = (this.col[i * 4 + 3] as number) * Math.min(1, (1 - k) * 2.2) * gain;
       const fi = this.fadeIn[i] as number;
       if (fi) a *= Math.min(1, k / fi);
       P[n * 3] = this.px[i] as number;
