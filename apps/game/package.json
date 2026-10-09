@@ -14,7 +14,8 @@
     "@hd2d/content": "workspace:*",
     "@hd2d/shared": "workspace:*",
     "@hd2d/sim": "workspace:*",
-    "three": "0.186.1"
+    "three": "0.186.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",

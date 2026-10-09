@@ -35,6 +35,9 @@ importers:
       three:
         specifier: 0.186.1
         version: 0.186.1
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@playwright/test':
         specifier: 1.64.0
@@ -69,6 +72,13 @@ importers:
       '@hd2d/content':
         specifier: workspace:*
         version: link:../content
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.64.0
+        version: 1.64.0
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
 
   tools/balance:
     devDependencies:

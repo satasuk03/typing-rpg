@@ -1,0 +1,10 @@
+{
+  "description": "Final state hash (fnv1a32 of canonicalJson) of the toy sim replayed through runReplay, keyed by seed. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
+  "simVersion": 1,
+  "hashes": {
+    "1": "6391a9cd",
+    "42": "42a4a7c1",
+    "123456789": "b74394ca",
+    "3735928559": "4dc788fc"
+  }
+}

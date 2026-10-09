@@ -20,7 +20,9 @@
                   "setTimeout": "sim must be deterministic: use ticks",
                   "setInterval": "sim must be deterministic: use ticks",
                   "window": "sim must not touch the DOM",
-                  "document": "sim must not touch the DOM"
+                  "document": "sim must not touch the DOM",
+                  "Intl": "sim must be deterministic: Intl depends on locale/ICU",
+                  "structuredClone": "sim must use deepClone (asserts plain data)"
                 }
               }
             },
