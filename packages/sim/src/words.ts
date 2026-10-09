@@ -1,10 +1,41 @@
 // Word assignment (T1.2): tier mix draw + distinct-first-letter guarantee + deterministic pool-exhaustion fallbacks.
 // Pure functions over a ResolvedLevel's pools and an explicit RNG state (the encounter's `words` stream).
+
+import { K } from "./balance.ts";
 import { SimError } from "./errors.ts";
 import { isTypable } from "./input.ts";
 import { below, pickWeighted, type RngState } from "./rng.ts";
 import type { ResolvedLevel } from "./types.ts";
-import { FALLBACK_WORDS, TK } from "./typingBalance.ts";
+
+/** Last-resort plate words, one per letter, so a plate can ALWAYS be assigned a free first letter. */
+export const FALLBACK_WORDS: readonly string[] = [
+  "apple",
+  "bread",
+  "cloud",
+  "dream",
+  "eagle",
+  "flame",
+  "grass",
+  "heart",
+  "ivory",
+  "jewel",
+  "knife",
+  "lemon",
+  "moon",
+  "night",
+  "ocean",
+  "pearl",
+  "queen",
+  "river",
+  "stone",
+  "tiger",
+  "umber",
+  "vine",
+  "water",
+  "xenon",
+  "yield",
+  "zebra",
+];
 
 const TIER_ORDER = ["current", "review", "biome", "weak"] as const;
 type Tier = (typeof TIER_ORDER)[number];
@@ -101,4 +132,4 @@ export function plateFolds(text: string, caseMode: "auto" | "strict"): boolean {
   return text === text.toLowerCase();
 }
 
-export const RECENT_LIMIT = TK.RECENT_WORDS;
+export const RECENT_LIMIT = K.RECENT_WORDS;

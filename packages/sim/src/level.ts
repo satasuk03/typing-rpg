@@ -1,47 +1,41 @@
-// Level runtime for the "typing-only" slice (T1.2): segment flow, encounters of plates with attack timers, getView and
-// getResult. Combat numbers (HP/damage/ATB attacks/skills/boss script) arrive in T1.3-T1.6; every stub is marked "STUB".
+// Level runtime: segment flow, encounters, getView and getResult. Typing rules live in typing.ts, combat in combat.ts.
+// Boss phases (T1.5), skills and passives (T1.4) and rewards (T1.6) plug in through the seams marked in combat.ts.
 // Tick processing order: docs/interfaces.md §3.2 (inputs are applied first, then step runs steps 1-7 for the tick).
 import type { WeaponArchetype } from "@hd2d/content";
+import { K } from "./balance.ts";
 import { type Emit, emitTo } from "./bus.ts";
-import { SimError } from "./errors.ts";
-import type { EntityId, HitOrigin, SimEvent } from "./events.ts";
-import { BP, type Milli, mulDiv, toDisplay } from "./fixed.ts";
 import {
-  cancelAttack,
-  enemyDef,
-  type ImpactResolver,
-  initAttack,
-  scheduleAttack,
-  stepEnemyAttacks,
-} from "./guard.ts";
+  chipHit,
+  expireBreaks,
+  externalRevive,
+  FINAL_GATE_M,
+  resolveHeroImpacts,
+  resolveImpact,
+  secondWindFailed,
+  secondWindSucceeded,
+  walkHeal,
+} from "./combat.ts";
+import { assignWordPlate, enemyById, killEnemy } from "./encounter.ts";
+import { SimError } from "./errors.ts";
+import type { HitOrigin, SimEvent } from "./events.ts";
+import { BP, type Milli, mulBp, mulDiv, toDisplay } from "./fixed.ts";
+import { failLevel, isTerminal, setPhase } from "./flow.ts";
+import { enemyDef, holdAttacks, initAttack, stepEnemyAttacks } from "./guard.ts";
 import { deepClone } from "./hash.ts";
 import type { SimInput } from "./input.ts";
+import { computeHeroStats } from "./meta/loadout.ts";
 import { below, deriveRng } from "./rng.ts";
-import type { EncounterState, EnemyState, PlateState, RunState } from "./state.ts";
-import type {
-  LevelOptions,
-  LevelPhase,
-  LevelResult,
-  LevelState,
-  Loadout,
-  ResolvedLevel,
-} from "./types.ts";
+import type { EncounterState, EnemyState, RunState } from "./state.ts";
+import type { LevelOptions, LevelResult, LevelState, Loadout, ResolvedLevel } from "./types.ts";
 import {
   accuracyBp,
-  addAtb,
-  addPlate,
   comboMultBp,
-  dropTarget,
   findPlate,
   handleKey,
   netWpmX100,
-  removePlate,
   type TypingHooks,
-  visibleFirstLetters,
 } from "./typing.ts";
-import { TK } from "./typingBalance.ts";
 import type { EnemyPose, EnemyView, HeroPose, LevelView, PlateView } from "./view.ts";
-import { pickPlateWord, RECENT_LIMIT } from "./words.ts";
 
 const WEAPON_DAMAGE_TYPE: Readonly<
   Record<WeaponArchetype, "slash" | "pierce" | "arcane" | "blunt">
@@ -51,9 +45,6 @@ const WEAPON_DAMAGE_TYPE: Readonly<
   staff: "arcane",
   hammer: "blunt",
 };
-
-const isTerminal = (s: Readonly<LevelState>): boolean =>
-  s.phase === "cleared" || s.phase === "failed";
 
 // ---------------------------------------------------------------- create
 
@@ -65,11 +56,12 @@ export function createLevel(
 ): LevelState {
   if (def.segments.length === 0) throw new SimError("createLevel: level has no segments");
   if (!Number.isSafeInteger(seed)) throw new SimError("createLevel: seed must be an integer");
-  const pace = Math.min(TK.AUTO_PACE_MAX, Math.max(TK.AUTO_PACE_MIN, Math.round(options.pace)));
+  const pace = Math.min(K.PACE_MAX, Math.max(K.PACE_MIN, Math.round(options.pace)));
+  const hero = computeHeroStats(loadout);
   const run: RunState = {
-    def: structuredPlain(def),
-    loadout: structuredPlain(loadout),
-    options: { ...structuredPlain(options), pace },
+    def: deepClone(def),
+    loadout: deepClone(loadout),
+    options: { ...deepClone(options), pace },
     started: false,
     phaseStart: 0,
     combo: 0,
@@ -89,15 +81,19 @@ export function createLevel(
       perfectParries: 0,
       hitsTaken: 0,
       autoAttacks: 0,
-      chipDamageM: 0,
+      damageByOriginM: { weapon: 0, chip: 0, skill: 0, counter: 0, minigame: 0, finisher: 0 },
     },
     activeTicks: 0,
     words: [],
     burstTicks: [],
     burstWpm: 0,
     lastBurstTick: null,
-    heroMaxHpM: TK.HERO_HP0_M,
-    heroHpM: TK.HERO_HP0_M,
+    heroAtkM: hero.atk,
+    heroMaxHpM: hero.maxHp,
+    heroHpM: hero.maxHp,
+    barrier: 0,
+    secondWindUsed: false,
+    goldCollected: 0,
     guardsShown: 0,
     encountersStarted: 0,
     endTick: null,
@@ -117,8 +113,6 @@ export function createLevel(
   };
 }
 
-const structuredPlain = <T>(v: T): T => deepClone(v);
-
 // ---------------------------------------------------------------- public step/input
 
 export function applyInput(state: LevelState, input: SimInput): SimEvent[] {
@@ -130,7 +124,8 @@ export function applyInput(state: LevelState, input: SimInput): SimEvent[] {
   const emit = emitTo(out);
   if ("cmd" in input) {
     if (input.cmd === "abandon") failLevel(state, "abandoned", emit);
-    return out; // "revive" is a hook for T1.3 (allowExternalRevive); a no-op in the typing-only slice
+    else externalRevive(state, input.source, emit); // gem/feather hook: a no-op unless options.allowExternalRevive
+    return out;
   }
   handleKey(state, input.key, HOOKS, emit);
   return out;
@@ -160,13 +155,17 @@ function stepOne(state: LevelState, emit: Emit): void {
     enterSegment(state, 0, emit);
   } else {
     if (state.phase === "combat") run.activeTicks++;
-    // steps 1-2 (statuses, hero impacts): T1.3. Step 3: enemy timers.
-    if (state.phase === "combat" && state.enc !== null)
-      stepEnemyAttacks(state, resolveImpactStub, emit);
+    if (state.phase === "combat" && state.enc !== null) {
+      expireBreaks(state, emit); // step 1: timers (statuses: T1.4)
+      resolveHeroImpacts(state, emit); // step 2: scheduled hero impacts
+      if (run.options.tutorial && run.stats.wordsCompleted < K.TUTORIAL_HOLD_ATTACKS_UNTIL_WORDS)
+        holdAttacks(state); // tutorial: enemies hold their attacks until the hero has typed a few words
+      stepEnemyAttacks(state, resolveImpact, emit); // step 3: enemy timers
+    }
     // step 7: deaths, wave/encounter/segment transitions
     transitions(state, emit);
   }
-  if (!isTerminal(state) && t + 1 >= TK.LEVEL_TIMEOUT_T) failLevel(state, "timeout", emit);
+  if (!isTerminal(state) && t + 1 >= K.LEVEL_TIMEOUT_T) failLevel(state, "timeout", emit);
   state.tick = t + 1;
 }
 
@@ -186,7 +185,7 @@ function transitions(state: LevelState, emit: Emit): void {
         encounterIndex: enc.index,
         durationTicks: t - enc.startTick,
       });
-      setPhase(state, "rewards", t + TK.REWARD_T);
+      setPhase(state, "rewards", t + K.REWARD_T);
       return;
     }
     if (state.phaseUntil === null || t < state.phaseUntil) return;
@@ -202,27 +201,13 @@ function transitions(state: LevelState, emit: Emit): void {
       case "rewards":
         enterSegment(state, state.segmentIndex + 1, emit);
         break;
+      case "secondWind":
+        secondWindFailed(state, emit);
+        break;
       default:
         return;
     }
   }
-}
-
-function setPhase(state: LevelState, phase: LevelPhase, until: number | null): void {
-  state.phase = phase;
-  state.phaseUntil = until;
-  state.run.phaseStart = state.tick;
-}
-
-function failLevel(
-  state: LevelState,
-  reason: "abandoned" | "timeout" | "defeated",
-  emit: Emit,
-): void {
-  state.run.failReason = reason;
-  state.run.endTick = state.tick;
-  setPhase(state, "failed", null);
-  emit({ type: "LevelFailed", tick: state.tick, reason, goldKept: 0 });
 }
 
 // ---------------------------------------------------------------- segments & encounters
@@ -235,7 +220,13 @@ function enterSegment(state: LevelState, idx: number, emit: Emit): void {
   if (seg === undefined) {
     run.endTick = t;
     setPhase(state, "cleared", null);
-    emit({ type: "LevelCleared", tick: t, levelId: run.def.levelId, durationTicks: t, gold: 0 });
+    emit({
+      type: "LevelCleared",
+      tick: t,
+      levelId: run.def.levelId,
+      durationTicks: t,
+      gold: run.goldCollected,
+    });
     return;
   }
   if (seg.kind === "walk") {
@@ -247,6 +238,7 @@ function enterSegment(state: LevelState, idx: number, emit: Emit): void {
       untilTick: t + seg.ticks,
       heals: seg.heal,
     });
+    if (seg.heal) walkHeal(state, emit);
     return;
   }
   startEncounter(state, emit);
@@ -262,7 +254,7 @@ function startEncounter(state: LevelState, emit: Emit): void {
   const boss = isBoss ? run.def.boss : null;
   if (isBoss && boss === null) throw new SimError("boss segment without def.boss");
   const index = run.encountersStarted++;
-  const typingFrom = t + (boss !== null ? boss.introTicks : TK.ENCOUNTER_INTRO_T);
+  const typingFrom = t + (boss !== null ? boss.introTicks : K.ENCOUNTER_INTRO_T);
   const enc: EncounterState = {
     index,
     isBoss,
@@ -275,6 +267,10 @@ function startEncounter(state: LevelState, emit: Emit): void {
     targetPlateId: null,
     focusEnemyId: null,
     atbM: 0, // hero ATB resets each encounter (D18); Opening Gambit is T1.4
+    pending: [],
+    critWords: 0,
+    critPerfect: 0,
+    frozenAt: null,
     wordsRng: deriveRng(state.seed, "words", index),
     aiRng: deriveRng(state.seed, "enemyAi", index),
     combatRng: deriveRng(state.seed, "combat", index),
@@ -332,6 +328,9 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
           1000,
           mulDiv((seg as { hpPoolM: Milli }).hpPoolM, def.hpWeightBp, Math.max(1, weightSum)),
         );
+    const hitM = isBossEnemy
+      ? (boss as NonNullable<typeof boss>).hitM
+      : mulBp((seg as { gruntHitM: Milli }).gruntHitM, def.hitWeightBp);
     spawned.push({
       id: state.nextId++,
       defId: r.enemyId,
@@ -340,6 +339,15 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
       alive: true,
       hpM: maxHpM,
       maxHpM,
+      hitM,
+      shield: def.shield,
+      shieldMax: def.shield,
+      revealed: [],
+      brokenUntil: null,
+      staggerUntil: null,
+      // T1.3: a boss cannot be damaged to death; reaching 1 milli shows the Finisher. T1.5 replaces this with the
+      // 66% / 33% phase gates (and sets the final gate when the last phase starts).
+      gateHpM: isBossEnemy ? FINAL_GATE_M : null,
       plateId: null,
       spawnTick: t,
       intervalTicks: 0,
@@ -368,12 +376,12 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
       slot: e.slot,
       maxHp: toDisplay(e.maxHpM),
       isBoss: e.isBoss,
-      shieldMax: enemyDef(state, e.defId).shield,
+      shieldMax: e.shieldMax,
     });
   }
   for (const e of spawned) assignWordPlate(state, e, emit);
   for (const e of spawned) {
-    const p = below3000(enc);
+    const p = below(enc.aiRng, K.INITIAL_ENEMY_ATB_MAX_BP + 1);
     initAttack(state, e, p);
   }
   if (enc.focusEnemyId === null && spawned[0] !== undefined) {
@@ -382,40 +390,23 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
   }
 }
 
-const below3000 = (enc: EncounterState): number =>
-  below(enc.aiRng, TK.INITIAL_ENEMY_ATB_MAX_BP + 1);
-
-/** Assigns a fresh word plate (distinct first letter among visible plates) to an enemy. */
-function assignWordPlate(state: LevelState, enemy: EnemyState, emit: Emit): PlateState {
-  const enc = state.enc as EncounterState;
-  const run = state.run;
-  const boss = run.def.boss;
-  const lengthRange =
-    enemy.isBoss && boss !== null ? boss.plateLength : enemyDef(state, enemy.defId).plateLength;
-  const word = pickPlateWord(run.def, enc.wordsRng, {
-    forbidden: visibleFirstLetters(enc),
-    recent: enc.recent,
-    lengthRange,
-  });
-  enc.recent.push(word);
-  while (enc.recent.length > RECENT_LIMIT) enc.recent.shift();
-  const plate = addPlate(state, { ownerId: enemy.id, kind: "word", text: word }, emit);
-  enemy.plateId = plate.id;
-  return plate;
-}
-
-// ---------------------------------------------------------------- enemy-side consequences of plates (STUBs for T1.3+)
+// ---------------------------------------------------------------- consequences of completed plates
 
 const HOOKS: TypingHooks = {
   onPlateCompleted(state, plate, emit) {
     const enc = state.enc as EncounterState;
-    const enemy =
-      plate.ownerId === null ? null : (enc.enemies.find((e) => e.id === plate.ownerId) ?? null);
+    if (plate.kind === "secondWind") {
+      secondWindSucceeded(state, emit);
+      return;
+    }
+    const enemy = enemyById(enc, plate.ownerId);
     if (enemy === null) return;
     if (plate.kind === "guard") {
-      // the normal word returns as a fresh plate; block/parry resolves at impact
+      // Block / parry resolves at impact. The completed guard plate also deals its chip (orchestrator ruling):
+      // WordCompleted, GuardWordTyped (the typed outcome), PlateRemoved, then Hit{chip}, then the fresh word plate.
       enemy.guardResult = plate.perfect ? "parry" : "block";
-      if (enemy.alive) assignWordPlate(state, enemy, emit);
+      chipHit(state, enemy, plate.perfect, emit);
+      if (enemy.alive && !enc.finisherShown) assignWordPlate(state, enemy, emit);
       return;
     }
     if (plate.kind === "finisher") {
@@ -429,132 +420,9 @@ const HOOKS: TypingHooks = {
       enc.focusEnemyId = enemy.id;
       emit({ type: "FocusChanged", tick: state.tick, enemyId: enemy.id });
     }
-    // STUB word strike: kills after STUB_WORDS_TO_KILL words (T1.3: CHIP_NORMAL/PERFECT x ATK, phase gates, shields)
-    const words = enemy.isBoss ? TK.STUB_WORDS_TO_KILL_BOSS : TK.STUB_WORDS_TO_KILL;
-    const chipM = Math.ceil(enemy.maxHpM / words);
-    const lethal = enemy.hpM - chipM <= 0;
-    const dmgM = lethal && enemy.isBoss ? enemy.hpM - 1 : Math.min(chipM, enemy.hpM);
-    enemy.hpM -= dmgM;
-    state.run.stats.chipDamageM += dmgM;
-    const killed = lethal && !enemy.isBoss;
-    emit({
-      type: "Hit",
-      tick: state.tick,
-      sourceId: 0,
-      targetId: enemy.id,
-      kind: "chip",
-      origin: "chip",
-      skillId: null,
-      damageType: null,
-      damage: toDisplay(dmgM),
-      damageM: dmgM,
-      hpAfter: toDisplay(enemy.hpM),
-      maxHp: toDisplay(enemy.maxHpM),
-      crit: false,
-      weak: false,
-      broken: false,
-      atbKnockback: false,
-      hitIndex: 0,
-      hitCount: 1,
-      killed,
-    });
-    if (killed) {
-      killEnemy(state, enemy, "chip", emit);
-    } else if (lethal && enemy.isBoss) {
-      showFinisher(state, enemy, emit); // STUB boss: finisher sentence plate (exclusive, auto-targeted)
-    } else {
-      assignWordPlate(state, enemy, emit);
-    }
+    chipHit(state, enemy, plate.perfect, emit);
+    if (enemy.alive && !enc.finisherShown) assignWordPlate(state, enemy, emit);
   },
-};
-
-function showFinisher(state: LevelState, boss: EnemyState, emit: Emit): void {
-  const enc = state.enc as EncounterState;
-  const def = state.run.def.boss as NonNullable<ResolvedLevel["boss"]>;
-  enc.finisherShown = true;
-  cancelAttack(boss);
-  if (enc.targetPlateId !== null) dropTarget(state, "phaseChanged", emit);
-  for (const p of [...enc.plates]) removePlate(state, p, "phaseEnded", emit);
-  boss.plateId = null;
-  const plate = addPlate(
-    state,
-    { ownerId: boss.id, kind: "finisher", text: def.phase3.finisherText },
-    emit,
-  );
-  boss.plateId = plate.id;
-  emit({
-    type: "FinisherShown",
-    tick: state.tick,
-    enemyId: boss.id,
-    plateId: plate.id,
-    text: plate.text,
-  });
-}
-
-function killEnemy(
-  state: LevelState,
-  enemy: EnemyState,
-  byKind: "chip" | "finisher",
-  emit: Emit,
-): void {
-  const enc = state.enc as EncounterState;
-  enemy.alive = false;
-  enemy.hpM = 0;
-  cancelAttack(enemy);
-  enc.finisherShown = false;
-  emit({
-    type: "EnemyDeath",
-    tick: state.tick,
-    enemyId: enemy.id,
-    defId: enemy.defId,
-    isBoss: enemy.isBoss,
-    byKind,
-  });
-  const own = findPlate(enc, enemy.plateId);
-  if (own !== null) {
-    if (enc.targetPlateId === own.id) dropTarget(state, "ownerDied", emit);
-    removePlate(state, own, "ownerDied", emit);
-  }
-  enemy.plateId = null;
-  if (enc.focusEnemyId === enemy.id) {
-    const next = enc.enemies.find((e) => e.alive);
-    enc.focusEnemyId = next === undefined ? null : next.id;
-    emit({ type: "FocusChanged", tick: state.tick, enemyId: enc.focusEnemyId });
-  }
-}
-
-/**
- * STUB impact (T1.3 replaces): no damage is dealt. Emits the outcome the typing decided (blocked/parried/hit) with 0
- * damage, pays the parry ATB, reverts an ignored guard plate to a normal word, and reschedules the next cycle.
- */
-const resolveImpactStub: ImpactResolver = (state, enemy, emit) => {
-  const enc = state.enc as EncounterState;
-  const run = state.run;
-  const t = state.tick;
-  const outcome =
-    enemy.guardResult === "parry" ? "parried" : enemy.guardResult === "block" ? "blocked" : "hit";
-  emit({ type: "EnemyAttack", tick: t, enemyId: enemy.id, outcome, damage: 0 });
-  if (outcome === "parried") {
-    emit({ type: "GuardParried", tick: t, enemyId: enemy.id, counterDamage: 0 });
-    run.stats.perfectParries++;
-    addAtb(state, TK.PARRY_ATB_M, emit);
-  } else if (outcome === "blocked") {
-    emit({ type: "GuardBlocked", tick: t, enemyId: enemy.id, damage: 0 });
-    run.stats.blocks++;
-  } else {
-    run.stats.hitsTaken++;
-    const guardPlate = findPlate(enc, enemy.plateId);
-    if (guardPlate !== null && guardPlate.kind === "guard") {
-      if (enc.targetPlateId === guardPlate.id) dropTarget(state, "plateChanged", emit);
-      removePlate(state, guardPlate, "expired", emit);
-      assignWordPlate(state, enemy, emit);
-    }
-  }
-  enemy.cycleStart = t;
-  enemy.windupShown = false;
-  enemy.guardResult = null;
-  enemy.nextImpact = null;
-  scheduleAttack(state, enemy, t + enemy.intervalTicks);
 };
 
 // ---------------------------------------------------------------- view & result
@@ -585,11 +453,13 @@ export function getView(state: Readonly<LevelState>): LevelView {
     const span = e.nextImpact === null ? 0 : e.nextImpact - e.cycleStart;
     const pose: EnemyPose = !e.alive
       ? "dead"
-      : e.windupShown
-        ? "windup"
-        : t < (enc as EncounterState).typingFromTick
-          ? "enter"
-          : "idle";
+      : e.brokenUntil !== null
+        ? "broken"
+        : e.windupShown
+          ? "windup"
+          : t < (enc as EncounterState).typingFromTick
+            ? "enter"
+            : "idle";
     const def = run.def.enemies[e.defId];
     return {
       id: e.id,
@@ -609,10 +479,13 @@ export function getView(state: Readonly<LevelState>): LevelView {
       guardTicksLeft: isGuard && e.nextImpact !== null ? Math.max(0, e.nextImpact - t) : 0,
       guardTotalTicks: isGuard && plate !== null ? (plate.totalTicks ?? 0) : 0,
       guardResult: e.guardResult,
-      shield: def === undefined ? 0 : def.shield,
-      shieldMax: def === undefined ? 0 : def.shield,
-      weaknesses: (def?.weaknesses ?? []).map((type) => ({ type, revealed: false })),
-      brokenTicksLeft: 0,
+      shield: e.shield,
+      shieldMax: e.shieldMax,
+      weaknesses: (def?.weaknesses ?? []).map((type) => ({
+        type,
+        revealed: e.revealed.includes(type),
+      })),
+      brokenTicksLeft: e.brokenUntil === null ? 0 : Math.max(0, e.brokenUntil - t),
       statuses: [],
       isFocus: (enc as EncounterState).focusEnemyId === e.id,
       pose,
@@ -624,12 +497,15 @@ export function getView(state: Readonly<LevelState>): LevelView {
       ? "walk"
       : state.phase === "cleared"
         ? "victory"
-        : state.phase === "failed"
+        : state.phase === "failed" || state.phase === "secondWind" || state.phase === "downed"
           ? "downed"
-          : "idle";
+          : enc !== null && enc.pending.length > 0
+            ? "attack"
+            : "idle";
   const span = state.phaseUntil === null ? 0 : state.phaseUntil - run.phaseStart;
   const bossEnemy = enc?.isBoss ? enc.enemies[0] : undefined;
   const bossDef = run.def.boss;
+  const swPlate = (enc?.plates ?? []).find((p) => p.kind === "secondWind");
   return {
     tick: t,
     phase: state.phase,
@@ -647,12 +523,12 @@ export function getView(state: Readonly<LevelState>): LevelView {
       hp: run.heroHpM / 1000,
       maxHp: run.heroMaxHpM / 1000,
       hpFrac: run.heroHpM / run.heroMaxHpM,
-      atbFrac: enc === null ? 0 : Math.min(1, enc.atbM / TK.ATB_FULL_M),
+      atbFrac: enc === null ? 0 : Math.min(1, enc.atbM / K.ATB_FULL_M),
       archetype: arch,
       weaponDamageType: WEAPON_DAMAGE_TYPE[arch],
-      barrierCharges: 0,
+      barrierCharges: run.barrier,
       statuses: [],
-      secondWindAvailable: true,
+      secondWindAvailable: !run.secondWindUsed,
       pose: heroPose,
       poseSinceTick: run.phaseStart,
     },
@@ -680,7 +556,14 @@ export function getView(state: Readonly<LevelState>): LevelView {
         : null,
     doom: null,
     minigame: null,
-    secondWind: null,
+    secondWind:
+      swPlate === undefined || state.phaseUntil === null
+        ? null
+        : {
+            plateId: swPlate.id,
+            ticksLeft: Math.max(0, state.phaseUntil - t),
+            totalTicks: K.SECOND_WIND_T,
+          },
     stats: {
       netWpm: netWpmX100(run) / 100,
       accuracy: accuracyBp(run),
@@ -688,29 +571,22 @@ export function getView(state: Readonly<LevelState>): LevelView {
       elapsedTicks: t,
       activeTicks: run.activeTicks,
     },
-    goldCollected: 0,
+    goldCollected: run.goldCollected,
   };
 }
 
-/** Non-null once terminal. T1.6 adds gold, chests and the reward rolls; this reports the typing stats. */
+/** Non-null once terminal. T1.6 adds the reward rolls (chests, gold payout); this reports the combat and typing stats. */
 export function getResult(state: Readonly<LevelState>): LevelResult | null {
   if (!isTerminal(state)) return null;
   const run = state.run;
-  const origins: Record<HitOrigin, number> = {
-    weapon: 0,
-    chip: run.stats.chipDamageM,
-    skill: 0,
-    counter: 0,
-    minigame: 0,
-    finisher: 0,
-  };
+  const origins: Record<HitOrigin, number> = { ...run.stats.damageByOriginM };
   return {
     levelId: run.def.levelId,
     outcome: state.phase === "cleared" ? "cleared" : "failed",
     failReason: run.failReason,
     durationTicks: run.endTick ?? state.tick,
     activeTicks: run.activeTicks,
-    gold: 0,
+    gold: run.goldCollected,
     chests: [],
     stats: {
       correctChars: run.stats.correctChars,
@@ -726,11 +602,9 @@ export function getResult(state: Readonly<LevelState>): LevelResult | null {
       perfectParries: run.stats.perfectParries,
       autoAttacks: run.stats.autoAttacks,
       skillsCast: 0,
-      secondWindUsed: false,
+      secondWindUsed: run.secondWindUsed,
       damageByOriginM: origins,
     },
     words: run.words.map((w) => ({ ...w })),
   };
 }
-
-export type { EntityId };
