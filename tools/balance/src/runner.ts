@@ -10,7 +10,7 @@ import {
   type ResolvedLevel,
   resolveLevel,
 } from "@hd2d/sim";
-import { playLevel, type RunRecord } from "./bot.ts";
+import { type GimmickMode, playLevel, type RunRecord } from "./bot.ts";
 import { drawAttempt, PERSONAS, type PersonaId } from "./personas.ts";
 import { applyWhatIf, type WhatIf } from "./whatif.ts";
 
@@ -27,6 +27,8 @@ export interface Job {
   whatif?: WhatIf;
   /** starter (default): the Ch1 starter kit. bare: Fireball only, Clean Cut + Steady Hands (no Aegis, no Iron Will). */
   kit?: "starter" | "bare";
+  /** free (default): scrambled/faded words are decoded for free. realistic: the T6.2 reading model (bot.ts). */
+  gimmicks?: GimmickMode;
 }
 
 /** Ch1 starter kit (content skills.ts, no unlockLevel): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will, par gear. */
@@ -78,7 +80,16 @@ export function runJob(job: Job): RunRecord[] {
       allowExternalRevive: false,
       tutorial: d.tutorial,
     };
-    out.push(playLevel({ def: level, loadout: starterLoadout(job.kit), seed, attempt, options }));
+    out.push(
+      playLevel({
+        def: level,
+        loadout: starterLoadout(job.kit),
+        seed,
+        attempt,
+        options,
+        gimmicks: job.gimmicks,
+      }),
+    );
   }
   return out;
 }
