@@ -299,9 +299,9 @@ export class LevelStage {
     const e = this.foes.get(id);
     if (!e) return;
     e.hurtT = 0;
-    // chip / DoT hits must not keep a big enemy white: no re-trigger while a flash is still up, bosses cap at 0.5
+    // chip / DoT hits must not keep a big enemy white: no re-trigger while a flash is still up, bosses cap at 0.3
     if (e.flash > 0.2) return;
-    e.flash = Math.max(e.flash, Math.min(strength, e.isBoss ? 0.5 : 1));
+    e.flash = Math.max(e.flash, Math.min(strength, e.isBoss ? 0.3 : 1));
   }
 
   enemyAttack(id: number): void {
@@ -614,8 +614,14 @@ export class LevelStage {
       }
       if (e.hurtT < 0.2) dx += 0.25 * (1 - e.hurtT / 0.2);
       if (ev.pose === "broken") {
-        flash = Math.max(flash, 0.28 + 0.1 * Math.sin(this.time * 10));
-        flashCol = [0.45, 0.75, 1];
+        // a pale boss (the Golem) washes out under the full tint for the whole break: 0.10-0.14, a bluer colour
+        if (e.isBoss) {
+          flash = Math.max(flash, 0.12 + 0.02 * Math.sin(this.time * 10));
+          flashCol = [0.35, 0.55, 1];
+        } else {
+          flash = Math.max(flash, 0.28 + 0.1 * Math.sin(this.time * 10));
+          flashCol = [0.45, 0.75, 1];
+        }
         dz += 0;
       }
     }

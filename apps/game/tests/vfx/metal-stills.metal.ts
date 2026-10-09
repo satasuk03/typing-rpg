@@ -112,6 +112,11 @@ const PLAY: {
   { name: "coin-fountain", demo: ["coins"], at: 0.9 },
   { name: "chest-slash", demo: ["chest:Gold", "slash"], at: 0.5, gap: 1.6 },
   { name: "l09-cave-hero", demo: [], at: 0.5, level: "ch1-l09" },
+  // T6.3 W3: the same effects on the bright forest (L05)
+  { name: "f-fireball", demo: ["fireball"], at: 0.3, level: "ch1-l05" },
+  { name: "f-crit", demo: ["crit"], at: 0.64, level: "ch1-l05" },
+  { name: "f-break", demo: ["break"], at: 0.22, level: "ch1-l05" },
+  { name: "f-chest-slash", demo: ["chest:Gold", "slash"], at: 0.5, gap: 1.6, level: "ch1-l05" },
 ];
 
 for (const s of PLAY) {

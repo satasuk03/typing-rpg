@@ -85,6 +85,9 @@ const SPEC: ParticleSpec = newSpec();
 const RGB: Rgb = [0, 0, 0];
 const RGB2: Rgb = [0, 0, 0];
 
+/** Seconds the aura takes to dim to the lower tier on a one-tier streak drop. */
+export const STEP_DOWN_SEC = 0.15;
+
 export class HeroAura {
   private readonly rune: FxQuad;
   private readonly pool: AuraQuad;
@@ -204,6 +207,17 @@ export class HeroAura {
       SPEC.kind = PK_GLOW;
       this.poolB.emit(SPEC);
     }
+  }
+
+  /**
+   * A typo drops the streak ONE tier (to > 0): a soft step-down. The aura level falls to the lower tier's level over
+   * ~150 ms (a dim toward the lower tier colour), no smoke, no gutter: clearly weaker than the break-to-0.
+   */
+  stepDown(to: number): void {
+    this.streakTier = to;
+    this.forceT4 = false;
+    const target = STREAK_STYLE.auraLevel[to] as number;
+    this.downRate = Math.max(0.1, this.level - target) / STEP_DOWN_SEC;
   }
 
   clear(): void {

@@ -126,6 +126,9 @@ export class ArcPool {
     return n;
   }
 
+  /** Biome glare scale (1 cave .. lower on bright worlds), set by the kit each frame. */
+  gain = 1;
+
   fire(x: number, y: number, z: number, o: ArcOpts, core: Rgb, edge: Rgb): void {
     // reuse a free slot, else steal the oldest in round-robin order
     let s = this.slots[this.next] as Slot;
@@ -150,7 +153,7 @@ export class ArcPool {
     (u.uSweep as { value: number }).value = o.sweep;
     (u.uHead as { value: number }).value = 0;
     (u.uTail as { value: number }).value = 0;
-    (u.uI as { value: number }).value = o.intensity;
+    (u.uI as { value: number }).value = o.intensity * this.gain;
     (u.uCore as { value: Vector3 }).value.set(core[0], core[1], core[2]);
     (u.uEdge as { value: Vector3 }).value.set(edge[0], edge[1], edge[2]);
     s.mesh.position.set(x, y, z);

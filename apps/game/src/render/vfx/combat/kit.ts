@@ -71,6 +71,7 @@ export class FxKit {
   readonly rings: QuadPool;
   readonly glows: QuadPool;
   readonly hexes: QuadPool;
+  readonly lines: QuadPool;
   readonly beams: QuadPool;
   readonly cracks: AuraQuad[] = [];
   /** Dev demo only: pretend the hero wields this archetype. */
@@ -106,6 +107,7 @@ export class FxKit {
     this.rings = new QuadPool(w, FxKind.Ring, 8, 9);
     this.glows = new QuadPool(w, FxKind.Glow, 8, 8);
     this.hexes = new QuadPool(w, FxKind.Guard, 4, 9);
+    this.lines = new QuadPool(w, FxKind.Line, 4, 10);
     this.beams = new QuadPool(w, FxKind.Beam, 3, 9);
     for (let i = 0; i < 2; i++) {
       const c = new AuraQuad(w, AuraKind.Burst, 5, i * 3.1, 0);
@@ -132,6 +134,37 @@ export class FxKit {
   warmBiome(): boolean {
     const b = this.deps.world.biome;
     return b === "cave" || b === "boss";
+  }
+
+  /**
+   * Additive glare scale by biome brightness: 1 in the dark cave / boss hollow (caveK 1), 0.4 on the bright forest
+   * (caveK 0), where stacked additive flares otherwise clip to a white blob and lose their hue.
+   */
+  get glare(): number {
+    const k = this.deps.world.currentMood?.caveK ?? 1;
+    return (0.4 + 0.6 * Math.min(1, Math.max(0, k))) * this.localK;
+  }
+
+  /** Extra additive scale while one hit plays (1 normally; `bigTargetK` for a boss). */
+  localK = 1;
+
+  /** 0.5 for a big (>= 3.5 u) target such as the Golem, whose pale body clips under full-size hit flares; else 1. */
+  bigTargetK(id: number): number {
+    return this.deps.enemyInfo(id, this.bigInfo) && this.bigInfo.height >= 3.5 ? 0.5 : 1;
+  }
+  private readonly bigInfo: EnemyInfo = {
+    frame: null,
+    scale: 1,
+    x: 0,
+    y: 0,
+    z: 0,
+    height: 0,
+  };
+
+  /** A hot colour kept amber on bright worlds: drops green / blue so the sum with the backdrop does not clip to white. */
+  warm(c: Rgb): Rgb {
+    const w = 1 - this.glare; // 0 cave .. 0.6 forest
+    return [c[0], c[1] * (1 - 0.35 * w), c[2] * (1 - 0.8 * w)];
   }
 
   n(base: number): number {
@@ -301,7 +334,9 @@ export class FxKit {
     rot = 0,
   ): void {
     const g =
-      this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * (this.scale.reducedFlash ? 0.5 : 1);
+      this.scale.k <= 0
+        ? 0
+        : (0.5 + 0.5 * this.scale.k) * (this.scale.reducedFlash ? 0.5 : 1) * this.glare;
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;
@@ -312,9 +347,13 @@ export class FxKit {
     q.life = life;
     q.i = i * g;
     q.rot = rot;
-    q.r = c[0];
-    q.g = c[1];
-    q.b = c[2];
+    // forest: the star core HDR is capped at 1.6 (cave: uncapped), keeping the hue instead of clipping to white
+    const mx = Math.max(c[0], c[1], c[2]);
+    const cap = this.glare < 1 ? 1.6 + (mx - 1.6) * Math.max(0, (this.glare - 0.4) / 0.6) : mx;
+    const f = mx > cap ? cap / mx : 1;
+    q.r = c[0] * f;
+    q.g = c[1] * f;
+    q.b = c[2] * f;
     this.stars.spawn(q);
   }
 
@@ -363,7 +402,7 @@ export class FxKit {
     c: Rgb,
     i: number,
   ): void {
-    const g = this.scale.k <= 0 ? 0 : 0.5 + 0.5 * this.scale.k;
+    const g = this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * this.glare;
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;
@@ -380,6 +419,38 @@ export class FxKit {
     this.glows.spawn(q);
   }
 
+  /** A crisp thin outline ring facing the camera (BREAK): not scaled by biome glare, it must read everywhere. */
+  lineRing(
+    x: number,
+    y: number,
+    z: number,
+    s0: number,
+    s1: number,
+    life: number,
+    c: Rgb,
+    c2: Rgb,
+    i: number,
+  ): void {
+    const g = this.scale.k <= 0 ? 0 : 0.5 + 0.5 * this.scale.k;
+    if (g <= 0) return;
+    const q = this.quad();
+    q.x = x;
+    q.y = y;
+    q.z = z;
+    q.s0 = s0;
+    q.s1 = s1;
+    q.life = life;
+    q.i = i * g;
+    q.ease = true;
+    q.r = c[0];
+    q.g = c[1];
+    q.b = c[2];
+    q.r2 = c2[0];
+    q.g2 = c2[1];
+    q.b2 = c2[2];
+    this.lines.spawn(q);
+  }
+
   /** A hex-lattice flash (shield chip / break / frost); `s0` -> `s1` world units across. */
   hex(
     x: number,
@@ -391,7 +462,7 @@ export class FxKit {
     c: Rgb,
     i: number,
   ): void {
-    const g = this.scale.k <= 0 ? 0 : 0.5 + 0.5 * this.scale.k;
+    const g = this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * this.glare * this.glare; // the lattice shader boosts x3.5 late in its life
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;
@@ -435,7 +506,7 @@ export class FxKit {
     life: number,
   ): void {
     if (this.scale.k <= 0) return;
-    this.lights.flash(x, y, z, c[0], c[1], c[2], intensity, radius, life);
+    this.lights.flash(x, y, z, c[0], c[1], c[2], intensity * this.glare, radius, life);
   }
 
   /** Camera shake scaled by the settings (0 under reduced motion / k = 0). */
@@ -447,7 +518,7 @@ export class FxKit {
   /** Capped full-screen flash. No-op without the typing world fx, or under reduced flash / k = 0. */
   postFlash(amount: number, c: Rgb, ms: number, cap: number): void {
     if (this.scale.reducedFlash || this.scale.k <= 0) return;
-    this.deps.postFlash?.(amount, c, ms, cap);
+    this.deps.postFlash?.(amount * this.glare, c, ms, cap * this.glare);
   }
 
   // ------------------------------------------------------------------------------- per frame
@@ -455,12 +526,14 @@ export class FxKit {
   /** @hot `dt` is the stage's dilated dt. */
   update(dt: number): void {
     this.time += dt;
+    this.arcs.gain = 0.4 + 0.6 * Math.min(1, (this.glare - 0.4) / 0.6); // 0.4 forest .. 1 cave
     this.arcs.update(dt);
     this.ghosts.update(dt);
     this.stars.update(dt);
     this.rings.update(dt);
     this.glows.update(dt);
     this.hexes.update(dt);
+    this.lines.update(dt);
     this.beams.update(dt);
     for (let i = 0; i < this.cracks.length; i++) {
       const life = this.crackLife[i] as number;
@@ -490,6 +563,7 @@ export class FxKit {
     this.rings.clear();
     this.glows.clear();
     this.hexes.clear();
+    this.lines.clear();
     this.beams.clear();
     for (let i = 0; i < this.cracks.length; i++) {
       this.crackLife[i] = 0;
@@ -509,6 +583,7 @@ export class FxKit {
     this.rings.dispose();
     this.glows.dispose();
     this.hexes.dispose();
+    this.lines.dispose();
     this.beams.dispose();
     for (const c of this.cracks) c.dispose();
     if (this.ownsPools) {

@@ -274,20 +274,20 @@ export class RewardFx {
         .color2(st.beamCore[0], st.beamCore[1], st.beamCore[2])
         .at(this.x, 7.2, this.z - 0.1)
         .size(st.width * (1 + wob), 14.4)
-        .intensity(st.beam * k * g);
+        .intensity(st.beam * k * g * kit.glare);
       this.halo
         .color(st.beamCol[0] * 0.6, st.beamCol[1] * 0.6, st.beamCol[2] * 0.6)
         .color2(st.beamCol[0] * 0.4, st.beamCol[1] * 0.4, st.beamCol[2] * 0.4)
         .at(this.x, 7.2, this.z - 0.2)
         .size(st.width * 2.7, 14.4)
-        .intensity(st.halo * k * g);
+        .intensity(st.halo * k * g * kit.glare);
       if (st.rays && sc.k > 0) {
         this.rays
           .color(st.beamCol[0], st.beamCol[1], st.beamCol[2])
           .at(this.x, 2.2, this.z - 0.3)
           .size(9);
         this.rays.mesh.rotation.z = sc.reducedMotion ? 0 : t * 0.15;
-        this.rays.alpha(0.5 * k * g);
+        this.rays.alpha(0.5 * k * g * kit.glare);
       }
       if (st.rune) {
         this.rune.color(2.4, 1.0, 3.2).at(this.x, 0.05, this.z).size(5.2);
@@ -300,7 +300,7 @@ export class RewardFx {
         st.light[0],
         st.light[1],
         st.light[2],
-        st.lightPeak * k * g * (sc.k > 0 ? 1 : 0),
+        st.lightPeak * k * g * kit.glare * (sc.k > 0 ? 1 : 0),
         8,
       );
       if (sc.k > 0) {
