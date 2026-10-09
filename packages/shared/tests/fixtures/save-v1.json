@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "createdAtMs": 1000,
+  "updatedAtMs": 4152000,
+  "playtimeSec": 4151,
+  "settings": {
+    "comboMode": "gentle",
+    "difficulty": "standard",
+    "caseMode": "auto",
+    "autoUnlock": true,
+    "effectsIntensity": 1,
+    "reducedMotion": false,
+    "reducedFlash": false,
+    "volumes": {
+      "master": 0.8,
+      "sfx": 0.8,
+      "ambience": 0.6,
+      "music": 0.6,
+      "ui": 0.7
+    },
+    "translationLang": null
+  },
+  "progress": {
+    "frontierChapter": 1,
+    "levels": {
+      "ch1-l11": {
+        "cleared": true,
+        "stars": [false, true, false],
+        "bestTicks": null,
+        "attempts": 3
+      },
+      "ch1-l12": {
+        "cleared": false,
+        "stars": [true, false, false],
+        "bestTicks": null,
+        "attempts": 1
+      },
+      "ch1-l02": {
+        "cleared": true,
+        "stars": [true, false, false],
+        "bestTicks": 1792,
+        "attempts": 4
+      },
+      "ch1-l04": {
+        "cleared": true,
+        "stars": [true, true, false],
+        "bestTicks": 2577,
+        "attempts": 1
+      }
+    },
+    "starChestsClaimed": {
+      "2": [30, 10]
+    }
+  },
+  "pace": {
+    "calibrationWpm": null,
+    "recentNetWpm": []
+  },
+  "accuracyDaily": [
+    {
+      "day": "2026-02-18",
+      "accuracyBp": 9809
+    },
+    {
+      "day": "2026-02-06",
+      "accuracyBp": 9042
+    },
+    {
+      "day": "2026-02-23",
+      "accuracyBp": 9568
+    }
+  ],
+  "wallet": {
+    "gold": 639
+  },
+  "inventory": {
+    "gear": [
+      {
+        "uid": 1,
+        "defId": "a-leather",
+        "rarity": "U",
+        "upgrade": 1
+      }
+    ],
+    "nextGearUid": 2,
+    "unopenedCaches": 2
+  },
+  "equipped": {
+    "weapon": 0,
+    "armor": 0,
+    "charm": 0
+  },
+  "loadout": {
+    "actives": [null, null],
+    "activeModes": ["smart", "smart"],
+    "passives": [null, null, null]
+  },
+  "unlocks": {
+    "actives": ["frostLock", "fireball"],
+    "passives": []
+  },
+  "cachePity": {
+    "sinceRare": 7,
+    "sinceEpic": 0,
+    "sinceLegendary": 0
+  },
+  "metaRng": [1376818985, 2874603105, 948720820, 727157693],
+  "srs": {
+    "levelsPlayed": 5,
+    "entries": {
+      "river": {
+        "box": 2,
+        "due": 1,
+        "lapses": 0
+      },
+      "wind": {
+        "box": 4,
+        "due": 1,
+        "lapses": 0
+      },
+      "tree": {
+        "box": 3,
+        "due": 3,
+        "lapses": 0
+      },
+      "ash": {
+        "box": 1,
+        "due": 5,
+        "lapses": 0
+      }
+    },
+    "mastered": ["cat", "dog", "moon", "fire", "dog", "fire"]
+  },
+  "journal": {
+    "firstSeen": {
+      "cat": 39,
+      "dog": 24,
+      "moon": 43,
+      "stone": 14,
+      "ash": 5
+    }
+  },
+  "replays": {
+    "day": "2026-01-01",
+    "count": 0
+  },
+  "lifetime": {
+    "words": 179,
+    "chars": 1723,
+    "typos": 57
+  }
+}
