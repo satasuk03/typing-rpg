@@ -23,6 +23,12 @@ function boot(): void {
     return;
   }
 
+  // Dev-only route: ?scene=audio-test (src/dev/audioTestScene.ts).
+  if (new URLSearchParams(location.search).get("scene") === "audio-test") {
+    void import("./dev/audioTestScene").then((m) => m.start(glCanvas));
+    return;
+  }
+
   const renderer = new WebGLRenderer({ canvas: glCanvas, antialias: false });
   renderer.setClearColor(0x080a12, 1);
   const scene = new Scene();
