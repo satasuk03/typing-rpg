@@ -181,11 +181,14 @@ export class CombatFx implements CombatFxSink {
       if (!this.viaCallbacks) this.attackFx.chip(e);
       return;
     }
+    // a big pale target (the Golem) washes out under the full-size flares and lights: dim them while this hit plays
+    this.kit.localK = this.kit.bigTargetK(e.targetId);
     if (e.kind === "skill" && e.skillId !== null) this.skillFx.skillHit(e);
     else {
       if (e.kind === "auto") this.proj.consume(P_BOLT, e.targetId);
       this.attackFx.hit(e);
     }
+    this.kit.localK = 1;
   }
   weaknessRevealed(e: EventOf<"WeaknessRevealed">): void {
     this.attackFx.weaknessRevealed(e);

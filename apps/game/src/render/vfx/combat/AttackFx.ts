@@ -366,8 +366,19 @@ export class AttackFx {
     const kit = this.kit;
     if (kit.scale.k <= 0 || !this.body(e.enemyId)) return;
     this.kit.deps.enemyInfo(e.enemyId, INFO);
-    const w = Math.max(2, INFO.height * 1.1);
-    kit.hex(EN.x, EN.y, EN.z + 0.6, w * 0.85, w * 1.05, 0.22, SHARD_BLUE, 1.0);
+    // a boss (the Golem) gets a capped, dimmer lattice BEHIND the body: the full-height disc washed it white on every hit
+    const big = INFO.height >= 3.5;
+    const w = big ? Math.min(3.0, INFO.height * 0.6) : Math.max(2, INFO.height * 1.1);
+    kit.hex(
+      EN.x,
+      EN.y,
+      big ? EN.z - 0.4 : EN.z + 0.6,
+      w * 0.85,
+      w * 1.05,
+      0.22,
+      SHARD_BLUE,
+      big ? 0.35 : 1.0,
+    );
     kit.sparks(EN.x, EN.y, EN.z, kit.n(12), SHARD_BLUE, 5, {
       kind: PK_PIXEL,
       size: 0.08,
@@ -375,7 +386,7 @@ export class AttackFx {
       grav: 8,
       st: 0,
     });
-    kit.flash(EN.x, EN.y, EN.z + 1, [0.6, 0.8, 1], 1.6, 5, 0.18);
+    kit.flash(EN.x, EN.y, EN.z + 1, [0.6, 0.8, 1], big ? 0.6 : 1.6, 5, 0.18);
   }
 
   /** BREAK: the shield shatters (POC `breakMon`): hex flash, shard burst, shock ring, white-blue star, light. */

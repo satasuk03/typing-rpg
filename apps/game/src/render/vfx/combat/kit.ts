@@ -142,8 +142,24 @@ export class FxKit {
    */
   get glare(): number {
     const k = this.deps.world.currentMood?.caveK ?? 1;
-    return 0.4 + 0.6 * Math.min(1, Math.max(0, k));
+    return (0.4 + 0.6 * Math.min(1, Math.max(0, k))) * this.localK;
   }
+
+  /** Extra additive scale while one hit plays (1 normally; `bigTargetK` for a boss). */
+  localK = 1;
+
+  /** 0.5 for a big (>= 3.5 u) target such as the Golem, whose pale body clips under full-size hit flares; else 1. */
+  bigTargetK(id: number): number {
+    return this.deps.enemyInfo(id, this.bigInfo) && this.bigInfo.height >= 3.5 ? 0.5 : 1;
+  }
+  private readonly bigInfo: EnemyInfo = {
+    frame: null,
+    scale: 1,
+    x: 0,
+    y: 0,
+    z: 0,
+    height: 0,
+  };
 
   /** A hot colour kept amber on bright worlds: drops green / blue so the sum with the backdrop does not clip to white. */
   warm(c: Rgb): Rgb {

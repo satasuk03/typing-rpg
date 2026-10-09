@@ -299,9 +299,9 @@ export class LevelStage {
     const e = this.foes.get(id);
     if (!e) return;
     e.hurtT = 0;
-    // chip / DoT hits must not keep a big enemy white: no re-trigger while a flash is still up, bosses cap at 0.5
+    // chip / DoT hits must not keep a big enemy white: no re-trigger while a flash is still up, bosses cap at 0.3
     if (e.flash > 0.2) return;
-    e.flash = Math.max(e.flash, Math.min(strength, e.isBoss ? 0.5 : 1));
+    e.flash = Math.max(e.flash, Math.min(strength, e.isBoss ? 0.3 : 1));
   }
 
   enemyAttack(id: number): void {
