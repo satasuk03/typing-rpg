@@ -44,6 +44,9 @@ export class PresentationQueue {
   private readonly at = new Float64Array(CAP);
   private readonly seq = new Float64Array(CAP);
   private readonly ent = new Int32Array(CAP).fill(-1);
+  /** Timed holds (the finisher cinematic): events for the entity wait until the hold time, no event is stored. */
+  private readonly holdEnt = new Int32Array(8).fill(-1);
+  private readonly holdAt = new Float64Array(8);
   private nextSeq = 0;
   count = 0;
   /** Events that were deferred and later presented (diagnostics). */
@@ -68,9 +71,36 @@ export class PresentationQueue {
     this.ent[i] = entityOf(e);
   }
 
-  /** Latest pending time for entity `id`, or -1 when nothing is pending for it. */
-  pendingUntil(id: number): number {
+  /**
+   * Hold every later event about enemy `id` until `atMs` (+16 ms), without presenting anything itself.
+   * The finisher uses it so `Hit{finisher}` and `EnemyDeath` come out at t = 1060 ms, after the cinematic.
+   */
+  holdEntity(id: number, atMs: number): void {
+    let i = 0;
+    for (let j = 0; j < this.holdEnt.length; j++)
+      if (this.holdEnt[j] === -1 || this.holdEnt[j] === id) {
+        i = j;
+        break;
+      } else if ((this.holdAt[j] as number) < (this.holdAt[i] as number)) i = j;
+    this.holdEnt[i] = id;
+    this.holdAt[i] = atMs;
+  }
+
+  /** Latest end of a live timed hold, or -1. A clear event (EncounterCleared...) waits for it. */
+  holdUntil(nowMs: number): number {
     let t = -1;
+    for (let j = 0; j < this.holdEnt.length; j++)
+      if (this.holdEnt[j] !== -1 && (this.holdAt[j] as number) > nowMs)
+        t = Math.max(t, this.holdAt[j] as number);
+    return t;
+  }
+
+  /** Latest pending time for entity `id`, or -1 when nothing is pending for it. */
+  pendingUntil(id: number, nowMs = Number.NEGATIVE_INFINITY): number {
+    let t = -1;
+    for (let j = 0; j < this.holdEnt.length; j++)
+      if (this.holdEnt[j] === id && (this.holdAt[j] as number) > nowMs)
+        t = Math.max(t, this.holdAt[j] as number);
     for (let j = 0; j < CAP; j++)
       if (this.ev[j] !== null && this.ent[j] === id) t = Math.max(t, this.at[j] as number);
     return t;
@@ -83,7 +113,7 @@ export class PresentationQueue {
   gate(e: SimEvent, nowMs: number, chipDelayMs: number = CHIP_DELAY_MS): boolean {
     const id = entityOf(e);
     const isChip = e.type === "Hit" && e.kind === "chip" && chipDelayMs > 0;
-    const pend = id >= 0 ? this.pendingUntil(id) : -1;
+    const pend = id >= 0 ? this.pendingUntil(id, nowMs) : -1;
     if (isChip) {
       this.defer(e, Math.max(nowMs + chipDelayMs, pend >= 0 ? pend + GATE_GAP_MS : 0));
       return true;
@@ -121,10 +151,12 @@ export class PresentationQueue {
 
   /** Present everything now, in order (EncounterCleared / LevelCleared / LevelFailed). */
   flushAll(sink: (e: SimEvent) => void): void {
+    this.holdEnt.fill(-1);
     this.flush(Number.POSITIVE_INFINITY, sink);
   }
 
   clear(): void {
+    this.holdEnt.fill(-1);
     this.ev.fill(null);
     this.ent.fill(-1);
     this.count = 0;

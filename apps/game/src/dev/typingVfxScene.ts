@@ -29,7 +29,10 @@ export interface TypingVfxApi {
   /** Step until the nth next event of `type` (default 1st), then `afterMs` more. False on timeout. */
   stepToEvent(type: string, afterMs: number, nth?: number, maxMs?: number): boolean;
   /** Step until a CharCorrect whose keyStreakTier >= tier and index >= minIndex, then `afterMs`. */
-  stepToKey(afterMs: number, o?: { minIndex?: number; notLast?: boolean }): boolean;
+  stepToKey(
+    afterMs: number,
+    o?: { minIndex?: number; notLast?: boolean; guard?: boolean },
+  ): boolean;
   /** Step to the next non-guard WordCompleted (optionally perfect), then `afterMs` more. */
   stepToWord(afterMs: number, o?: { perfect?: boolean; minLen?: number }): boolean;
   /** Force a typo on the next key press. */
@@ -64,7 +67,40 @@ export interface TypingVfxApi {
   /** Count of every event seen since the scene started, by type. */
   eventCounts(): Record<string, number>;
   readability(): string[];
+  /** Sim time of the mock (s). */
+  time(): number;
+  /**
+   * Contact sheet: steps `seconds` of scene time at `fps` and composites every `every`-th frame (WebGL + HUD)
+   * into a `cols` x `rows` grid of `cw` x `ch` cells with a time/tier label. Returns the PNG data URL.
+   */
+  sheet(o: {
+    seconds: number;
+    fps: number;
+    every: number;
+    cols: number;
+    rows: number;
+    cw: number;
+    ch: number;
+    title: string;
+  }): string;
+  /**
+   * Hero silhouette probe (pixel test): composites the WebGL canvas and the HUD canvas, with the hero
+   * sprite shown and hidden, at the CURRENT frame, and measures how distinguishable the hero still is.
+   * `includeHud` false (default) measures the 3D pass only (aura, lights, rim flash, particles); true adds the
+   * HUD canvas (labels, fragments). Call it with the FX on, then `setEnabled(false)` and call it again at the same frame to get the FX-off
+   * baseline.
+   */
+  heroProbe(includeHud?: boolean): HeroProbe;
   consoleErrors: string[];
+}
+
+/** What `heroProbe` measures inside the hero's screen rect. */
+export interface HeroProbe {
+  /** Pixels of the hero that differ from the same frame without the hero by more than the threshold. */
+  area: number;
+  /** Sum of the Sobel edge magnitude (luminance, 0..255) over those pixels. */
+  edge: number;
+  rect: { x: number; y: number; w: number; h: number };
 }
 
 declare global {
@@ -113,6 +149,8 @@ export function start(glCanvas: HTMLCanvasElement): void {
     reducedMotion: q.get("reducedMotion") === "1",
   });
   const hitFlashes: { a: { setFlash(v: number): void }; t: number }[] = [];
+  /** T2.3 stand-in for the death dissolve: enemy actors fading out over 0.7 s of world time. */
+  const dissolves: { a: { setDissolve(v: number): void }; t: number }[] = [];
   let fx!: TypingFxHandle;
   let typing!: TypingHudFx;
 
@@ -132,6 +170,8 @@ export function start(glCanvas: HTMLCanvasElement): void {
     pace: Number(q.get("pace") ?? 40) || 40,
     mode,
     typoAt,
+    guard: q.get("guard") === "1",
+    script: boss,
   });
   const counts: Record<string, number> = {};
   let lastEvents: readonly SimEvent[] = [];
@@ -149,6 +189,10 @@ export function start(glCanvas: HTMLCanvasElement): void {
     // world time advances by the dilated dt (ATB-filled slow, hit-stop); the HUD stays in real time
     const wdt = fx.update(DT, DT, driver.view);
     backdrop?.advance(wdt);
+    for (const d of dissolves) {
+      d.t += wdt;
+      d.a.setDissolve(Math.min(1, d.t / 0.7));
+    }
     for (let i = hitFlashes.length - 1; i >= 0; i--) {
       const h = hitFlashes[i];
       if (!h) continue;
@@ -200,7 +244,7 @@ export function start(glCanvas: HTMLCanvasElement): void {
             e.type === "CharCorrect" &&
             e.index >= (o.minIndex ?? 0) &&
             !(o.notLast && e.isLast) &&
-            e.kind !== "guard",
+            (o.guard ? e.kind === "guard" : e.kind !== "guard"),
         );
         if (ok) {
           api.step(afterMs);
@@ -291,13 +335,112 @@ export function start(glCanvas: HTMLCanvasElement): void {
     }),
     eventCounts: () => ({ ...counts }),
     readability: () => checkSnapshot(hud.debugSnapshot()),
+    time: () => driver.view.tick / 60,
+    sheet(o) {
+      const bd = backdrop;
+      if (!bd) throw new Error("no backdrop");
+      const pad = 6;
+      const head = 34;
+      const sheet = document.createElement("canvas");
+      sheet.width = o.cols * (o.cw + pad) + pad;
+      sheet.height = head + o.rows * (o.ch + pad) + pad;
+      const c = sheet.getContext("2d");
+      if (!c) throw new Error("no 2d context");
+      c.fillStyle = "#0b0a10";
+      c.fillRect(0, 0, sheet.width, sheet.height);
+      c.fillStyle = "#f3e7c7";
+      c.font = "bold 18px sans-serif";
+      c.fillText(o.title, pad + 4, 23);
+      const frames = Math.round(o.seconds * o.fps);
+      const t0 = driver.view.tick / 60;
+      let cell = 0;
+      for (let f = 0; f < frames; f++) {
+        api.step(1000 / o.fps);
+        if (f % o.every !== 0 || cell >= o.cols * o.rows) continue;
+        const cx = pad + (cell % o.cols) * (o.cw + pad);
+        const cy = head + pad + Math.floor(cell / o.cols) * (o.ch + pad);
+        c.drawImage(glCanvas, cx, cy, o.cw, o.ch);
+        c.drawImage(hudCanvas, cx, cy, o.cw, o.ch);
+        c.fillStyle = "rgba(0,0,0,0.6)";
+        c.fillRect(cx, cy + o.ch - 18, 190, 18);
+        c.fillStyle = "#fff";
+        c.font = "12px monospace";
+        const v = driver.view;
+        c.fillText(
+          `t=${(v.tick / 60 - t0).toFixed(2)}s  streak ${v.keyStreak}  T${v.keyStreakTier}`,
+          cx + 4,
+          cy + o.ch - 5,
+        );
+        cell++;
+      }
+      return sheet.toDataURL("image/png");
+    },
+    heroProbe(includeHud = false) {
+      const bd = backdrop;
+      if (!bd) throw new Error("no backdrop");
+      const feet = bd.projector({ kind: "hero", part: "feet" });
+      const head = bd.projector({ kind: "hero", part: "head" });
+      if (!feet || !head) throw new Error("no hero anchor");
+      const k = glCanvas.width / window.innerWidth;
+      const hh = (feet.y - head.y) * k;
+      const rect = {
+        x: Math.max(0, Math.round(feet.x * k - hh * 0.36)),
+        y: Math.max(0, Math.round(head.y * k - hh * 0.05)),
+        w: Math.round(hh * 0.72),
+        h: Math.round(hh * 1.1),
+      };
+      const off = document.createElement("canvas");
+      off.width = glCanvas.width;
+      off.height = glCanvas.height;
+      const ctx = off.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("no 2d context");
+      const grab = (hide: boolean): ImageData => {
+        bd.hero.actor.mesh.visible = !hide;
+        bd.frame(0);
+        hud.render(driver.view, 1, 0);
+        ctx.clearRect(0, 0, off.width, off.height);
+        // the GL back buffer is only readable in the same task as its render
+        ctx.drawImage(glCanvas, 0, 0);
+        if (includeHud) ctx.drawImage(hudCanvas, 0, 0, off.width, off.height);
+        bd.hero.actor.mesh.visible = true;
+        return ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
+      };
+      const shown = grab(false);
+      const hidden = grab(true);
+      bd.frame(0);
+      hud.render(driver.view, 1, 0);
+      const W = rect.w;
+      const H = rect.h;
+      const lum = (d: Uint8ClampedArray, i: number): number =>
+        0.2126 * (d[i] as number) + 0.7152 * (d[i + 1] as number) + 0.0722 * (d[i + 2] as number);
+      let area = 0;
+      let edge = 0;
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const i = (y * W + x) * 4;
+          const dr = (shown.data[i] as number) - (hidden.data[i] as number);
+          const dg = (shown.data[i + 1] as number) - (hidden.data[i + 1] as number);
+          const db = (shown.data[i + 2] as number) - (hidden.data[i + 2] as number);
+          if (Math.hypot(dr, dg, db) <= 24) continue;
+          area++;
+          const L = (dx: number, dy: number): number =>
+            lum(shown.data, ((y + dy) * W + x + dx) * 4);
+          const gx = L(1, -1) + 2 * L(1, 0) + L(1, 1) - L(-1, -1) - 2 * L(-1, 0) - L(-1, 1);
+          const gy = L(-1, 1) + 2 * L(0, 1) + L(1, 1) - L(-1, -1) - 2 * L(0, -1) - L(1, -1);
+          edge += Math.hypot(gx, gy);
+        }
+      }
+      return { area, edge, rect };
+    },
     consoleErrors,
   };
   window.__typingVfx = api;
 
   const boot = async (): Promise<void> => {
     if (q.get("fonts") !== "0") await loadHudFonts();
-    backdrop = await makeWorldBackdrop(glCanvas, scenario, q);
+    const qb = new URLSearchParams(q);
+    qb.set("pose", "battle");
+    backdrop = await makeWorldBackdrop(glCanvas, scenario, qb);
     const bd = backdrop;
     // weapon anchor: the real archetype offset (the backdrop projector only knows the sword)
     hud.setProjector((a) => {
@@ -330,7 +473,12 @@ export function start(glCanvas: HTMLCanvasElement): void {
       callbacks: {
         // T2.3 stand-ins: sprite flashes for the hero (ATB) and the enemy hit by the chip
         actorFlash(who, amount, rgb) {
-          if (who === "hero") bd.hero.actor.setFlash(amount, rgb);
+          if (who === "hero") bd.hero.actor.setRimFlash(amount, rgb);
+        },
+        dissolve(id) {
+          const en = driver.view.enemies.find((x) => x.id === id);
+          const a = en ? bd.slotActor(en.slot) : null;
+          if (a) dissolves.push({ a, t: 0 });
         },
         chipImpact(h) {
           const en = driver.view.enemies.find((x) => x.id === h.targetId);

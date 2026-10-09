@@ -34,8 +34,8 @@ export function pixelTexture(src: TexImageSource, srgb = true, repeatX = false):
 
 const FS_SPRITE = /* glsl */ `
 ${GLSL_COMMON}
-uniform sampler2D map, nmap, emap; uniform vec2 uTexSize; uniform vec3 uTint, uFlashCol, uEdgeCol;
-uniform float uFlash, uDissolve, uEmis, uRim, uWrap, uDark, uGhost;
+uniform sampler2D map, nmap, emap; uniform vec2 uTexSize; uniform vec3 uTint, uFlashCol, uEdgeCol, uRimFlashCol;
+uniform float uFlash, uDissolve, uEmis, uRim, uWrap, uDark, uGhost, uRimFlash, uLumCap;
 varying vec2 vUv; varying vec3 vWP;
 void main(){
   vec4 c = texture2D(map, vUv); if (c.a < 0.5) discard;
@@ -53,6 +53,17 @@ void main(){
   col = mix(col, uFlashCol, uFlash);
   col += edge * uEdgeCol;
   col = applyFog(col, vWP);
+  if (uRimFlash > 0.0) {
+    // silhouette rim flash (typing VFX): only the outline pixels light up, the body stays readable
+    vec2 px = 1.0 / uTexSize;
+    float nb = min(min(texture2D(map, vUv + vec2(px.x, 0.0)).a, texture2D(map, vUv - vec2(px.x, 0.0)).a),
+                   min(texture2D(map, vUv + vec2(0.0, px.y)).a, texture2D(map, vUv - vec2(0.0, px.y)).a));
+    float rimPx = nb < 0.5 ? 1.0 : 0.0;
+    col = mix(col, uRimFlashCol, uRimFlash * rimPx);
+  }
+  // hard luminance cap (hero while typing FX are up): the silhouette never washes out
+  float lm = max(col.r, max(col.g, col.b));
+  if (lm > uLumCap) col *= uLumCap / lm;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -181,6 +192,9 @@ export class SpriteResources {
           uWrap: { value: o.wrap ?? 0.45 },
           uDark: { value: o.dark ?? 0 },
           uGhost: { value: 0 },
+          uRimFlash: { value: 0 },
+          uRimFlashCol: { value: new Vector3(1.6, 1.6, 1.6) },
+          uLumCap: { value: 1e3 },
         },
         vertexShader: VS_WORLD,
         fragmentShader: FS_SPRITE,
@@ -353,6 +367,18 @@ export class SpriteActor {
     const u = this.material.uniforms;
     (u.uFlash as { value: number }).value = amount;
     if (color) (u.uFlashCol as { value: Vector3 }).value.set(...color);
+  }
+
+  /** Outline-only flash: lights the silhouette's edge pixels (never the body). */
+  setRimFlash(amount: number, color?: readonly [number, number, number]): void {
+    const u = this.material.uniforms;
+    (u.uRimFlash as { value: number }).value = amount;
+    if (color) (u.uRimFlashCol as { value: Vector3 }).value.set(...color);
+  }
+
+  /** Hard cap on the sprite's final HDR brightness (1e3 = off). Keeps a hero legible under strong light FX. */
+  setLumCap(cap: number): void {
+    (this.material.uniforms.uLumCap as { value: number }).value = cap;
   }
 
   setDissolve(v: number): void {

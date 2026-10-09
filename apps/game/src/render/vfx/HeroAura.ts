@@ -15,7 +15,7 @@ import { easeOutQuad, STREAK_STYLE } from "../../level/typingFxParams";
 import { FxKind } from "../materials/fx";
 import type { RenderWorld } from "../RenderWorld";
 import { AuraKind, AuraQuad } from "./AuraQuad";
-import { accentRgb, COMBO_RGB, hueRgb, type Rgb } from "./colors";
+import { accentRgb, COMBO_RGB, hueRgb, LIGHT_BEHIND, LIGHT_MAX_RADIUS, type Rgb } from "./colors";
 import { FxQuad } from "./FxQuad";
 import type { LightSlots } from "./LightSlots";
 import {
@@ -33,7 +33,7 @@ const LIGHT_PEAK = [0, 0.35, 0.6, 0.85, 1.1] as const;
 const LIGHT_RADIUS = [0, 2.2, 2.8, 3.2, 3.6] as const;
 /** The aura light is multiplied so it visibly lights the hero, the ground and the nearest props. */
 const LIGHT_GAIN = 1.0;
-const LIGHT_RADIUS_GAIN = 1.15;
+const LIGHT_RADIUS_GAIN = 1.0;
 const MOTE_RATE = [0, 6, 18, 24, 32] as const;
 const MOTE_SIZE = [
   [0, 0],
@@ -86,6 +86,8 @@ export class HeroAura {
   private readonly stars: FxQuad[] = [];
   heroX = 0;
   heroZ = 0.25;
+  /** 0 (dark cave) .. 1 (bright forest): picks a deeper, saturated colour and less additive light. */
+  bright = 0;
 
   private streakTier = 0;
   private comboTier = 0;
@@ -272,15 +274,16 @@ export class HeroAura {
 
     // ---- streak flare
     if (v > 0.003) {
-      const r = RGB[0] * OVER;
-      const g = RGB[1] * OVER;
-      const b = RGB[2] * OVER;
-      const m = Math.min(1.1, v);
+      const sc = this.shapeColor(RGB, tier);
+      const r = sc[0];
+      const g = sc[1];
+      const b = sc[2];
+      const m = Math.min(1.1, v) * (1 + 0.65 * this.bright);
       // ground pool of light + two expanding pulse rings
       this.pool
         .color(r, g, b)
         .at(hx, 0.05, hz + 0.1)
-        .size(3.2 + 2.4 * v)
+        .size(2.6 + 1.5 * v)
 
         .alpha(0.62 * m);
       for (let i = 0; i < 2; i++) {
@@ -289,7 +292,7 @@ export class HeroAura {
         ring
           .color(r * 1.15, g * 1.15, b * 1.15)
           .at(hx, 0.055, hz + 0.1)
-          .size(5.6 + 1.6 * v)
+          .size(3.8 + 1.0 * v)
           .progress(0.18 + 0.82 * u)
           .alpha(1.0 * m);
       }
@@ -299,7 +302,7 @@ export class HeroAura {
         .color(r, g, b)
         .at(hx, 2.5, hz - 0.08)
         .size(1.1 + 0.6 * v, 5.2)
-        .alpha(0.5 * m);
+        .alpha(0.36 * m * (1 - 0.45 * this.bright));
       for (let i = 0; i < 2; i++) {
         const s = this.shafts[i] as AuraQuad;
         const off = (i === 0 ? -1 : 1) * (0.62 + sway);
@@ -315,27 +318,27 @@ export class HeroAura {
         .color(r, g, b)
         .at(hx, 1.15, hz - 0.06)
         .size(1.6 + 0.8 * v)
-        .alpha(0.16 * m);
+        .alpha(0.1 * m);
       // slow sunburst behind the hero (tier 3+)
       if (tier >= 3) {
         this.burst
           .color(r * 1.2, g * 1.2, b * 1.2)
           .at(hx, 1.25, hz - 0.12)
-          .size(4.6 + 1.2 * v)
+          .size(3.4 + 0.8 * v)
           .alpha(0.8 * m);
         this.burst.mesh.rotation.z = rm ? 0 : time * 0.28;
       } else this.burst.alpha(0);
       // held light
       const ti = Math.max(1, Math.min(4, tier));
       const peak = (LIGHT_PEAK[ti] as number) * LIGHT_GAIN;
-      const rad = (LIGHT_RADIUS[ti] as number) * LIGHT_RADIUS_GAIN;
+      const rad = Math.min(LIGHT_MAX_RADIUS, (LIGHT_RADIUS[ti] as number) * LIGHT_RADIUS_GAIN);
       const ramp = target > 0 ? Math.min(1.25, v / target) : v;
       if (qualityTier >= 2) this.lights.setAura(0, 0, 0, 0, 0, 0, 0, 0);
       else
         this.lights.setAura(
           hx,
-          1.1,
-          hz + 0.15,
+          1.4,
+          hz + LIGHT_BEHIND,
           RGB[0] * 0.6,
           RGB[1] * 0.6,
           RGB[2] * 0.6,
@@ -386,6 +389,31 @@ export class HeroAura {
         this.emitMote(tier, time);
       }
     } else this.moteAcc = 0;
+  }
+
+  private readonly shape: Rgb = [0, 0, 0];
+  /**
+   * Colour of the light shapes. Dark worlds: the accent, near 1 (an "over" blend wants that). Bright worlds:
+   * the same hue pushed to full saturation and darkened (a dark core + saturated rim reads on a bright
+   * ground where more additive light would only go white).
+   */
+  private shapeColor(acc: Rgb, _tier: number): Rgb {
+    const bk = this.bright;
+    const m = Math.max(acc[0], acc[1], acc[2], 0.001);
+    const p = 1 + 1.1 * bk;
+    const dark = OVER * (1 - 0.5 * bk);
+    const o = this.shape;
+    o[0] = (acc[0] / m) ** p * dark * (1 + 0.5 * bk);
+    o[1] = (acc[1] / m) ** p * dark * (1 + 0.5 * bk);
+    o[2] = (acc[2] / m) ** p * dark * (1 + 0.5 * bk);
+    const add = 0.45 * (1 - 0.85 * bk);
+    this.pool.additive(0.35 * (1 - 0.85 * bk));
+    for (const r of this.rings) r.additive(0.6 * (1 - 0.8 * bk));
+    this.pillar.additive(add);
+    for (const s of this.shafts) s.additive(0.55 * (1 - 0.8 * bk));
+    this.halo.additive(add);
+    this.burst.additive(0.6 * (1 - 0.8 * bk));
+    return o;
   }
 
   private emitMote(tier: number, time: number): void {

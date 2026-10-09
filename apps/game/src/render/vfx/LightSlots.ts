@@ -26,7 +26,7 @@ export class LightSlots {
       radius: 0,
       color: [1, 0.9, 0.5],
       intensity: 0,
-      scatter: 0.15,
+      scatter: 0,
     });
     for (let i = 0; i < 2; i++) {
       const light = rig.hold({
@@ -36,7 +36,7 @@ export class LightSlots {
         radius: 0,
         color: [1, 1, 1],
         intensity: 0,
-        scatter: 0.05,
+        scatter: 0,
       });
       this.slots.push({ light, peak: 0, life: 0, max: 1 });
     }

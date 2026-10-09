@@ -4,6 +4,13 @@
  */
 import { ELEMENT_HEX } from "../../level/typingFxParams";
 
+/** Hard cap on the hero sprite's final HDR brightness while typing FX are up (keeps the silhouette readable). */
+export const HERO_LUM_CAP = 1.45;
+
+/** Flash and aura lights sit BEHIND the hero (rim light, no in-scatter wash on the sprite) and stay local (radius cap, world units). */
+export const LIGHT_BEHIND = -0.85;
+export const LIGHT_MAX_RADIUS = 3.0;
+
 export type Rgb = [number, number, number];
 
 /** §3.1 "world accent" per key-streak tier (T4 is a hue cycle, see `hueRgb`). */

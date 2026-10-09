@@ -40,6 +40,11 @@ const CASES = [
   { name: "cave-40wpm", params: "wpm=40&tier=4&biome=cave&typoAt=3,6,9" },
   { name: "cave-90wpm", params: "wpm=90&tier=4&biome=cave&typoAt=3.3,6.6" },
   { name: "boss-40wpm", params: "wpm=40&tier=4&boss=1&typoAt=4,8" },
+  // Chunk C: guard words (glyphs, barrier, snap) and the boss sentences / finisher at max intensity
+  { name: "forest-40wpm-guard", params: "wpm=40&tier=4&biome=forest&guard=1&typoAt=3,7" },
+  { name: "cave-90wpm-guard", params: "wpm=90&tier=4&biome=cave&guard=1&typoAt=4" },
+  { name: "boss-40wpm-guard", params: "wpm=40&tier=4&boss=1&guard=1&typoAt=5" },
+  { name: "boss-90wpm-finisher", params: "wpm=90&tier=4&boss=1&guard=1&at=4" },
 ];
 
 for (const c of CASES) {

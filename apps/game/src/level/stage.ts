@@ -12,7 +12,9 @@ import type { EnemyDef } from "@hd2d/content";
 import type { EnemyView, LevelView } from "@hd2d/sim";
 import type { HudAnchor, HudProjector } from "../hud";
 import type { CameraPose, RenderWorld, SpriteActor, SpriteFrame } from "../render";
+import { HERO_LUM_CAP } from "../render/vfx/colors";
 import type { WorldHandle } from "../render/world";
+import { WEAPON_ANCHOR_OFFSET } from "./typingFxParams";
 
 // ---------------------------------------------------------------------------------------------- render clock
 
@@ -126,6 +128,14 @@ export class LevelStage {
   private walkEndTick = 1;
   private letterboxOn = false;
   private lastView: LevelView | null = null;
+  // ---- typing VFX hooks (T2.6): camera override, guard push-back, delayed finisher dash
+  private camOverride: Partial<CameraPose> | null = null;
+  private camSnapPending = false;
+  private pushT = Infinity;
+  private pushDist = 0;
+  private pushOut = 0.08;
+  private pushBack = 0.2;
+  private pendingDash: { at: number; target: number } | null = null;
 
   constructor(
     readonly world: RenderWorld,
@@ -154,6 +164,7 @@ export class LevelStage {
       win: f("win"),
     };
     this.hero = this.world.addActor("hero", "idle", { rim: 1.3, blobW: 1.25 });
+    this.hero.setLumCap(HERO_LUM_CAP);
     this.placeHero();
   }
 
@@ -168,6 +179,9 @@ export class LevelStage {
     this.heroZ = this.handle.walkPath.zAtX(this.heroX);
     this.heroFlash = 0;
     this.heroHurtT = this.heroAttackT = this.heroCastT = this.heroGuardT = Infinity;
+    this.camOverride = null;
+    this.pushT = Infinity;
+    this.pendingDash = null;
     this.clock.reset();
     this.setLetterbox(false);
     this.placeHero();
@@ -301,6 +315,50 @@ export class LevelStage {
     this.clock.slowMo(scale, sec);
   }
 
+  // ------------------------------------------------------------------------------------------- typing VFX hooks (T2.6)
+
+  /** Hero position (resting x incl. dash, z) for the world typing effects. */
+  heroPos(out: { x: number; z: number }): void {
+    out.x = this.heroXNow();
+    out.z = this.heroZ;
+  }
+
+  /** Centre of an enemy's body (world units); false when the enemy is not on stage. */
+  enemyBody(id: number, out: { x: number; y: number; z: number }): boolean {
+    const e = this.foes.get(id);
+    if (!e) return false;
+    out.x = e.baseX;
+    out.y = e.flyY + e.actor.height * 0.5;
+    out.z = e.baseZ;
+    return true;
+  }
+
+  /** Outline-only flash of the hero (`"hero"`) or an enemy actor: the silhouette stays readable. */
+  rimFlash(who: "hero" | number, amount: number, rgb: readonly [number, number, number]): void {
+    if (who === "hero") this.hero?.setRimFlash(amount, rgb);
+    else this.foes.get(who)?.actor.setRimFlash(amount, rgb);
+  }
+
+  /** Hold a camera pose over the stage's own (finisher push); `null` releases it. `snap` = hard cut. */
+  setCameraOverride(pose: Partial<CameraPose> | null, followRate: number, snap: boolean): void {
+    this.camOverride = pose ? { ...pose } : null;
+    this.world.camera.followRate = followRate;
+    this.camSnapPending = snap;
+  }
+
+  /** Push the hero back `dist` world units over `outMs`, returning over `backMs` (guard block). */
+  heroPush(dist: number, outMs: number, backMs: number): void {
+    this.pushT = 0;
+    this.pushDist = dist;
+    this.pushOut = Math.max(0.01, outMs / 1000);
+    this.pushBack = Math.max(0.01, backMs / 1000);
+  }
+
+  /** Start the hero's dash at `target` in `inMs` (stage time). */
+  dashLater(inMs: number, target: number): void {
+    this.pendingDash = { at: this.time + inMs / 1000, target };
+  }
+
   setLetterbox(on: boolean): void {
     if (this.letterboxOn === on) return;
     this.letterboxOn = on;
@@ -324,6 +382,11 @@ export class LevelStage {
     this.heroAttackT += dt;
     this.heroCastT += dt;
     this.heroGuardT += dt;
+    this.pushT += dt;
+    if (this.pendingDash && this.time >= this.pendingDash.at) {
+      this.heroAttack(this.pendingDash.target);
+      this.pendingDash = null;
+    }
 
     // drop actors of enemies the sim no longer lists (previous wave / encounter)
     const live = new Set(view.enemies.map((e) => e.id));
@@ -389,6 +452,13 @@ export class LevelStage {
       frames = F.cast;
     } else if (this.heroGuardT < 0.6) {
       frames = F.raise;
+    }
+    if (this.pushT < this.pushOut + this.pushBack) {
+      const u =
+        this.pushT < this.pushOut
+          ? easeOut(this.pushT / this.pushOut)
+          : 1 - easeOut((this.pushT - this.pushOut) / this.pushBack);
+      x -= this.pushDist * u;
     }
     const idx = frames.length > 1 ? Math.floor(this.time * fps) % frames.length : 0;
     const f = frames[idx] ?? frames[0];
@@ -463,7 +533,11 @@ export class LevelStage {
 
   private updateCamera(view: LevelView): void {
     const { target, letterbox } = this.poseFor(view);
-    this.world.camera.setTarget(target);
+    this.world.camera.setTarget(this.camOverride ? { ...target, ...this.camOverride } : target);
+    if (this.camSnapPending) {
+      this.camSnapPending = false;
+      this.world.camera.snap();
+    }
     this.setLetterbox(letterbox);
   }
 
@@ -483,6 +557,16 @@ export class LevelStage {
   /** The HUD projector: world position of an enemy/hero body part through the real camera (CSS px). */
   readonly projector: HudProjector = (a: HudAnchor) => {
     if (a.kind === "hero") {
+      if (a.part === "weapon") {
+        const off =
+          WEAPON_ANCHOR_OFFSET[this.lastView?.hero.archetype ?? "sword"] ??
+          WEAPON_ANCHOR_OFFSET.sword;
+        return this.toPx(
+          this.heroXNow() + (off?.x ?? 0.55),
+          this.heroY + (off?.y ?? 0.65),
+          this.heroZ,
+        );
+      }
       const h = this.hero?.height ?? 2.2;
       const y = this.heroY + (a.part === "head" ? h : a.part === "feet" ? 0 : h * 0.5);
       return this.toPx(this.heroXNow(), y, this.heroZ);

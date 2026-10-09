@@ -22,6 +22,7 @@ import { EventRouter } from "./eventBindings";
 import { LevelRunner, type LoggedInput, type PauseReason, type RunConfig } from "./runner";
 import { buildResultsModel, type ResultExtras, Screens } from "./screens";
 import { LevelStage } from "./stage";
+import { attachTypingFx, type SessionTypingFx } from "./typingFx";
 
 export interface SessionOptions extends PlayParams {
   glCanvas: HTMLCanvasElement;
@@ -30,6 +31,10 @@ export interface SessionOptions extends PlayParams {
   audio?: boolean;
   fonts?: boolean;
   bot?: { wpm: number; accuracy?: number; seed?: number };
+  /** T2.6 typing VFX (default on). `?fx=0` turns them off (A/B captures). */
+  typingFx?: boolean;
+  /** Effect settings for the typing VFX (`?intensity=`, `?reducedFlash=1`, `?reducedMotion=1`). */
+  fxSettings?: { effectsIntensity?: number; reducedFlash?: boolean; reducedMotion?: boolean };
   /** App mode (T3.2): a prebuilt run config (equipped gear, settings, SRS words, replay pay). */
   runConfig?: RunConfig;
   /** App mode: builds a fresh config for "restart" (the save changed since the last attempt). */
@@ -93,6 +98,8 @@ export class PlaySession {
   readonly screens: Screens;
   readonly audio: AudioEngine | null;
   bot: WpmBot | null = null;
+  /** T2.6 typing VFX (null when disabled). */
+  typingFx: SessionTypingFx | null = null;
 
   private readonly keyboard: KeyboardCapture;
   private lastView: LevelView;
@@ -137,6 +144,17 @@ export class PlaySession {
       audio: this.audio as AudioApi | null,
       ui: this.screens,
     });
+    // ---- T2.6 typing VFX: gate every event through the presentation queue, world dt from the handle
+    if (opts.typingFx !== false)
+      this.typingFx = attachTypingFx({
+        stage,
+        world,
+        hud: this.hud,
+        router: this.router,
+        audio: this.audio as AudioApi | null,
+        seed: cfg.seed,
+        settings: opts.fxSettings,
+      });
     this.runner = new LevelRunner(cfg, (evs) => this.onEvents(evs));
     this.lastView = getView(this.runner.state);
     this.keyboard = new KeyboardCapture({
@@ -192,6 +210,7 @@ export class PlaySession {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.keyboard.detach();
+    this.typingFx?.dispose();
     this.screens.dispose();
     if (this.ownsAudio) this.audio?.dispose();
     this.stage.dispose();
@@ -257,6 +276,7 @@ export class PlaySession {
     }
     this.stage.reset();
     this.hud.reset();
+    this.typingFx?.reset();
     this.screens.closePanel();
     this.screens.secondWind(false);
     this.resultAt = null;
@@ -324,7 +344,8 @@ export class PlaySession {
     const alpha = paused ? 0 : this.lastAlpha;
     const animDt = paused ? 0 : dt;
 
-    this.stage.update(view, alpha, animDt);
+    const worldDt = this.typingFx ? this.typingFx.update(animDt, view) : animDt;
+    this.stage.update(view, alpha, worldDt);
     this.setBiomeFromWorld();
     this.world.render();
     this.hud.render(view, alpha, animDt);

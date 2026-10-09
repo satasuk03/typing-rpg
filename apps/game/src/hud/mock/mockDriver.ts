@@ -37,6 +37,17 @@ export interface MockOpts {
   typoAt?: number[];
   /** Disable random typos (scripted ones still fire). */
   noTypos?: boolean;
+  /**
+   * Typing VFX dev scene `guard=1`: every enemy throws a guard word every 5 s (the window is 2.5 s, so the
+   * bot can type it at 40 WPM: perfect = parry, a typo = block, too slow = ignored).
+   */
+  guard?: boolean;
+  /**
+   * Typing VFX dev scene `boss=1`: the boss sentences are doom plates (every word fires `SentenceWordDone`,
+   * the last one included) and the last sentence is a finisher: `FinisherShown`, then on completion
+   * `FinisherCompleted` and the killing `Hit{finisher}` + `EnemyDeath{byKind: finisher}`.
+   */
+  script?: boolean;
 }
 
 /** Streak at the start of each 2 s cycle segment (crosses 10 / 25 / 50 / 100 about 0.4 s in). */
@@ -373,6 +384,12 @@ export class MockDriver {
         typingFromTick: this.typingFrom,
       });
     }
+    if (this.opts.guard)
+      this.enemies.forEach((en, i) => {
+        en.guardWords = true;
+        en.cycle = 300;
+        en.cycleStart = t + 120 + i * 100;
+      });
     this.phaseEnd = this.typingFrom;
     const first: SimEvent[] = [];
     if (this.wave === 0)
@@ -527,9 +544,13 @@ export class MockDriver {
         if (!e.alive) continue;
         if (e.plateId === null && t >= e.nextPlateAt) {
           const text = e.words[e.wordIdx % e.words.length] ?? "word";
+          const scripted = this.opts.script === true && e.isBoss;
+          const kind: PlateKind = scripted ? (e.wordIdx % 3 === 2 ? "finisher" : "doom") : "word";
           e.wordIdx++;
-          const p = this.showPlate(e, "word", text, null, null);
+          const p = this.showPlate(e, kind, text, null, null);
           e.plateId = p.id;
+          if (kind === "finisher")
+            this.emit({ type: "FinisherShown", tick: t, enemyId: e.id, plateId: p.id, text });
         }
         this.enemyCycle(e);
       }
@@ -583,8 +604,9 @@ export class MockDriver {
       return;
     }
     const frac = (t - e.cycleStart) / e.cycle;
-    if (e.guardWords && e.guardPlateId === null && frac >= 0.74 && frac < 1) {
-      const total = Math.round(e.cycle * 0.26);
+    const guardFrac = this.opts.guard ? 0.5 : 0.74;
+    if (e.guardWords && e.guardPlateId === null && frac >= guardFrac && frac < 1) {
+      const total = Math.round(e.cycle * (1 - guardFrac));
       const text = GUARD_WORDS[Math.floor(this.rng() * GUARD_WORDS.length)] ?? "guard";
       const impact = t + total;
       this.emit({
@@ -831,6 +853,17 @@ export class MockDriver {
     const oldCombo = cbTier(this.combo);
     this.combo = perfect ? this.combo + 1 : 0;
     const swift = this.cps > 5.5;
+    if (this.opts.script && (p.kind === "doom" || p.kind === "finisher")) {
+      const n = p.text.split(" ").length;
+      this.emit({
+        type: "SentenceWordDone",
+        tick: t,
+        plateId: p.id,
+        kind: p.kind,
+        wordIndex: n - 1,
+        wordCount: n,
+      });
+    }
     this.emit({
       type: "WordCompleted",
       tick: t,
@@ -871,8 +904,26 @@ export class MockDriver {
     }
     owner.plateId = null;
     owner.nextPlateAt = t + 35;
+    if (p.kind === "finisher") {
+      this.emit({ type: "FinisherCompleted", tick: t, enemyId: owner.id, plateId: p.id });
+      this.hit(owner, owner.hp, "finisher", { crit: false });
+      return;
+    }
+    if (p.kind === "doom")
+      this.emit({
+        type: "DoomSpellCompleted",
+        tick: t,
+        enemyId: owner.id,
+        plateId: p.id,
+        staggerUntilTick: t + 120,
+      });
     const sentence = owner.isBoss;
-    this.hit(owner, sentence ? 40 : 14, sentence ? "finisher" : "chip", { crit: false });
+    this.hit(
+      owner,
+      sentence ? 40 : 14,
+      p.kind === "doom" ? "skill" : sentence ? "finisher" : "chip",
+      { crit: false },
+    );
   }
 
   // ------------------------------------------------------------ combat

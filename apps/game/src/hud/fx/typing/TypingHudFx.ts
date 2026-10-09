@@ -18,6 +18,7 @@ import {
 import type { HudEffect } from "../../fx";
 import type { Hud } from "../../hud";
 import { buildGlowSprites, buildHaloSprites, type GlowSprites } from "./glowSprites";
+import { GuardGlyphs } from "./guardGlyphs";
 import {
   accentIndex,
   I_CYAN,
@@ -48,6 +49,7 @@ import { SpeedFx } from "./speedFx";
 import { AtbStreaks } from "./streaks";
 import { StreakTierFx } from "./tierFx";
 import { applyTypo } from "./typoFx";
+import { type OrbPayload, WordOrbs } from "./wordOrb";
 
 export interface TypingFxOptions {
   seed?: number;
@@ -85,11 +87,22 @@ export class TypingHudFx {
   private readonly tierFx = new StreakTierFx();
   private readonly speed = new SpeedFx();
   readonly shatter = new PlateShatter();
+  readonly guard = new GuardGlyphs();
+  readonly orbs = new WordOrbs();
+  /**
+   * Word orb hand-off (spec 9.1, 120 ms): the orb's CSS-px position and what it is for. The world half
+   * converts it with `screenToActionPlane` and launches the bolt.
+   */
+  onBolt: (x: number, y: number, p: OrbPayload) => void = () => {};
+  /** impactTick of the live guard word per plate (late-snap compression). */
+  private readonly guardImpact = new Map<number, number>();
   private sprites: GlowSprites = [];
   private halos: GlowSprites = [];
   /** ATB-filled white line flash age (s); -1 = idle. */
   private atbFlash = -1;
   private readonly env: SparkEnv;
+  /** Finisher panel dim (alpha 1 -> 0.4 over 200 ms, back after `holdMs`). */
+  private readonly panelDim = { v: 1, to: 1, holdMs: 0 };
   private view: LevelView | null = null;
   private enabled = true;
   private attached = false;
@@ -129,6 +142,34 @@ export class TypingHudFx {
       rng: mulberry32(this.seed),
     };
     this.streaks.onArrive = (tier, x, y, fat) => this.arrive(tier, x, y, fat);
+    this.guard.onLand = (x, y) => this.guardSparks(x, y, 3, false);
+    this.guard.onPop = (x, y) => this.guardSparks(x, y, 4, true);
+    this.orbs.onLaunch = (x, y, p) => this.onBolt(x, y, p);
+  }
+
+  /** Azure sparks at a guard glyph (landing: 3, wall pop: 4 plus a white flare). */
+  private guardSparks(x: number, y: number, n: number, pop: boolean): void {
+    const env = this.env;
+    if (env.k <= 0) return;
+    const S = env.S;
+    const m = Math.max(1, Math.round(n * env.k));
+    for (let i = 0; i < m; i++) {
+      const a = env.rng() * Math.PI * 2;
+      const sp = (90 + env.rng() * 120) * S;
+      this.sparks.add(
+        x,
+        y,
+        Math.cos(a) * sp,
+        Math.sin(a) * sp,
+        0,
+        0.24,
+        4,
+        K_SQ2,
+        I_ELEMENT + 5,
+        L_ABOVE,
+      );
+    }
+    if (pop) this.sparks.add(x, y, 0, 0, 0, 0.16, 26, K_FLARE, I_WHITE, L_ABOVE);
   }
 
   // ---------------------------------------------------------------- lifecycle
@@ -193,6 +234,10 @@ export class TypingHudFx {
     this.tierFx.clear();
     this.speed.clear();
     this.shatter.clear();
+    this.guard.clear();
+    this.orbs.clear();
+    this.guardImpact.clear();
+    this.hud.setPanelAlpha(1);
     this.atbFlash = -1;
   }
 
@@ -219,13 +264,43 @@ export class TypingHudFx {
       case "Typo":
         applyTypo(this.hud, e, this.view?.comboMode === "zen");
         this.speed.onTypo();
-        if (e.kind === "guard" && e.plateId !== null) this.guardTypo(e.plateId);
+        if (e.kind === "guard" && e.plateId !== null) {
+          this.guardTypo(e.plateId);
+          this.guard.flicker();
+        }
         break;
       case "WordCompleted":
         if (e.kind !== "guard") this.wordCompleted(e);
         break;
       case "AtbFilled":
         this.atbFilledHud();
+        break;
+      case "GuardWordShown":
+        this.guardImpact.set(e.plateId, e.impactTick);
+        break;
+      case "GuardWordTyped": {
+        const impact = this.guardImpact.get(e.plateId);
+        const left = impact === undefined ? 1e9 : ((impact - (this.view?.tick ?? 0)) / 60) * 1000;
+        // 100 ms snap + pop; compress when the impact is closer than 240 ms (done >= 40 ms before it)
+        this.guard.snap(e.plateId, left < 240 ? Math.max(40, (left - 40) * 0.5) : 100);
+        this.guardImpact.delete(e.plateId);
+        break;
+      }
+      case "EnemyAttack":
+        if (e.outcome === "hit") this.guard.crumbleOwner(e.enemyId);
+        break;
+      case "PlateRemoved":
+        if (e.reason !== "completed") {
+          this.guard.crumble(e.plateId);
+          this.guardImpact.delete(e.plateId);
+        }
+        break;
+      case "SentenceWordDone":
+        this.sentenceWord(e);
+        break;
+      case "FinisherCompleted":
+        this.panelDim.to = 0.4;
+        this.panelDim.holdMs = 1600;
         break;
       case "KeyStreakTierChanged":
         this.tierChanged(e.from, e.to);
@@ -271,6 +346,17 @@ export class TypingHudFx {
     if (!hud.getLetterRectInto(e.plateId, e.index, R)) return;
     const element = elementIndex(v?.hero.weaponDamageType);
     emitLetterSparks(this.sparks, env, R, tier, element, e.isLast, guard ? I_ELEMENT + 5 : -1);
+    if (guard && k > 0 && v) {
+      let len = e.index + 1;
+      for (let i = 0; i < v.plates.length; i++) {
+        const p = v.plates[i];
+        if (p && p.id === e.plateId) {
+          len = p.text.length;
+          break;
+        }
+      }
+      this.guard.add(e.plateId, e.ownerId ?? -1, e.index, len, R.x + R.w / 2, R.y, env.S);
+    }
     if (!e.isLast && k >= 0.15 && !guard) {
       hud.getAtbTipInto(TIP);
       this.streaks.launch(R.x + R.w / 2, R.y, tier, e.plateId * 31 + e.index, false, TIP.x, TIP.y);
@@ -342,7 +428,18 @@ export class TypingHudFx {
     const ra = k * (set.reducedFlash ? 0.5 : 1);
     if (perfect) {
       for (let i = 0; i < 3; i++)
-        rings.addRing(cx, cy, 0.3 * PR.w, 1.9 * PR.w, i * 0.05, 0.38, 6, 1, 0.9 * ra, I_TIER + 1);
+        rings.addRing(
+          cx,
+          cy,
+          Math.min(0.3 * PR.w, 60 * S),
+          Math.min(1.9 * PR.w, 280 * S),
+          i * 0.05,
+          0.38,
+          6,
+          1,
+          0.9 * ra,
+          I_TIER + 1,
+        );
       this.shatter.rayBurst(
         PR,
         set.reducedFlash ? 0 : Math.round(16 * Math.max(0.5, k)),
@@ -353,8 +450,8 @@ export class TypingHudFx {
       rings.addRing(
         cx,
         cy,
-        0.3 * PR.w,
-        1.25 * PR.w,
+        Math.min(0.3 * PR.w, 50 * S),
+        Math.min(1.25 * PR.w, 200 * S),
         0,
         0.38,
         6,
@@ -436,6 +533,55 @@ export class TypingHudFx {
       );
     }
   }
+
+  /** SentenceWordDone (spec 9.1): the finished word's letters collapse into an orb that goes to the world. */
+  private sentenceWord(e: Extract<SimEvent, { type: "SentenceWordDone" }>): void {
+    const env = this.env;
+    if (env.k <= 0) return;
+    const v = this.view;
+    let text = "";
+    if (v)
+      for (let i = 0; i < v.plates.length; i++) {
+        const p = v.plates[i];
+        if (p && p.id === e.plateId) {
+          text = p.text;
+          break;
+        }
+      }
+    if (!text) return;
+    let from = 0;
+    let w = 0;
+    for (; w < e.wordIndex; w++) {
+      const sp = text.indexOf(" ", from);
+      if (sp < 0) break;
+      from = sp + 1;
+    }
+    let to = text.indexOf(" ", from);
+    if (to < 0) to = text.length;
+    let n = 0;
+    for (let i = from; i < to && n < 16; i++) {
+      if (!this.hud.getLetterRectInto(e.plateId, i, R)) continue;
+      this.letterXY[n * 2] = R.x + R.w / 2;
+      this.letterXY[n * 2 + 1] = R.y + R.h / 2;
+      n++;
+    }
+    if (n === 0) return;
+    const doom = e.kind === "doom";
+    this.orbs.start(
+      this.letterXY,
+      n,
+      e.kind === "secondWind" ? I_TEAL : doom ? I_ELEMENT + 3 : I_TIER + 1,
+      {
+        plateId: e.plateId,
+        kind: e.kind,
+        wordIndex: e.wordIndex,
+        wordCount: e.wordCount,
+        final: e.wordIndex >= e.wordCount - 1,
+        exitY: this.hud.getPlateRectInto(e.plateId, R) ? R.y + R.h + 6 * env.S : 0,
+      },
+    );
+  }
+  private readonly letterXY = new Float32Array(32);
 
   /** Guard typo cue (spec 6, art-direction fix): white-cyan sparks and a ring from the plate frame. */
   private guardTypo(plateId: number): void {
@@ -582,6 +728,22 @@ export class TypingHudFx {
     this.tierFx.update(dt, env, set.reducedMotion, () => hud.triggerTierFlash());
     this.speed.update(dt);
     this.shatter.update(dt, env.S);
+    hud.getWeaponAnchorInto(WTIP);
+    this.guard.cx = WTIP.x;
+    this.guard.cy = WTIP.y;
+    this.guard.update(dt, env.S);
+    this.orbs.update(dt);
+    // finisher panel dim: 200 ms in, back to 1 after the hold
+    const pd = this.panelDim;
+    if (pd.holdMs > 0) {
+      pd.holdMs -= dt * 1000;
+      if (pd.holdMs <= 0) pd.to = 1;
+    }
+    if (pd.v !== pd.to) {
+      const step = (dt / 0.2) * 0.6;
+      pd.v = pd.v < pd.to ? Math.min(pd.to, pd.v + step) : Math.max(pd.to, pd.v - step);
+      hud.setPanelAlpha(pd.v);
+    }
     if (this.atbFlash >= 0) {
       this.atbFlash += dt;
       if (this.atbFlash > 0.12) this.atbFlash = -1;
@@ -644,6 +806,17 @@ export class TypingHudFx {
     c.globalCompositeOperation = "source-over";
     this.sparks.draw(c, L_ABOVE, S, this.sprites);
     if (this.benching) tp = this.lap("sparksAbove", tp);
+    if (this.guard.count > 0)
+      this.guard.draw(
+        c,
+        S,
+        time,
+        set.effectsIntensity,
+        set.reducedMotion,
+        this.sprites,
+        I_ELEMENT + 5,
+      );
+    if (this.orbs.count > 0) this.orbs.draw(c, S, this.sprites, set.effectsIntensity);
     this.shatter.drawAbove(c, S, this.sprites, set.effectsIntensity);
     c.globalCompositeOperation = "source-over";
     if (this.benching) tp = this.lap("shatter", tp);

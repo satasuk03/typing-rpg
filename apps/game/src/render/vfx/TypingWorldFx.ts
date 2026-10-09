@@ -8,6 +8,7 @@
  */
 import type { LevelView, SimEvent } from "@hd2d/sim";
 import { Vector3 } from "three";
+import type { OrbPayload } from "../../hud/fx/typing/wordOrb";
 import {
   elementIndex,
   fragmentArrivalSec,
@@ -16,10 +17,21 @@ import {
 } from "../../level/typingFxParams";
 import type { RenderWorld } from "../RenderWorld";
 import { BladeGlow } from "./BladeGlow";
-import { accentRgb, ELEMENT_LIGHT, ELEMENT_RGB, type Rgb } from "./colors";
+import {
+  accentRgb,
+  ELEMENT_LIGHT,
+  ELEMENT_RGB,
+  LIGHT_BEHIND,
+  LIGHT_MAX_RADIUS,
+  type Rgb,
+} from "./colors";
+import { FinisherCinematic } from "./FinisherCinematic";
+import { GuardBarrier } from "./GuardBarrier";
 import { HeroAura } from "./HeroAura";
 import { LightSlots } from "./LightSlots";
 import { PooledParticles } from "./PooledParticles";
+import { BOLT_COLORS, boltScale, SentenceBolts } from "./SentenceBolts";
+import { screenToActionPlane } from "./screenToWorld";
 import type { TimeDilation } from "./TimeDilation";
 import type { TypingFxCallbacks, TypingFxSettings, WorldAnchors } from "./types";
 
@@ -27,7 +39,7 @@ const POOL_A_USED = [384, 288, 192] as const;
 export const WORLD_Q = [1.0, 0.8, 0.55] as const;
 /** Light flashes are multiplied so they actually light the diorama (spec numbers read as torch-weak). */
 const FLASH_GAIN = 0.85;
-const FLASH_RADIUS_GAIN = 1.05;
+const FLASH_RADIUS_GAIN = 0.8;
 /** Typing post flash cap (R6). */
 export const POST_FLASH_CAP = 0.12;
 const GOLD: Rgb = [2.4, 1.8, 0.6];
@@ -56,6 +68,11 @@ export class TypingWorldFx {
   readonly lights: LightSlots;
   readonly aura: HeroAura;
   readonly blade: BladeGlow;
+  readonly barrier: GuardBarrier;
+  readonly bolts: SentenceBolts;
+  readonly finisher: FinisherCinematic;
+  /** impactTick of the live guard word, to compress a late snap. */
+  private guardImpact = -1;
   private settings: TypingFxSettings = {
     effectsIntensity: 1,
     reducedFlash: false,
@@ -94,6 +111,17 @@ export class TypingWorldFx {
     this.lights = new LightSlots(world.lights);
     this.aura = new HeroAura(world, this.poolA, this.poolB, this.lights);
     this.blade = new BladeGlow(world, this.poolA);
+    this.barrier = new GuardBarrier(world, this.poolA, this.lights, td, cb);
+    this.bolts = new SentenceBolts(world, this.poolA, this.lights);
+    this.bolts.onImpact = (doomFinal) => {
+      if (doomFinal) this.punch(0.4, 0.0009, 0.01);
+    };
+    this.finisher = new FinisherCinematic(world, this.poolA, this.lights, td, cb, {
+      postFlash: (a, rgb, ms, cap) => this.postFlash(a, rgb, ms, cap),
+      enemy: (id, out) => this.anchors.enemy(id, out),
+      hero: (out) => this.anchors.hero(out),
+      element: () => ELEMENT_RGB[elementIndex(this.view?.hero.weaponDamageType)] as Rgb,
+    });
     for (let i = 0; i < MAX_WORDS; i++)
       this.words.push({
         age: -1,
@@ -124,8 +152,14 @@ export class TypingWorldFx {
     this.lights.clear();
     this.aura.clear();
     this.blade.clear();
+    this.barrier.clear();
+    this.bolts.clear();
+    this.finisher.clear();
+    this.aura.setForceMax(false);
+    this.guardImpact = -1;
     for (const w of this.words) w.age = -1;
     this.downIn = -1;
+    if (this.flashT >= 0) this.cb.actorFlash("hero", 0, [1, 1, 1]);
     this.flashT = -1;
     this.postFlashV = 0;
     this.world.postFx.effects.flash = 0;
@@ -157,6 +191,45 @@ export class TypingWorldFx {
       case "AtbFilled":
         this.atbFilled();
         break;
+      case "CharCorrect":
+        if (e.kind === "guard") this.guardKey(e);
+        break;
+      case "Typo":
+        if (e.kind === "guard") this.barrier.shimmer();
+        break;
+      case "GuardWordShown":
+        this.guardImpact = e.impactTick;
+        break;
+      case "GuardWordTyped": {
+        // late snap: the barrier must be complete >= 40 ms before the impact
+        const left =
+          this.guardImpact >= 0 ? ((this.guardImpact - (this.view?.tick ?? 0)) / 60) * 1000 : 1e9;
+        this.barrier.snap(e.result, left < 280 ? Math.max(0.2, (left - 40) / 240) : 1);
+        this.guardImpact = -1;
+        break;
+      }
+      case "GuardBlocked":
+        this.barrier.block(this.settings);
+        break;
+      case "GuardParried":
+        this.barrier.parry(this.settings);
+        break;
+      case "EnemyAttack":
+        if (e.outcome === "hit") this.barrier.fade(200);
+        break;
+      case "PlateRemoved":
+        if (e.reason === "expired" || e.reason === "ownerDied" || e.reason === "phaseEnded")
+          this.barrier.fade(200);
+        break;
+      case "FinisherShown":
+        this.aura.setForceMax(true);
+        break;
+      case "FinisherCompleted":
+        this.finisher.play(e.enemyId, this.settings);
+        break;
+      case "EnemyDeath":
+        if (e.byKind === "finisher") this.aura.setForceMax(false);
+        break;
       case "AutoAttack": {
         const dur = Math.max(60, ((e.impactTick - e.tick) / 60) * 1000 - 160);
         this.cb.dash(160, dur, e.targetId);
@@ -173,6 +246,77 @@ export class TypingWorldFx {
       default:
         break;
     }
+  }
+
+  private guardKey(e: Extract<SimEvent, { type: "CharCorrect" }>): void {
+    if (this.settings.effectsIntensity <= 0) return;
+    let len = e.index + 1;
+    const v = this.view;
+    if (v)
+      for (const p of v.plates)
+        if (p.id === e.plateId) {
+          len = p.text.length;
+          break;
+        }
+    this.heroPos();
+    this.barrier.preview((e.index + 1) / Math.max(1, len));
+  }
+
+  /**
+   * A sentence-word orb arrives from the HUD (spec 9.1): convert its screen position to the action plane and
+   * launch the bolt at the plate owner (second wind: at the hero). The final word of a finisher launches nothing
+   * (the cinematic replaces it).
+   */
+  launchBolt(sx: number, sy: number, p: OrbPayload, cssW: number, cssH: number): boolean {
+    if (!this.enabled || this.settings.effectsIntensity <= 0) return false;
+    if (p.kind === "finisher" && p.final) return false;
+    if (!screenToActionPlane(this.world.camera.camera, sx, sy, cssW, cssH, V3)) return false;
+    const heal = p.kind === "secondWind";
+    let owner = -1;
+    const v = this.view;
+    if (v)
+      for (const pl of v.plates)
+        if (pl.id === p.plateId) {
+          owner = pl.ownerId ?? -1;
+          break;
+        }
+    this.heroPos();
+    let tx = this.aura.heroX + 4;
+    let ty = 1.4;
+    let tz = this.aura.heroZ;
+    if (heal) {
+      tx = this.aura.heroX;
+      ty = 1.1;
+    } else if (owner >= 0 && this.anchors.enemy(owner, EN)) {
+      tx = EN.x;
+      ty = EN.y;
+      tz = EN.z;
+    }
+    const rgb = heal
+      ? BOLT_COLORS.secondWind
+      : p.kind === "finisher"
+        ? BOLT_COLORS.finisher
+        : BOLT_COLORS.doom;
+    this.bolts.launch(
+      V3.x,
+      V3.y,
+      tx,
+      ty,
+      tz,
+      boltScale(p.wordIndex, p.wordCount),
+      rgb,
+      p.kind === "doom" && p.final,
+      heal,
+    );
+    return true;
+  }
+
+  /** 0 dark (cave) .. 1 bright (forest) from the biome's fog colour; picks the biome-aware aura colours. */
+  private biomeBright(): number {
+    const f = this.world.currentMood.fogCol;
+    const lum = 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2];
+    const t = Math.min(1, Math.max(0, (lum - 0.08) / 0.4));
+    return t * t * (3 - 2 * t);
   }
 
   private heroPos(): void {
@@ -216,17 +360,17 @@ export class TypingWorldFx {
     const el = this.elementLight();
     this.lights.flash(
       this.aura.heroX,
-      1.1,
-      this.aura.heroZ + 0.1,
+      1.3,
+      this.aura.heroZ + LIGHT_BEHIND,
       el[0],
       el[1],
       el[2],
-      2.2 * FLASH_GAIN,
-      4 * FLASH_RADIUS_GAIN,
+      1.7 * FLASH_GAIN,
+      Math.min(LIGHT_MAX_RADIUS, 4 * FLASH_RADIUS_GAIN),
       0.3,
     );
     this.flashT = 0;
-    this.aura.ring(el[0] * 1.6, el[1] * 1.6, el[2] * 1.6, 8, 0.5);
+    this.aura.ring(el[0] * 1.6, el[1] * 1.6, el[2] * 1.6, 5.5, 0.5);
     if (!this.settings.reducedMotion) {
       this.punch(0.25, 0.0008, 0.008);
       this.td.slow(1 + (0.25 - 1) * k, 100, 60);
@@ -268,16 +412,16 @@ export class TypingWorldFx {
     this.heroPos();
     this.aura.surge();
     accentRgb(to, this.time, this.settings.reducedMotion, RGB);
-    this.aura.ring(RGB[0] * 0.8, RGB[1] * 0.8, RGB[2] * 0.8, 9 + to, 0.55);
+    this.aura.ring(RGB[0] * 0.8, RGB[1] * 0.8, RGB[2] * 0.8, 5 + 0.4 * to, 0.55);
     this.lights.flash(
       this.aura.heroX,
-      1.2,
-      this.aura.heroZ + 0.1,
+      1.3,
+      this.aura.heroZ + LIGHT_BEHIND,
       RGB[0] * 0.5,
       RGB[1] * 0.5,
       RGB[2] * 0.5,
-      (1.5 + 0.4 * to) * FLASH_GAIN,
-      4.5 * FLASH_RADIUS_GAIN,
+      (1.3 + 0.35 * to) * FLASH_GAIN,
+      Math.min(LIGHT_MAX_RADIUS, 4.5 * FLASH_RADIUS_GAIN),
       0.45,
     );
     if (to >= 3) this.punch(0.25, 0.0009, 0.009);
@@ -303,6 +447,7 @@ export class TypingWorldFx {
       return;
     }
     this.heroPos();
+    this.aura.bright = this.biomeBright();
     // follow the view upward when events were missed (attach mid-run, a mock that pre-seeds the streak);
     // downward changes always arrive as events (the view may be a frame stale)
     const v = this.view;
@@ -336,8 +481,12 @@ export class TypingWorldFx {
       if (u >= 1) {
         this.flashT = -1;
         this.cb.actorFlash("hero", 0, [1, 1, 1]);
-      } else this.cb.actorFlash("hero", 0.8 * (1 - u), [1.6, 1.6, 1.6]);
+      } else this.cb.actorFlash("hero", 1 - u, [1.7, 1.6, 1.5]);
     }
+    this.barrier.setHero(this.aura.heroX, this.aura.heroZ);
+    this.barrier.update(dt, this.time, this.settings);
+    this.bolts.update(dt, this.time, this.settings);
+    this.finisher.update(realDt, this.settings);
     this.aura.update(dt, this.time, this.settings, this.q, this.qTier);
     this.blade.update(dt, this.time, this.aura, this.settings);
     this.lights.update(dt);
@@ -371,12 +520,12 @@ export class TypingWorldFx {
     this.lights.flash(
       this.blade.x,
       this.blade.y,
-      this.aura.heroZ + 0.9,
+      this.aura.heroZ - 0.4,
       lc[0],
       lc[1],
       lc[2],
-      (w.perfect ? 2.6 : 1.8) * FLASH_GAIN,
-      3 * FLASH_RADIUS_GAIN,
+      (w.perfect ? 2.2 : 1.6) * FLASH_GAIN,
+      Math.min(LIGHT_MAX_RADIUS, 3 * FLASH_RADIUS_GAIN),
       0.28,
     );
     if (w.owner >= 0 && this.anchors.enemy(w.owner, EN))
@@ -395,6 +544,10 @@ export class TypingWorldFx {
     postFlash: number;
     vignette: number;
     lightsLive: number;
+    boltsLaunched: number;
+    boltsLive: number;
+    barrier: number;
+    finisherClock: number;
   } {
     const e = this.world.postFx.effects;
     return {
@@ -407,6 +560,10 @@ export class TypingWorldFx {
       postFlash: e.flash,
       vignette: e.vignetteBoost,
       lightsLive: this.lights.live,
+      boltsLaunched: this.bolts.launched,
+      boltsLive: this.bolts.count,
+      barrier: this.barrier.intensity,
+      finisherClock: this.finisher.clock,
     };
   }
 
@@ -422,6 +579,9 @@ export class TypingWorldFx {
     this.lights.dispose();
     this.aura.dispose();
     this.blade.dispose();
+    this.barrier.dispose();
+    this.bolts.dispose();
+    this.finisher.dispose();
     this.poolA.dispose();
     this.poolB.dispose();
     this.world.postFx.effects.flash = 0;

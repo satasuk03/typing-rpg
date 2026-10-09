@@ -64,18 +64,47 @@ export interface TypingFxHandle {
   readonly queue: PresentationQueue;
 }
 
+/** Presentation time of the finisher's `EnemyDeath` (spec 9.2). */
+export const FINISHER_DEATH_MS = 1060;
+
+/** Default `cameraPose`: drive the world camera directly (dev scenes); the level stage overrides it. */
+function defaultCameraPose(world: RenderWorld): TypingFxCallbacks["cameraPose"] {
+  let saved: { pose: Record<string, number>; rate: number } | null = null;
+  return (pose, followRate, snap) => {
+    const cam = world.camera;
+    if (pose) {
+      if (!saved) saved = { pose: { ...cam.target }, rate: cam.followRate };
+      cam.setTarget(pose);
+      cam.followRate = followRate;
+    } else if (saved) {
+      cam.setTarget(saved.pose);
+      cam.followRate = saved.rate;
+      saved = null;
+    }
+    if (snap) cam.snap();
+  };
+}
+
 export function createTypingFx(o: TypingFxOptions): TypingFxHandle {
   const hudFx = new TypingHudFx(o.hud, { seed: o.seed, quality: o.quality ?? 0 });
   hudFx.attach();
   const td = new TimeDilation();
   const queue = new PresentationQueue();
-  const callbacks: TypingFxCallbacks = { ...NOOP_CALLBACKS, ...o.callbacks };
+  const callbacks: TypingFxCallbacks = {
+    ...NOOP_CALLBACKS,
+    cameraPose: defaultCameraPose(o.world),
+    ...o.callbacks,
+  };
   const worldFx = new TypingWorldFx(o.world, o.anchors, td, callbacks);
   worldFx.setSettings(o.hud.getSettings());
   let clockMs = 0;
   let enabled = true;
   let lastTier: QualityTier = o.quality ?? 0;
   const offView = o.hud.onUpdate((_dt, view) => worldFx.setView(view));
+  // the HUD collapses a finished sentence word into an orb and hands it over at 120 ms: the world launches the bolt
+  hudFx.onBolt = (x, y, p) => {
+    if (enabled) worldFx.launchBolt(x, y, p, o.hud.getCssW(), o.hud.getCssH());
+  };
 
   const handle: TypingFxHandle = {
     callbacks,
@@ -89,7 +118,18 @@ export function createTypingFx(o: TypingFxOptions): TypingFxHandle {
       hudFx.onEvent(e);
       worldFx.onEvent(e);
       if (e.type === "LevelStarted") queue.clear();
+      if (e.type === "FinisherCompleted") {
+        // EnemyDeath and the finishing Hit wait for the cinematic (1060 ms; 300 ms at intensity 0)
+        const k0 = o.hud.getSettings().effectsIntensity;
+        queue.holdEntity(e.enemyId, clockMs + (k0 > 0 ? FINISHER_DEATH_MS : 300) - 16);
+      }
       if (flushesQueue(e)) {
+        // a finisher in progress: the clear waits until the death has been presented (spec 9.2), in order
+        const holdEnd = queue.holdUntil(clockMs);
+        if (holdEnd >= 0) {
+          queue.defer(e, holdEnd + 32);
+          return false;
+        }
         queue.flushAll(release);
         return true;
       }

@@ -1,6 +1,7 @@
 /**
  * Playable level route:
  *   ?scene=play&level=ch1-l03[&seed=N][&pace=35][&tier=0|1|2][&wpm-bot=40[&bot-acc=0.96][&bot-seed=N]]
+ *     [&fx=0 (typing VFX off)][&intensity=0..1][&reducedFlash=1][&reducedMotion=1]
  *     [&audio=0][&fonts=0][&difficulty=story|standard|hard|zen]
  *
  * Loads the level by id with the starter loadout (parLoadout(1) + starter kit) and plays it through the real runner,
@@ -39,7 +40,14 @@ export function start(glCanvas: HTMLCanvasElement): void {
   const hudCanvas = document.getElementById("hud") as HTMLCanvasElement;
   const difficulty = q.get("difficulty") as LevelOptions["difficulty"] | null;
 
+  const fxSettings = {
+    ...(q.has("intensity") ? { effectsIntensity: Number(q.get("intensity")) } : {}),
+    ...(q.get("reducedFlash") === "1" ? { reducedFlash: true } : {}),
+    ...(q.get("reducedMotion") === "1" ? { reducedMotion: true } : {}),
+  };
   void PlaySession.create({
+    typingFx: q.get("fx") !== "0",
+    fxSettings,
     glCanvas,
     hudCanvas,
     levelId,

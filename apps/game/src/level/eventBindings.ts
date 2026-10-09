@@ -366,16 +366,30 @@ export class EventRouter {
     return this.register(TYPING_EVENT_TYPES, fn);
   }
 
+  /**
+   * The presentation gate (T2.6 `TypingFxHandle.onEvent`): runs for EVERY event, in order, BEFORE any binding. It
+   * returns false for an event that must be presented later (a chip hit, or an event queued behind one); the
+   * owner then hands it back through `present(e)` when it is due. The typing VFX see the event first either way.
+   */
+  setPresentationGate(fn: ((e: SimEvent) => boolean) | null): void {
+    this.gate = fn;
+  }
+  private gate: ((e: SimEvent) => boolean) | null = null;
+
   dispatch(events: readonly SimEvent[]): void {
+    const gate = this.gate;
+    for (const e of events) if (!gate || gate(e)) this.present(e);
+  }
+
+  /** Run the bindings and hooks for one event now (events the gate held back come back through here). */
+  present(e: SimEvent): void {
     const s = this.sinks;
-    for (const e of events) {
-      const binding = BINDINGS[e.type] as EventBinding<SimEventType>;
-      (binding.render as ((ev: SimEvent, c: BindingCtx) => void) | undefined)?.(e, s);
-      if (binding.hud === "push") s.hud.pushEvent(e);
-      if (binding.audio === "bound" && s.audio) dispatchAudioEvent(e, s.audio);
-      const list = this.hooks.get(e.type);
-      if (list) for (const h of list) h(e, s);
-      for (const h of this.any) h(e, s);
-    }
+    const binding = BINDINGS[e.type] as EventBinding<SimEventType>;
+    (binding.render as ((ev: SimEvent, c: BindingCtx) => void) | undefined)?.(e, s);
+    if (binding.hud === "push") s.hud.pushEvent(e);
+    if (binding.audio === "bound" && s.audio) dispatchAudioEvent(e, s.audio);
+    const list = this.hooks.get(e.type);
+    if (list) for (const h of list) h(e, s);
+    for (const h of this.any) h(e, s);
   }
 }

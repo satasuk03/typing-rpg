@@ -144,6 +144,8 @@ export class Hud {
   private typingFxAttached = false;
   /** False while the typing shatter replaces the completed-plate ghost (spec 5.1). */
   private ghostOnComplete = true;
+  /** Alpha of the HUD panels and bars (the finisher dims them to 0.4); plates and FX are untouched. */
+  private panelAlpha = 1;
   private quality: 0 | 1 | 2 = 0;
 
   private time = 0;
@@ -223,6 +225,13 @@ export class Hud {
    */
   setTypingFxAttached(on: boolean): void {
     this.typingFxAttached = on;
+  }
+  /** Dim the panels and bars (hero panel, stats, skills, combo, enemy bars) to `a` (0..1). */
+  setPanelAlpha(a: number): void {
+    this.panelAlpha = Math.min(1, Math.max(0, a));
+  }
+  getPanelAlpha(): number {
+    return this.panelAlpha;
   }
   /** The word shatter replaces the old completed-plate ghost fade when set to false. */
   setGhostOnComplete(on: boolean): void {
@@ -753,6 +762,7 @@ export class Hud {
       tierFlash: this.tierFlash,
     };
     if (hudVisible) {
+      c.globalAlpha = this.panelAlpha;
       const atb = this.lerpPrev(view.hero.atbFrac, (p) => p.hero.atbFrac);
       const hpv = this.lerpPrev(view.hero.hpFrac, (p) => p.hero.hpFrac);
       for (const e of view.enemies) {
@@ -779,6 +789,7 @@ export class Hud {
           this.lerpPrev(sk.chargeFrac, (p) => p.skills.find((x) => x.slot === sk.slot)?.chargeFrac),
         );
       drawComboDisplay(pc, view);
+      c.globalAlpha = 1;
     }
 
     // second wind dim (under plates)

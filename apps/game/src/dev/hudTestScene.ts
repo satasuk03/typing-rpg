@@ -13,6 +13,7 @@ import { loadHudFonts } from "../hud/fonts";
 import { checkSnapshot } from "../hud/invariants";
 import type { MockScenario } from "../hud/mock/mockDriver";
 import { MockDriver } from "../hud/mock/mockDriver";
+import { HERO_LUM_CAP } from "../render/vfx/colors";
 
 export interface HudDebugApi {
   ready: boolean;
@@ -145,10 +146,13 @@ export async function makeWorldBackdrop(
   const encIndex = boss
     ? (layout.encounters.find((e) => e.boss)?.index ?? 1)
     : Number(q.get("enc") ?? 1);
-  const pose = boss ? "boss" : (`battle:${encIndex}` as const);
+  // `pose=battle` keeps the combat camera on the boss encounter (the typing VFX scene fights in it)
+  const closeUp = boss && q.get("pose") !== "battle";
+  const pose = closeUp ? "boss" : (`battle:${encIndex}` as const);
   const enc = handle.encounter(encIndex);
 
   const hero = world.addActor("hero", "idle", { rim: 1.3, blobW: 1.25 });
+  hero.setLumCap(HERO_LUM_CAP);
   const frames = world.source.frames("hero", "idle");
   const f0 = frames[0];
   if (f0) hero.setFrame(f0);
@@ -169,7 +173,7 @@ export async function makeWorldBackdrop(
     return { x: sl.x, z: sl.z, scale: k.scale, flyY: k.flyY, actor: a };
   });
 
-  handle.setLetterbox(boss);
+  handle.setLetterbox(closeUp);
   const cam = handle.cameraPose(pose);
   world.camera.setTarget(cam);
   world.camera.snap();

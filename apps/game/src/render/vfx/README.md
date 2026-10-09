@@ -78,3 +78,16 @@ Pool A (additive) 384 / 288 / 192 by quality tier, pool B (normal blend: smoke, 
 3 dynamic lights (aura light off at quality 2). `effectsIntensity` 0 hides every world effect; `reducedFlash`
 turns the post flash off, halves light flashes and drops the CA; `reducedMotion` drops punches, shakes and the
 time-slow. The post flash is capped at 0.12 while typing (R6).
+
+## Chunk C: guard, bolts, finisher, runner
+
+`level/typingFx.ts` is the real wiring (read it instead of the sketch above): `router.setPresentationGate(handle.onEvent)`,
+`onPresent: router.present`, `worldDt = fx.update(dt)` fed to `stage.update`. New callbacks: `cameraPose`, `sfx`, `heroPush`,
+`dash(..., source)`. New files: `GuardBarrier`, `SentenceBolts`, `FinisherCinematic`, `screenToWorld`, `typingBindings` (the binding table the
+coverage test checks).
+
+## Chunk C: guard, bolts, finisher, runner
+
+`level/typingFx.ts` is the real wiring: `router.setPresentationGate(handle.onEvent)`, `onPresent: router.present`,
+`worldDt = fx.update(dt)` fed to `stage.update`. New callbacks: `cameraPose`, `sfx`, `heroPush`, `dash(..., source)`.
+New files: `GuardBarrier`, `SentenceBolts`, `FinisherCinematic`, `screenToWorld`, `typingBindings` (checked by the coverage test).

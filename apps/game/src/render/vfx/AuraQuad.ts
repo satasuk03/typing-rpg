@@ -108,6 +108,11 @@ export class AuraQuad {
     this.mesh.visible = v > 0.003;
     return this;
   }
+  /** Additive share (0 = plain alpha blend). Bright worlds use less so hues stay saturated. */
+  additive(v: number): this {
+    (this.mat.uniforms.uAdd as { value: number }).value = v;
+    return this;
+  }
   progress(v: number): this {
     (this.mat.uniforms.uP as { value: number }).value = v;
     return this;
