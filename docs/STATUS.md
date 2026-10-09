@@ -44,6 +44,8 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
 | Quiet perf re-measure (2026-10-09) | Orchestrator | **done** | Metal frame-budget 8/8 (p95 16.7–16.8 ms); typingSettings 3/3; typing-fx L1/L10 ×2, 0 violations (flake not reproduced); typingPerf: main 0.46 ms/key (first 0.74 reading was a stale dev server on port 5173). `docs/perf.md` |
 | T6.3 art review round 2 | Art director (opus) | **done** (merged 127cc0d) | `docs/qa/t6.3-review-2.md`: round-1 items 19 closed / 6 partly / 0 open; new P1-1…5 (boss Break dome, orphaned guard barrier, forest glare, Golem intro wash, parry/BREAK shape) → W3; H items P2-2/3/4/6/7 → H3; 10 PO showcase moments |
 | T6.3 W3 world (review-2 P1-1…P1-5, P2-1, P2-5) | VFX (sonnet) | in progress | |
+| T6.3 H3 HUD (review-2 P2-2/3/4/6/7, P3-2/3/5) | UI (sonnet) | in progress | |
+| Key streak: typo drops one tier (PO 2026-10-09) | Sim (sonnet) | in progress | |
 | HUD typing FX perf | UI (sonnet) | **done** (merged 530f0cc) | typingPerf 0.40–0.42 ms/key vs main 0.46 (budget 0.45), A/B by orchestrator; pixel diff ≤0.048% px changed; tests/hud 26/26; typing-fx 2/2 |
 
 ## Notes
