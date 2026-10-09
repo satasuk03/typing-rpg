@@ -782,7 +782,7 @@ export class TypingHudFx {
     this.tierFx.draw(c, S, time, this.sprites, this.halos, !set.reducedFlash, set.reducedMotion);
     if (this.benching) tp = this.lap("tier", tp);
     this.sparks.draw(c, L_BEHIND, S, this.sprites);
-    if (this.sparks.count > 0) {
+    if (this.sparks.hasLayer(L_ATB)) {
       // arrival sparks / flare: clipped to the ATB bar rect so nothing lands on the HP bar or its text
       hud.getAtbRectInto(ATBR);
       c.save();
