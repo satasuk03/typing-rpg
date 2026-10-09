@@ -7,7 +7,8 @@ const TTL_S = 300; // safety net: if the cron dies the cache expires and readers
 
 export interface CachedEntry {
   rank: number;
-  userId: string;
+  /** random public id (users.public_id), never the internal user id. */
+  publicId: string;
   displayName: string;
   wpmX100: number;
   accuracyBp: number;
@@ -29,7 +30,7 @@ export async function buildTop(env: Env, scope: Scope, now: number): Promise<Cac
     updatedAt: now,
     top: rows.map((r) => ({
       rank: r.rank,
-      userId: r.user_id,
+      publicId: r.public_id ?? "unknown",
       displayName: r.display_name,
       wpmX100: r.wpm_x100,
       accuracyBp: r.accuracy_bp,
@@ -50,9 +51,12 @@ export async function rebuildAllTopCaches(env: Env, now: number): Promise<void> 
   await Promise.all([rebuildTopCache(env, "season", now), rebuildTopCache(env, "all", now)]);
 }
 
-/** Cached top-100, or a live build (written back) on a cache miss. */
+/**
+ * Cached top-100. On a KV miss serve a live D1 result WITHOUT writing KV (L2): rebuilds belong to the cron and to
+ * waitUntil after a qualifying submit, so an anonymous reader can never trigger KV writes.
+ */
 export async function readTop(env: Env, scope: Scope, now: number): Promise<CachedTop> {
   const hit = await env.LB_CACHE.get<CachedTop>(cacheKey(periodKeyFor(env, scope)), "json");
   if (hit) return hit;
-  return rebuildTopCache(env, scope, now);
+  return buildTop(env, scope, now);
 }

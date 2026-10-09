@@ -2,12 +2,17 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.3** (2026-10-09) |
+| **Doc version** | **1.4** (2026-10-09) |
 | **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **1.4** (2026-10-09): API security review (§9.2, §10).
+  - Shadow flag is no longer an oracle: pb/rank are computed from the owner's effective best (public or shadow), identically for flagged and ok runs; flagged bests live in `leaderboard_shadow`, and the owner sees them in `top`/`me`/`around`.
+  - `LbEntry.userId` is now `publicId` (random, `users.public_id`); the internal id is never exposed.
+  - Run seed is `HMAC(TICKET_SECRET, userId|season|n)`, n = submitted runs (abandoning does not reroll); a `period_key` is stored on the run and credited at submit.
+  - JWT gains `aud: "hd2d-api"`; refresh has a 10 s grace window (deterministic child); CORS allowlist (`ALLOWED_ORIGINS`); rate limiting fails closed; secret validation; `Cache-Control: no-store` on `/auth/*` and `/save`, `nosniff` everywhere.
 - **1.3** (2026-10-09): additive changes recorded by the orchestrator after the T1.2–T1.4 implementations, plus the Trial sim.
   - View: `LevelView.stats.accuracy` and `TrialView.accuracy` are basis points (0..10000).
   - `LevelResult.stats.damageBySkillM?: Record<ActiveSkillId, number>` (burn included). `SkillView` and `HeroView.statuses` (burn, bleed, freeze, barrier) are populated. `StatusApplied` and `StatusEnded` are emitted. `HeroPose "cast"` is used.
@@ -1240,8 +1245,10 @@ export declare function mergeSaves(base: SaveBlob | null, local: SaveBlob, serve
 
 **General rules.**
 - Bodies are JSON.
-- **Access token:** sent as `Authorization: Bearer <JWT>`. It is HS256, lasts 15 min, and has claims `{sub, ageBand, region, iat, exp}`.
-- **Refresh token:** opaque, valid for 90 days and stored hashed. It rotates on every use, and reusing an old one revokes the whole token family.
+- **Access token:** sent as `Authorization: Bearer <JWT>`. It is HS256, lasts 15 min, and has claims `{sub, ageBand, region, iat, exp, aud}` with `aud = "hd2d-api"` (verified).
+- **Refresh token:** opaque, valid for 90 days and stored hashed. It rotates on every use, and reusing an old one revokes the whole token family. **Grace window:** presenting the same parent again within 10 s of its rotation, while its child is still unused, returns the *same* child (children are derived deterministically from the parent), so a lost response is retryable. Outside the window, or if the child was already used, it is reuse.
+- **CORS:** only origins listed in the `ALLOWED_ORIGINS` Worker var get CORS headers (never reflected, never `*`). Allowed request headers: `Authorization, Content-Type, If-Match, Idempotency-Key`. Exposed: `ETag, Idempotent-Replay`.
+- **Run seeds (M1):** `seed = u32(HMAC(TICKET_SECRET, userId|season|n))`, `n` = the user's submitted runs this season. Starting and abandoning tickets does not change `n`, so the same passage is served until a run is submitted. An `abandon_rate` review flag is raised for heavy abandoners.
 - `POST /runs/submit` requires `Idempotency-Key: <runId>`.
 - Every non-2xx response uses the error envelope. A 409 save conflict also includes `server`.
 
@@ -1346,7 +1353,7 @@ export const RunSubmitResponse = z.object({
 // GET /lb/trial?scope=season|all&around=me    (top-100 from KV, 60 s cron; `around` = live D1 query)
 export const LbTrialQuery = z.object({ scope: z.enum(["season", "all"]).default("season"), around: z.literal("me").optional() });
 export const LbEntry = z.object({
-  rank: z.number().int().positive(), userId: z.string(), displayName: z.string(),
+  rank: z.number().int().positive(), publicId: z.string(), displayName: z.string(),
   wpmX100: z.number().int(), accuracyBp: z.number().int(), achievedAt: z.number().int(), isMe: z.boolean(),
 });
 export const LbTrialResponse = z.object({
@@ -1412,13 +1419,13 @@ The integration tests assert exactly these three cases.
 
 **Race-safe persistence (M8).** Everything goes in one D1 `batch()`, which runs as a single transaction:
 1. `UPDATE runs SET status=?, submitted_at=?, log_sha256=?, submit_nonce=?, response=? WHERE id=? AND status='open'`. `submit_nonce` is a fresh random value per request.
-2. The leaderboard PB upsert, for `period_key ∈ {season, 'all'}`, using the **verified** values. It is guarded by `WHERE EXISTS (SELECT 1 FROM runs WHERE id=? AND submit_nonce=?)`.
+2. The leaderboard PB upsert, for `period_key ∈ {run.period_key, 'all'}` (`period_key` is stored on the run at `/runs/start`), using the **verified** values. **Ok** runs upsert `leaderboard_entries` (public); **flagged** runs upsert `leaderboard_shadow` (owner-only). The response's `pb` and `rank` are computed from the owner's *effective best* (the better of the two rows) and never depend on the flag, so a flagged and an ok run with the same score receive identical answers. It is guarded by `WHERE EXISTS (SELECT 1 FROM runs WHERE id=? AND submit_nonce=?)`.
 3. The `run_replays` insert (top 1,000 or flagged; 90-day TTL), with the same guard.
 
 After the batch:
 - If the UPDATE changed 0 rows, another request won the race. Re-read the run and answer as in step 2a.
 - Terminal error paths (steps 4–7) use the same conditional UPDATE, with `status='rejected'` and the stored error body.
-- If the score enters the top 100, rebuild the KV top-100.
+- If `pb` and `rank <= 100`, rebuild the KV top-100 via `waitUntil` (the same condition and path for flagged and ok runs, so timing does not leak the flag).
 
 The claimed numbers are never written.
 

@@ -118,6 +118,24 @@ export function humanKeys(passage: string, seed: number, wpm = 60, typoRate = 0.
   return out;
 }
 
+/** Exactly `n` correct keys (no typos) with wide uniform IKI jitter: passes every heuristic (a clean human-like run). */
+export function jitterKeys(
+  passage: string,
+  n: number,
+  seed: number,
+  min = 60,
+  span = 170,
+): LoggedInput[] {
+  const rnd = mulberry32(seed);
+  const out: LoggedInput[] = [];
+  let ms = 0;
+  for (let i = 0; i < n; i++) {
+    out.push({ ms, input: { tick: msToTick(ms), key: passage.charAt(i) } });
+    ms += min + Math.floor(rnd() * span);
+  }
+  return out;
+}
+
 /** Perfectly correct typing with a fixed IKI (a macro). */
 export function constantKeys(passage: string, ikiMs: number, maxKeys = 1500): LoggedInput[] {
   const out: LoggedInput[] = [];

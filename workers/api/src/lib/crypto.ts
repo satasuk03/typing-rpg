@@ -74,7 +74,10 @@ export interface AccessClaims {
   region: string | null;
   iat: number; // seconds
   exp: number; // seconds
+  aud: string;
 }
+
+export const JWT_AUDIENCE = "hd2d-api";
 
 const HEADER = toB64Url(enc.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
 
@@ -101,9 +104,29 @@ export async function verifyJwt(secret: string, token: string, nowSec: number): 
   } catch {
     return { ok: false, reason: "malformed" };
   }
-  if (typeof claims.sub !== "string" || typeof claims.exp !== "number") {
+  if (
+    typeof claims.sub !== "string" ||
+    typeof claims.exp !== "number" ||
+    claims.aud !== JWT_AUDIENCE
+  ) {
     return { ok: false, reason: "malformed" };
   }
   if (claims.exp <= nowSec) return { ok: false, reason: "expired" };
   return { ok: true, claims };
+}
+
+/** Deterministic child refresh token for a given parent hash (L5 grace window): same parent -> same child. */
+export const deriveRefreshChild = (secret: string, parentHash: string): Promise<string> =>
+  hmacB64Url(secret, `rt-child|${parentHash}`);
+
+/** M1: per-user, per-period fixed passage sequence. u32 seed = first 4 bytes of HMAC(secret, user|period|n). */
+export async function deriveSeed(
+  secret: string,
+  userId: string,
+  periodKey: string,
+  n: number,
+): Promise<number> {
+  const mac = fromB64Url(await hmacB64Url(secret, `seed|${userId}|${periodKey}|${n}`));
+  if (!mac) throw new Error("seed derivation failed");
+  return new DataView(mac.buffer, mac.byteOffset, 4).getUint32(0);
 }

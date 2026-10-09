@@ -15,6 +15,7 @@ export interface UserRow {
   flags: number;
   created_at: number;
   deleted_at: number | null;
+  public_id: string | null;
 }
 
 export interface DeviceRow {
@@ -76,6 +77,7 @@ export interface RunRow {
   verified_wpm_x100: number | null;
   verified_accuracy_bp: number | null;
   verified_score: number | null;
+  period_key: string | null;
 }
 
 export interface LeaderboardEntryRow {
@@ -94,6 +96,8 @@ export interface LeaderboardEntryRow {
 export interface RankedEntry extends LeaderboardEntryRow {
   rank: number;
   display_name: string;
+  /** random public id (users.public_id); the only identifier leaderboards expose. */
+  public_id: string | null;
 }
 
 export interface FlagRow {

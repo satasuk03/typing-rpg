@@ -2,3 +2,5 @@
 # Production: `wrangler secret put JWT_SECRET` / `wrangler secret put TICKET_SECRET` (>= 32 random bytes each).
 JWT_SECRET=dev-only-jwt-secret-change-me-0123456789abcdef
 TICKET_SECRET=dev-only-ticket-secret-change-me-0123456789abcdef
+# Lets the dev-only- placeholder secrets above pass the startup checks. NEVER set ENV=local in production.
+ENV=local

@@ -34,10 +34,22 @@ name = "RL_RUN"
 namespace_id = "1003"
 simple = { limit = 10, period = 60 }
 
+[[ratelimits]]
+name = "RL_LB"
+namespace_id = "1004"
+simple = { limit = 30, period = 60 }
+
+# NOTE: wrangler does NOT inherit bindings, [vars], [triggers] or [[ratelimits]] into [env.*] sections. If you add one
+# (e.g. [env.production]), you MUST repeat every [[d1_databases]], [[kv_namespaces]], [triggers], [vars] and all four
+# [[ratelimits]] blocks (RL_AUTH, RL_SAVE, RL_RUN, RL_LB) inside it. A missing rate-limit binding fails CLOSED
+# (HTTP 500) unless RATE_LIMIT_DISABLED=1 is set, so a forgotten mirror is loud, not silent.
+#
 # Non-secret config. Secrets (JWT_SECRET, TICKET_SECRET) come from `wrangler secret put` / .dev.vars (see .dev.vars.example).
 # AC_* thresholds: interfaces §10. IKI-based ones are PROVISIONAL: tune on real data before the season starts.
 [vars]
 SEASON_KEY = "S1"
+# CORS allowlist (exact origins, comma separated). Production must list the real game origin(s) only.
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 AC_RUN_TTL_MS = "600000"
 AC_CLOCK_SLACK_MS = "5000"
 AC_MAX_SUSTAINED_WPM = "220"
@@ -54,3 +66,5 @@ AC_PERFECT_MIN_KEYS = "400"
 AC_PERFECT_MIN_WPM = "150"
 AC_PB_JUMP_REVIEW_WPM = "35"
 AC_MIN_KEYS = "20"
+AC_ABANDON_MIN_TICKETS = "8"
+AC_ABANDON_MAX_RATE = "0.5"

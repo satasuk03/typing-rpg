@@ -9,7 +9,13 @@ import {
   insertUserStmt,
   rotateRefreshToken,
 } from "../db/index.ts";
-import { randomToken, sha256Hex, signJwt } from "../lib/crypto.ts";
+import {
+  deriveRefreshChild,
+  JWT_AUDIENCE,
+  randomToken,
+  sha256Hex,
+  signJwt,
+} from "../lib/crypto.ts";
 import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, type Ctx, parseBody, rateLimit, secretOf } from "../lib/http.ts";
 
@@ -21,6 +27,8 @@ type AuthAnonBody = {
 
 export const ACCESS_TTL_MS = 15 * 60_000;
 export const REFRESH_TTL_MS = 90 * 24 * 3_600_000;
+/** L5: a retry of the same parent within this window gets the same child (lost-response tolerance). */
+export const REFRESH_GRACE_MS = 10_000;
 const FRIEND_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export const authRoutes = new Hono<AppEnv>();
@@ -36,6 +44,7 @@ async function issueAccess(c: Ctx, user: UserRow) {
     region: user.region,
     iat: Math.floor(now / 1000),
     exp: Math.floor(exp / 1000),
+    aud: JWT_AUDIENCE,
   });
   return { accessToken, accessExpiresAt: exp };
 }
@@ -89,6 +98,7 @@ authRoutes.post("/anon", async (c) => {
           id,
           displayName: `Typist-${code.slice(0, 4)}`,
           friendCode: code,
+          publicId: randomToken(12),
           now,
         }),
         insertDeviceStmt(db, body.deviceId, id, now, secretHash),
@@ -121,12 +131,16 @@ authRoutes.post("/refresh", async (c) => {
   await rateLimit(c, "auth", clientIp(c));
   const body = await parseBody(c, AuthRefreshRequest, 4096);
   const now = c.get("deps").now();
-  const newToken = randomToken(32);
+  // The child token is derived from the parent (HMAC with a server secret), so a retry inside the grace window
+  // reproduces exactly the same child instead of tripping reuse detection.
+  const oldHash = await sha256Hex(body.refreshToken);
+  const newToken = await deriveRefreshChild(secretOf(c.env, "JWT_SECRET"), oldHash);
   const r = await rotateRefreshToken(c.env.DB, {
-    oldHash: await sha256Hex(body.refreshToken),
+    oldHash,
     newHash: await sha256Hex(newToken),
     now,
     expiresAt: now + REFRESH_TTL_MS,
+    graceMs: REFRESH_GRACE_MS,
   });
   if (r.status === "invalid")
     throw new ApiError("refresh_invalid", "refresh token invalid or expired");
