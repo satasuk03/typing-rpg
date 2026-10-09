@@ -14,7 +14,9 @@ import type {
 } from "./events.ts";
 import { BP, mulBp } from "./fixed.ts";
 import type { SimKey } from "./input.ts";
+import { emitPassive, hasPassive, lastStandMultBp, tutorialCue } from "./passives.ts";
 import type { EncounterState, PlateState, RunState } from "./state.ts";
+import { grantBarrier } from "./statuses.ts";
 import type { LevelState } from "./types.ts";
 import { firstLetter, plateFolds } from "./words.ts";
 
@@ -170,6 +172,7 @@ function setCombo(state: LevelState, combo: number, emit: Emit): void {
   if (to !== from) {
     run.comboTier = to;
     emit({ type: "ComboTierChanged", tick: state.tick, from, to, combo });
+    if (to >= 1) tutorialCue(state, "combo", emit);
   }
 }
 
@@ -243,6 +246,7 @@ function correctChar(state: LevelState, plate: PlateState, hooks: TypingHooks, e
   let gainM = 0;
   if (paysAtb(plate.kind) && idx >= plate.maxPaid) {
     gainM = mulBp(K.WEAPONS[run.loadout.weapon.archetype].charChargeM, comboMultBp(run.combo));
+    gainM = mulBp(gainM, lastStandMultBp(state, emit)); // Last Stand: +40% ATB charge at low HP
     plate.paidChars++;
     plate.paidAtbM += gainM;
   }
@@ -268,7 +272,10 @@ function correctChar(state: LevelState, plate: PlateState, hooks: TypingHooks, e
   });
   setKeyStreak(state, streak, emit);
   burst(state, emit);
-  if (gainM > 0) addAtb(state, gainM, emit);
+  if (gainM > 0) {
+    tutorialCue(state, "atb", emit);
+    addAtb(state, gainM, emit);
+  }
 
   // sentence words: a finished word inside a multi-word plate (space typed, or the last char)
   if (plate.text.includes(" ") && (plate.text.charAt(idx) === " " || isLast)) {
@@ -329,6 +336,7 @@ function typo(state: LevelState, plate: PlateState | null, got: string, emit: Em
   const mode = run.options.comboMode;
   let penalty: "halved" | "reset" | "none" | "latched" | "forgiven" = "none";
   let newCombo = comboBefore;
+  let steady = false;
   if (mode !== "zen") {
     const latched = plate !== null ? plate.penalized : run.strayLatch;
     if (latched) {
@@ -336,7 +344,12 @@ function typo(state: LevelState, plate: PlateState | null, got: string, emit: Em
     } else {
       if (plate !== null) plate.penalized = true;
       else run.strayLatch = true;
-      if (mode === "gentle") {
+      if (enc.steadyLeft > 0 && hasPassive(run, "steadyHands")) {
+        // Steady Hands: the first typo of each encounter does not crack the combo (nor cost ATB in strict mode)
+        enc.steadyLeft--;
+        penalty = "forgiven";
+        steady = true;
+      } else if (mode === "gentle") {
         newCombo = Math.floor(comboBefore / 2);
         penalty = "halved";
       } else {
@@ -360,8 +373,12 @@ function typo(state: LevelState, plate: PlateState | null, got: string, emit: Em
     keyStreakBefore,
     penalty,
   });
+  if (steady) emitPassive(state, "steadyHands", null, emit);
   setKeyStreak(state, 0, emit);
-  if (newCombo !== comboBefore) setCombo(state, newCombo, emit);
+  if (newCombo !== comboBefore) {
+    if (hasPassive(run, "comeback")) run.comebackLost += comboBefore - newCombo;
+    setCombo(state, newCombo, emit);
+  }
 
   // beginner auto-unlock: N consecutive wrong keys drop the lock (doc 01 §1.2)
   const n = run.options.autoUnlockAfterTypos;
@@ -386,11 +403,13 @@ function completePlate(state: LevelState, plate: PlateState, hooks: TypingHooks,
     bonusM = perfect ? mulBp(w.wordBonusM, K.PERFECT_ATB_MULT_BP) : w.wordBonusM;
     if (perfect) bonusM += mulBp(plate.paidAtbM, K.PERFECT_CHAR_BONUS_BP);
     if (swift) bonusM += K.SWIFT_ATB_M;
+    bonusM = mulBp(bonusM, lastStandMultBp(state, emit));
   }
 
   run.stats.wordsCompleted++;
   if (perfect) run.stats.perfectWords++;
   if (paysAtb(plate.kind)) {
+    run.lastWordPerfect = perfect; // Clean Cut
     // crit share since the last auto-attack (D10); counted BEFORE this word's ATB can fill the gauge
     const enc = state.enc as EncounterState;
     enc.critWords++;
@@ -398,9 +417,16 @@ function completePlate(state: LevelState, plate: PlateState, hooks: TypingHooks,
   }
   // mechanical combo: a Perfect completion is +1 (a Sword Perfect Parry +1 more); imperfect leaves it unchanged
   let combo = run.combo;
+  let comeback = false;
   if (perfect) {
     combo += 1;
     if (plate.kind === "guard" && run.loadout.weapon.archetype === "sword") combo += 1;
+    if (run.comebackLost > 0 && hasPassive(run, "comeback")) {
+      // Comeback: the next perfect word wins back half the combo a typo cost
+      combo += mulBp(run.comebackLost, K.COMEBACK_RESTORE_BP);
+      run.comebackLost = 0;
+      comeback = true;
+    }
   }
   const wordKey = plate.text.toLowerCase();
   run.words.push({
@@ -435,7 +461,17 @@ function completePlate(state: LevelState, plate: PlateState, hooks: TypingHooks,
     });
   }
   removePlate(state, plate, "completed", emit);
+  const comboBefore = run.combo;
   if (combo !== run.combo) setCombo(state, combo, emit);
+  if (comeback) emitPassive(state, "comeback", null, emit);
+  if (
+    hasPassive(run, "bulwarkStreak") &&
+    Math.floor(combo / K.BULWARK_EVERY_COMBO) > Math.floor(comboBefore / K.BULWARK_EVERY_COMBO)
+  ) {
+    // Bulwark Streak: every 10 combo conjures a one-hit barrier
+    grantBarrier(state, K.BULWARK_BARRIER_HITS, null, null, emit);
+    emitPassive(state, "bulwarkStreak", null, emit);
+  }
   if (bonusM > 0) addAtb(state, bonusM, emit);
   hooks.onPlateCompleted(state, plate, emit);
 }

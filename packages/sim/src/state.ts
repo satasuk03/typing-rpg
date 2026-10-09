@@ -11,7 +11,7 @@ import type {
 } from "./events.ts";
 import type { RngState } from "./rng.ts";
 import type { Tick } from "./time.ts";
-import type { LevelOptions, Loadout, ResolvedLevel, WordResult } from "./types.ts";
+import type { ActiveSkillId, LevelOptions, Loadout, ResolvedLevel, WordResult } from "./types.ts";
 
 export interface PlateState {
   id: PlateId;
@@ -60,15 +60,32 @@ export interface EnemyState {
   windupShown: boolean; // guard word shown for the scheduled impact
   guardResult: "block" | "parry" | null; // typed, waiting for impact
   wordsDone: number;
+  dots: DotState[]; // burn / bleed (at most one of each), ticked every DOT_TICK_T (T1.4)
+  frozenUntil: Tick | null; // Frost Lock: the attack timer (and a shown guard word) is held until this tick (T1.4)
+}
+
+/** A damage-over-time status. Origin is inherited from the applier: bleed -> weapon, burn -> skill (skill-share metric). */
+export interface DotState {
+  status: "burn" | "bleed";
+  origin: HitOrigin;
+  skillId: ActiveSkillId | null;
+  untilTick: Tick;
+  nextTick: Tick;
+  perTickM: number;
 }
 
 /** A hero attack in flight: resolves when the tick reaches `tick` (ATTACK_IMPACT_T after AutoAttack). */
-export interface PendingHit {
-  tick: Tick;
-  kind: "auto";
-  targetId: EntityId;
-  crit: boolean;
-}
+export type PendingHit =
+  | { tick: Tick; kind: "auto"; targetId: EntityId; crit: boolean }
+  /** An auto-cast skill in flight (T1.4): its effect lands at `tick` (SKILL_IMPACT_T after SkillCast). */
+  | {
+      tick: Tick;
+      kind: "skill";
+      slot: 0 | 1;
+      skillId: ActiveSkillId;
+      targetId: EntityId | null;
+      crit: false;
+    };
 
 export interface EncounterState {
   index: number; // encounter counter (encounter + boss segments), 0-based
@@ -92,6 +109,7 @@ export interface EncounterState {
   gimmickRng: RngState;
   recent: string[]; // recently assigned plate texts (anti-repeat)
   finisherShown: boolean;
+  steadyLeft: number; // Steady Hands: forgiven typos left this encounter
 }
 
 export interface RunStats {
@@ -106,6 +124,8 @@ export interface RunStats {
   hitsTaken: number;
   autoAttacks: number;
   damageByOriginM: Record<HitOrigin, number>; // actual HP removed, by origin (skill-share metric)
+  damageBySkillM: Record<ActiveSkillId, number>; // ... of which each active skill (burn included), for tuning
+  skillsCast: number;
 }
 
 export interface RunState {
@@ -130,6 +150,13 @@ export interface RunState {
   heroMaxHpM: number;
   heroHpM: number;
   barrier: number; // absorb-the-next-hit charges (Aegis / Bulwark Streak, T1.4)
+  skillChargeM: [number, number]; // per active slot, in milli-words (persists across the level, D18)
+  skillReady: [boolean, boolean]; // charge >= need (waiting for its cast condition)
+  weaponAttacks: number; // resolved auto-attack impacts (Dagger: every 3rd applies Bleed)
+  lastWordPerfect: boolean; // the last completed word/guard plate was perfect (Clean Cut)
+  comebackLost: number; // combo lost to typo penalties since the last perfect word (Comeback)
+  lastStandOn: boolean; // HP below the Last Stand threshold (edge for PassiveTriggered)
+  cues: string[]; // TutorialCue ids already emitted (options.tutorial)
   secondWindUsed: boolean;
   goldCollected: number; // T1.6 pays gold; failLevel keeps FAIL_GOLD_KEEP of it
   guardsShown: number;

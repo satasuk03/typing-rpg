@@ -5,8 +5,9 @@
 import { K } from "./balance.ts";
 import type { Emit } from "./bus.ts";
 import { mulDiv } from "./fixed.ts";
+import { emitPassive, hasPassive } from "./passives.ts";
 import { chance } from "./rng.ts";
-import type { EncounterState, EnemyState } from "./state.ts";
+import type { EncounterState, EnemyState, RunState } from "./state.ts";
 import type { LevelState } from "./types.ts";
 
 /** The Focus if alive, else the lowest-slot living enemy, else null. */
@@ -19,19 +20,24 @@ export function heroImpactTarget(enc: EncounterState): EnemyState | null {
 /**
  * Auto-attack crit chance in basis points (D10): BASE_CRIT + PERFECT_CRIT_BONUS x perfectWords / wordsCompleted, counted
  * since the previous auto-attack. With no completed words the share is 0 and the chance is BASE_CRIT.
- * T1.4 adds Clean Cut (+10% if the last word was perfect) here.
+ * Clean Cut (passed via `run`) adds CLEAN_CUT_CRIT when the last completed word was perfect.
  */
-export function critChanceBp(enc: Readonly<EncounterState>): number {
+export function critChanceBp(enc: Readonly<EncounterState>, run?: Readonly<RunState>): number {
   const share =
     enc.critWords > 0 ? mulDiv(K.PERFECT_CRIT_BONUS_BP, enc.critPerfect, enc.critWords) : 0;
-  return K.BASE_CRIT_BP + share;
+  return (
+    K.BASE_CRIT_BP + share + (run !== undefined && cleanCutActive(run) ? K.CLEAN_CUT_CRIT_BP : 0)
+  );
 }
+
+const cleanCutActive = (run: Readonly<RunState>): boolean =>
+  run.lastWordPerfect && hasPassive(run, "cleanCut");
 
 /** ATB just filled: emit AutoAttack and schedule the impact. The crit roll ALWAYS draws from the `combat` stream. */
 export function launchAutoAttack(state: LevelState, emit: Emit): void {
   const enc = state.enc as EncounterState;
   const run = state.run;
-  const crit = chance(enc.combatRng, critChanceBp(enc));
+  const crit = chance(enc.combatRng, critChanceBp(enc, run));
   enc.critWords = 0;
   enc.critPerfect = 0;
   const target = heroImpactTarget(enc);
@@ -49,4 +55,5 @@ export function launchAutoAttack(state: LevelState, emit: Emit): void {
     impactTick,
     crit,
   });
+  if (cleanCutActive(run)) emitPassive(state, "cleanCut", target.id, emit);
 }

@@ -3,28 +3,28 @@
   "simVersion": 1,
   "goldens": {
     "1": {
-      "state": "ba23fd93",
+      "state": "e4b0d070",
       "events": "a2552017",
       "inputs": 371,
       "endTick": 3229,
       "outcome": "cleared"
     },
     "42": {
-      "state": "1b08a748",
+      "state": "7aea1f7d",
       "events": "c0c59cf1",
       "inputs": 411,
       "endTick": 3499,
       "outcome": "cleared"
     },
     "2024": {
-      "state": "328419dd",
+      "state": "17e53007",
       "events": "e4c69e55",
       "inputs": 423,
       "endTick": 3672,
       "outcome": "cleared"
     },
     "3735928559": {
-      "state": "6c324786",
+      "state": "1d1e6f0c",
       "events": "e53ab887",
       "inputs": 381,
       "endTick": 3270,
@@ -33,31 +33,64 @@
   },
   "combatGoldens": {
     "boss-sword": {
-      "state": "edaecb3e",
+      "state": "a80a9c11",
       "events": "9c4c4ec1",
       "inputs": 185,
       "endTick": 4776,
       "outcome": "cleared",
       "autoAttacks": 21,
-      "secondWindUsed": false
+      "secondWindUsed": false,
+      "skillsCast": 0
     },
     "dagger-shields": {
-      "state": "b5c811f0",
+      "state": "83728d56",
       "events": "260f50d7",
       "inputs": 58,
       "endTick": 1563,
       "outcome": "cleared",
       "autoAttacks": 9,
-      "secondWindUsed": false
+      "secondWindUsed": false,
+      "skillsCast": 0
     },
     "glass-hero": {
-      "state": "c6f2b26b",
-      "events": "d139d81f",
-      "inputs": 61,
-      "endTick": 1779,
+      "state": "5075639a",
+      "events": "32459b3a",
+      "inputs": 40,
+      "endTick": 1179,
       "outcome": "failed",
-      "autoAttacks": 3,
-      "secondWindUsed": true
+      "autoAttacks": 1,
+      "secondWindUsed": true,
+      "skillsCast": 0
+    },
+    "kit-starter": {
+      "state": "4fbe2b8d",
+      "events": "c6be7a8c",
+      "inputs": 67,
+      "endTick": 1789,
+      "outcome": "cleared",
+      "autoAttacks": 9,
+      "secondWindUsed": false,
+      "skillsCast": 3
+    },
+    "kit-dagger-crowd": {
+      "state": "1809d93a",
+      "events": "4083c5c6",
+      "inputs": 60,
+      "endTick": 1494,
+      "outcome": "cleared",
+      "autoAttacks": 10,
+      "secondWindUsed": false,
+      "skillsCast": 3
+    },
+    "kit-hammer-hurt": {
+      "state": "88e53044",
+      "events": "5d281bbe",
+      "inputs": 67,
+      "endTick": 2094,
+      "outcome": "cleared",
+      "autoAttacks": 6,
+      "secondWindUsed": false,
+      "skillsCast": 3
     }
   }
 }
