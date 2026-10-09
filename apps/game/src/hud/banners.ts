@@ -77,6 +77,11 @@ export function drawBanner(c: Ctx, b: Banner, W: number, H: number, s: HudSettin
   g.addColorStop(1, "rgba(8,5,12,0)");
   c.fillStyle = g;
   c.fillRect(0, cy - 60, W, 120);
+  if (b.style === "boss") {
+    // T6.3 #8: dark band (alpha 0.55) behind the title so the card reads over any world
+    c.fillStyle = "rgba(6,4,10,0.55)";
+    c.fillRect(0, cy - 78, W, 154);
+  }
   const lw = 380 * Math.min(1, k * 6);
   c.fillStyle = "rgba(233,196,106,0.75)";
   c.fillRect(W / 2 - lw, cy - 38, lw * 2, 1.5);
@@ -99,22 +104,45 @@ export function drawBanner(c: Ctx, b: Banner, W: number, H: number, s: HudSettin
     c.restore();
   }
   if (b.style === "boss") {
-    txt(c, b.sub.toUpperCase(), W / 2, cy - 48, 14, "#9fe8f0", { align: "center", ls: 6 });
+    txt(c, b.sub.toUpperCase(), W / 2, cy - 60, 14, "#9fe8ff", { align: "center", ls: 6 });
     txt(c, "BOSS", W / 2, cy + 58, 12, "#ff9a7a", { align: "center", ls: 8 });
   }
   setFont(c, st.size, FONT_DISP, 900);
+  if (b.style === "boss") {
+    // gradient #ffe7a8 -> #d9a441 with a 3 px #2a1608 outline
+    c.save();
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.letterSpacing = "12px";
+    c.lineJoin = "round";
+    c.miterLimit = 2;
+    c.strokeStyle = "#2a1608";
+    c.lineWidth = 6;
+    c.strokeText(b.text, W / 2, cy - 6);
+    if (glow > 0) {
+      c.shadowColor = st.glow;
+      c.shadowBlur = glow;
+    }
+    const tg = c.createLinearGradient(0, cy - 6 - st.size / 2, 0, cy - 6 + st.size / 2);
+    tg.addColorStop(0, "#ffe7a8");
+    tg.addColorStop(1, "#d9a441");
+    c.fillStyle = tg;
+    c.fillText(b.text, W / 2, cy - 6);
+    c.restore();
+    c.restore();
+    return;
+  }
   txt(c, b.text, W / 2 - slide, cy - 6, st.size, st.col, {
     align: "center",
     f: FONT_DISP,
     w: 900,
-    ls: b.style === "boss" ? 12 : 10,
+    ls: 10,
     out: st.out,
     sw: 8,
     glow: glow > 0 ? st.glow : null,
     gb: glow,
   });
-  if (b.sub && b.style !== "boss")
-    txt(c, b.sub, W / 2 + slide, cy + 26, 14, INK, { align: "center", ls: 3 });
+  if (b.sub) txt(c, b.sub, W / 2 + slide, cy + 26, 14, INK, { align: "center", ls: 3 });
   c.restore();
 }
 
@@ -129,7 +157,7 @@ export function bannerRect(c: Ctx, b: Banner, W: number, H: number): Rect {
   setFont(c, 14, FONT_UI, "");
   w = Math.max(w, c.measureText(b.sub).width);
   c.letterSpacing = "0px";
-  const top = b.style === "boss" ? cy - 62 : cy - 6 - st.size / 2 - 8;
+  const top = b.style === "boss" ? cy - 70 : cy - 6 - st.size / 2 - 8;
   const bottom = b.style === "boss" ? cy + 70 : cy + 38;
   return { x: Math.round(W / 2 - w / 2 - 12), y: top, w: Math.ceil(w + 24), h: bottom - top };
 }

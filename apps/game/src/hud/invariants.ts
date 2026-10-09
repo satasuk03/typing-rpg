@@ -45,5 +45,22 @@ export function checkSnapshot(s: HudDebugSnapshot): string[] {
         if (hit(r, l)) out.push(`banner ${i} covers a letter of plate ${p.id}`);
       });
     }
+  // T6.3 #9: panel text rows never overlap (e.g. "2ND WIND" vs the HP numbers)
+  const pt = s.panelTextRects ?? [];
+  for (let i = 0; i < pt.length; i++)
+    for (let j = i + 1; j < pt.length; j++) {
+      const a = pt[i];
+      const b = pt[j];
+      if (a && b && hit(a.rect, b.rect)) out.push(`panel text ${a.id} overlaps ${b.id}`);
+    }
+  // T6.3 #10: no pop/tag intersects the hero body or the boss plate
+  s.popRects.forEach((r, i) => {
+    if (s.heroRect && hit(r, s.heroRect)) out.push(`pop/tag ${i} covers the hero body`);
+    if (s.bossPlateRect && hit(r, s.bossPlateRect)) out.push(`pop/tag ${i} covers the boss plate`);
+  });
+  // T6.3 #12: never a "0" damage number
+  (s.popTexts ?? []).forEach((t, i) => {
+    if (/^-?0$/.test(t.trim())) out.push(`pop ${i} shows a 0 damage number`);
+  });
   return out;
 }

@@ -105,6 +105,13 @@ export interface HudDebugSnapshot {
   pops: number;
   /** CSS-px bounding boxes of live pops/tags and banner text, for the readability assertion. */
   popRects: Rect[];
+  /** Pop text parallel to `popRects` (for the "no 0 damage" assertion). */
+  popTexts: string[];
+  /** Hero body rect and live boss plate rect (CSS px; null when unknown / no boss): pops must keep clear. */
+  heroRect: Rect | null;
+  bossPlateRect: Rect | null;
+  /** Hero-panel text rows (CSS px); they must never overlap each other. */
+  panelTextRects: { id: string; rect: Rect }[];
   bannerRects: Rect[];
   fx: number;
   banners: number;
@@ -172,6 +179,13 @@ export class Hud {
   private frameMs: number[] = [];
   private popRects: Rect[] = [];
   private bannerRects: Rect[] = [];
+  private popTexts: string[] = [];
+  private heroRectCss: Rect | null = null;
+  private bossRectCss: Rect | null = null;
+  private panelText: { id: string; rect: Rect }[] = [];
+  /** 0 during the boss intro, then 1 over 300 ms: panels, combo and skill orbs fade back in. */
+  private introFade = 1;
+  private immuneAt = new Map<number, number>();
   /** DOM overlays (tutorial cards) the plates must stay clear of, in CSS px. */
   private reserved: Rect[] = [];
   private nextIndexByPlate = new Map<number, number>();
@@ -298,6 +312,8 @@ export class Hud {
     this.enemyTrail.clear();
     this.layoutState = newLayoutState();
     this.heroTrail = 1;
+    this.immuneAt.clear();
+    this.introFade = 1;
   }
 
   // ---------------------------------------------------------------- queries (CSS px)
@@ -483,7 +499,10 @@ export class Hud {
       }
       case "WordCompleted": {
         const rect = this.getPlateRect(e.plateId);
-        if (e.perfect && rect)
+        if (e.perfect && rect && e.combo >= 2) {
+          // T6.3 #11: in a combo PERFECT is a plate-border flash, not another floating tag
+          this.plateFx.flashBorder(e.plateId, 40, 80, "#ffe9a0");
+        } else if (e.perfect && rect)
           this.pops.spawn("perfect", "PERFECT", {
             kind: "screen",
             x: rect.x + rect.w / 2,
@@ -518,6 +537,15 @@ export class Hud {
         const enemy = v?.enemies.find((x) => x.id === e.targetId);
         if (!enemy && e.targetId === 0) break;
         const anchor: PopAnchor = { kind: "enemy", id: e.targetId };
+        if (e.damage <= 0) {
+          // T6.3 #12: never a "0"; a small grey IMMUNE at most once per second per enemy
+          const last = this.immuneAt.get(e.targetId) ?? -9;
+          if (e.kind !== "chip" && e.kind !== "dot" && this.time - last >= 1) {
+            this.immuneAt.set(e.targetId, this.time);
+            this.pops.spawn("chip", "IMMUNE", anchor, 0.8);
+          }
+          break;
+        }
         if (e.kind === "chip" || e.kind === "dot") {
           this.pops.spawn("chip", String(e.damage), anchor, 0.8);
           break;
@@ -533,7 +561,7 @@ export class Hud {
         break;
       }
       case "Break":
-        this.pops.spawn("break", "BREAK", { kind: "enemy", id: e.enemyId });
+        this.pops.spawn("break", "BREAK", { kind: "enemy", id: e.enemyId, part: "head" });
         break;
       case "WeaknessRevealed":
         this.pops.spawnTag("weak", `${e.damageType.toUpperCase()} WEAK`, {
@@ -602,6 +630,7 @@ export class Hud {
     this.alpha = clamp(alpha, 0, 1);
     this.time += dt;
     this.pops.update(dt);
+    this.introFade = view.phase === "bossIntro" ? 0 : Math.min(1, this.introFade + dt / 0.3);
     // The boss card lives exactly as long as the intro window; it must never outlast it onto live plates.
     if (view.phase !== "bossIntro") this.banners.remove("boss");
     this.banners.update(dt);
@@ -647,12 +676,15 @@ export class Hud {
   private popAnchorCss(a: PopAnchor): { x: number; y: number } {
     if (a.kind === "screen") return { x: a.x, y: a.y };
     if (a.kind === "hero") {
-      const h = this.resolveAnchor({ kind: "hero" });
-      return h ?? { x: 300 * this.s, y: this.H * 0.62 * this.s };
+      // hero pops sit 28 px above the head, never on the face
+      const h = this.projector ? this.projector({ kind: "hero", part: "head" }) : null;
+      if (h) return { x: h.x, y: h.y - 28 * this.s };
+      const b = this.resolveAnchor({ kind: "hero" });
+      return b ? { x: b.x, y: b.y - 90 * this.s } : { x: 300 * this.s, y: this.H * 0.45 * this.s };
     }
     const en = this.view?.enemies.find((x) => x.id === a.id);
     if (en) {
-      const p = this.anchorDesign(en, "body");
+      const p = this.anchorDesign(en, a.part ?? "body");
       return { x: p.x * this.s, y: p.y * this.s };
     }
     return { x: 640 * this.s, y: this.H * 0.55 * this.s };
@@ -782,8 +814,10 @@ export class Hud {
       comboPulse: this.comboPulse,
       tierFlash: this.tierFlash,
     };
-    if (hudVisible) {
-      c.globalAlpha = this.panelAlpha;
+    this.panelText.length = 0;
+    pc.textRects = this.panelText;
+    if (hudVisible && this.introFade > 0.01) {
+      c.globalAlpha = this.panelAlpha * this.introFade;
       const atb = this.lerpPrev(view.hero.atbFrac, (p) => p.hero.atbFrac);
       const hpv = this.lerpPrev(view.hero.hpFrac, (p) => p.hero.hpFrac);
       for (const e of view.enemies) {
@@ -911,7 +945,32 @@ export class Hud {
     const obst: Rect[] = [];
     for (const en of this.entries.values()) obst.push(inflate(en.box, 4));
     for (const g of this.ghosts) obst.push(inflate(g.box, 4));
+    // T6.3 #10 / #25: pops keep clear of the hero body (+24), the boss plate (+22), the combo area,
+    // the hero panel and the stats panel; guard plates (timer label row) get extra clearance.
+    const hero = this.heroRectDesign();
+    this.heroRectCss = hero ? this.toCss(hero) : null;
+    if (hero) obst.push(inflate(hero, 24));
+    const view = this.view;
+    const bossAlive =
+      !!view?.boss && view.enemies.some((e) => e.id === view.boss?.enemyId && e.alive);
+    if (bossAlive) {
+      const br = inflate(bossPlateRect(this.W), 22);
+      obst.push(br);
+      this.bossRectCss = this.toCss(bossPlateRect(this.W));
+    } else this.bossRectCss = null;
+    obst.push(COMBO_AREA(this.W), { ...HERO_PANEL }, {
+      x: this.W - 22 - STATS_PANEL_W,
+      y: 18,
+      w: STATS_PANEL_W,
+      h: 104,
+    });
+    for (const pl of view?.plates ?? []) {
+      if (pl.kind !== "guard") continue;
+      const en = this.entries.get(pl.id);
+      if (en) obst.push(inflate(en.box, 12));
+    }
     this.popRects.length = 0;
+    this.popTexts.length = 0;
     const placed: Rect[] = [];
     for (const p of this.pops.pops) {
       const pose = this.popPose(c, p, set);
@@ -944,9 +1003,22 @@ export class Hud {
       this.drawPop(c, p, set, fx, fy, pose.punch);
       placed.push(inflate(at(p.offX, p.offY), 2));
       this.popRects.push(this.toCss(at(p.offX, p.offY)));
+      this.popTexts.push(p.text);
     }
     c.globalAlpha = 1;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+
+  /** Hero body rect in design px: head/feet from the projector (width = 0.55 * height); null without a projector. */
+  private heroRectDesign(): Rect | null {
+    if (!this.projector) return null;
+    const hd = this.projector({ kind: "hero", part: "head" });
+    const ft = this.projector({ kind: "hero", part: "feet" });
+    if (!hd || !ft) return null;
+    const s = this.s;
+    const h = Math.abs(ft.y - hd.y) / s;
+    const w = h * 0.55;
+    return { x: hd.x / s - w / 2, y: Math.min(hd.y, ft.y) / s, w, h };
   }
 
   /** Smallest offset that clears every obstacle; tries single moves, then two-axis combinations. */
@@ -1023,7 +1095,7 @@ export class Hud {
         break;
       case "break":
         y -= p.age * 10;
-        sz = 64 * punch * p.size;
+        sz = 52 * punch * p.size;
         weight = "900";
         ls = 4;
         break;
@@ -1114,7 +1186,7 @@ export class Hud {
         });
         break;
       case "break": {
-        const sz = 64 * punch * p.size;
+        const sz = 52 * punch * p.size;
         c.save();
         c.translate(x, y);
         c.rotate(-0.06);
@@ -1249,6 +1321,10 @@ export class Hud {
       plates,
       pops: this.pops.pops.length,
       popRects: this.popRects.map((r) => ({ ...r })),
+      popTexts: [...this.popTexts],
+      heroRect: this.heroRectCss ? { ...this.heroRectCss } : null,
+      bossPlateRect: this.bossRectCss ? { ...this.bossRectCss } : null,
+      panelTextRects: this.panelText.map((t) => ({ id: t.id, rect: this.toCss(t.rect) })),
       bannerRects: this.bannerRects.map((r) => ({ ...r })),
       fx: this.fx.count,
       banners: this.banners.banners.length,

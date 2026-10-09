@@ -17,7 +17,7 @@ export type PopKind =
 
 /** Where a pop is anchored: an enemy/hero (resolved by the projector) or a screen point (CSS px). */
 export type PopAnchor =
-  | { kind: "enemy"; id: number }
+  | { kind: "enemy"; id: number; part?: "head" | "body" }
   | { kind: "hero" }
   | { kind: "screen"; x: number; y: number };
 
@@ -50,7 +50,7 @@ export const POP_LIFETIME: Record<PopKind, number> = {
   hurt: 1.2,
   heal: 1.2,
   weak: 1.0,
-  break: 1.6,
+  break: 0.9,
   perfect: 1.3,
   block: 1.1,
   parry: 1.2,
@@ -83,6 +83,8 @@ export const MAX_POPS = 28;
 export const MAX_STACK_Y = 170;
 
 const TAG_KINDS: readonly PopKind[] = ["weak", "tag", "perfect"];
+/** T6.3 #11: at most this many tag pops are alive on one anchor. */
+export const MAX_TAGS_PER_ANCHOR = 3;
 
 const anchorKey = (a: PopAnchor): string =>
   a.kind === "enemy"
@@ -143,10 +145,16 @@ export class PopSystem {
    */
   spawnTag(kind: PopKind, text: string, anchor: PopAnchor): Pop {
     const key = anchorKey(anchor);
-    const cur = this.pops.find(
-      (p) => TAG_KINDS.includes(p.kind) && anchorKey(p.anchor) === key && p.age < STACK_WINDOW,
-    );
-    if (!cur) return this.spawn(kind, text, anchor);
+    const live = this.pops.filter((p) => TAG_KINDS.includes(p.kind) && anchorKey(p.anchor) === key);
+    // WEAK merges with the element WEAK ("FIRE WEAK") for as long as either one is alive
+    const weakPop = text.endsWith("WEAK")
+      ? live.find((p) => p.text.split(" · ").some((x) => x.endsWith("WEAK")))
+      : undefined;
+    const cur = weakPop ?? live.find((p) => p.age < STACK_WINDOW);
+    if (!cur) {
+      if (live.length >= MAX_TAGS_PER_ANCHOR) return live[live.length - 1] as Pop;
+      return this.spawn(kind, text, anchor);
+    }
     const parts = cur.text.split(" · ");
     for (const np of text.split(" · ")) {
       if (parts.includes(np)) continue;
