@@ -1,1 +1,0 @@
--- Initial migration placeholder. The backend agent writes the schema (T5.x).

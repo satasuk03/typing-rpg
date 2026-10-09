@@ -8,3 +8,8 @@ binding = "DB"
 database_name = "hd2d"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
+
+# Local-only KV for the top-100 leaderboard cache (rebuilt by cron / on top-100 entry).
+[[kv_namespaces]]
+binding = "LB_CACHE"
+id = "00000000000000000000000000000000"
