@@ -72,7 +72,7 @@ interface Bolt {
 }
 
 /** W4: the burst / core where a sentence bolt lands on the (pale, big) boss: dimmed so the Golem is not washed out. */
-const BOSS_IMPACT_K = 0.6;
+const BOSS_IMPACT_K = 0.4;
 
 export class SentenceBolts {
   private readonly b: Bolt[] = [];

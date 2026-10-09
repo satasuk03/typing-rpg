@@ -91,14 +91,14 @@ for (const result of ["parry", "block"] as const) {
     });
     const hold = async (on: boolean): Promise<Probe> => {
       await page.evaluate(
-        ([k, r]) => {
+        ([k, r, noB]) => {
           const p = window.__play as PlayDebug;
           p.session.hud.setSettings({ effectsIntensity: k as number });
           // biome-ignore lint/suspicious/noExplicitAny: test-only access
           const w = (p.session.typingFx as any).handle.worldFx;
-          w.barrier.snap(r, 1);
+          if (!noB) w.barrier.snap(r, 1);
         },
-        [on ? 1 : 0, result] as const,
+        [on ? 1 : 0, result, !!process.env.NO_BARRIER] as const,
       );
       // snap (240 ms) + settle, still inside the 2.5 s held window
       await page.waitForTimeout(700);
