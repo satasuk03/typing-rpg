@@ -17,7 +17,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T2.6 Typing VFX: design spec | Art/VFX director (opus) | **done** (ac7396d) | `docs/vfx/typing-vfx-spec.md`: numbers for every effect, readability pixel test, budgets, binding table, 3 chunks |
 | T2.6 chunk A: keystroke (HUD) | VFX (sonnet) | in progress | — |
 | T1.2 Typing engine | Sim (sonnet) | **done** (merged 9c34986) | 82 rule-named typing tests; property test 120 levels / 697k ticks / 7k guard swaps: no shared first letters, events in tick order; golden typing replays + Chromium parity |
-| T1.3 Combat | Sim (sonnet) | in progress | — |
+| T1.3 Combat | Sim (sonnet) | **done** (merged 9050770); target re-checked in T1.4 | BALANCE ported, keys diffed against a Python dump; formulas cross-checked (hero stats ch1–30, pace table, prices, gold, ATB 62.5/72.5); 46 combat tests; Chromium parity incl. combat replays. Ref bot 35 WPM/94% × 24 seeds: 12.7 auto-attacks/enc without skills (rate 0.331/s vs Python 0.326/s; HP assumes a 16.4% skill share, and removing it gives 10.7). Real L5/L9 155 s / 162 s (in the 2:45 window) |
+| T1.4 Skills + passives | Sim (sonnet) | in progress | — |
 | T4.1 Word data + validator | Content (sonnet) | **done** (merged 9d96839) | 1089 entries (T1 491, T2 331, biome 76/71/67, guard 43, boss text), 31 trial passages (1605–1730 chars, tight difficulty spread); validator in check.sh, CONTENT_VERSION 70d9cd08; orchestrator sampled definitions + passages. Blocklist needs human review before release |
 | T4.2 Level/enemy/gear/skill data | Content (sonnet) | **done** (merged 9df36fb) | 6 enemies, Ruin Golem, 10 levels fit to layout anchors, 12 gear, 6 actives + 8 passives; validator cross-checks layouts, sprite + sfx ids; CONTENT_VERSION 9d21ae83. Encounter HP keeps the sim's 36 s TTK (L3–L9 ≈ 2:40); grunt hit 3.85–7.6 solved to the sim damage budget (T6.1 retune). Warning: no 'hollow' vocab for L10 |
 | Trial sim mode | Sim (sonnet) | **done** (merged 73a99a8) | 28 trial tests (clock on first key, 3600-tick cutoff, stop-on-error, score formula hand-checked); golden + Chromium parity; anti-cheat helpers `resimTrialLog` / `trialClaimMismatches`; 3000-event re-sim median 0.29 ms |
@@ -41,6 +42,9 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 - Chip hits apply on any plate, guard plates included (doc 01 §1.3). Event order: GuardBlocked/Parried, then Hit{chip}.
 
 - T2.6 implementer may edit `hud/{plates,fx,hud}.ts` and `render/ambient/particles.ts` (spec §14). T2.3 hooks are no-op callbacks until T2.3 lands.
+
+- Chip on a guard plate fires at completion (WordCompleted → GuardWordTyped → PlateRemoved → Hit{chip}); block/parry resolve at impact. Chips are untyped: never weak, never touch shields, but get the BREAK multiplier.
+- 2:45 ±15% applies to 3-encounter levels; L1–L2 (2 encounters) target ≈1:45, matching the Python.
 
 ## PO decisions log
 - 2026-10-09: Combo = hybrid. Mechanics use perfect-word combo (5/15/30/50); VFX colour tiers use per-key streak (10/25/50/100).
