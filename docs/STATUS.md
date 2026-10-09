@@ -6,7 +6,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 |---|---|---|---|
 | T0.1 Repo bootstrap | Platform (sonnet) | **done** (merged e4834d3) | install/typecheck/lint/test/build/bot/balance exit 0; e2e smoke 1 passed; `pnpm dev` serves; api `/health` → `{"ok":true}` (re-verified on main) |
 | T0.2 `scripts/check.sh` gate | Platform (sonnet) | **done** | CHECK PASS on main; determinism 1000-run test; purity guard (Biome + Math.random grep) shown failing on violation |
-| interfaces.md | Deep reasoner (opus) | v1.0 merged (58b9993); Reviewer (opus): approve-with-fixes (1 blocker, 10 major); v1.1 revision in progress | review findings relayed to author |
+| interfaces.md | Deep reasoner (opus) + Reviewer (opus) | **done: v1.1 approved & merged** | all review items applied; code blocks typecheck (tsc 7, zod 4); re-check with `node docs/tools/extract-interface-blocks.mjs docs/interfaces.md <dir>` |
+| T1.1 Sim kernel + publish contracts | Sim (sonnet) | in progress | — |
 | T2.1 Render core | Render (sonnet) | **done** (merged, 94a9857) | side-by-sides `apps/game/tests/render/__shots__/side-by-side/*-1280x720.png` (all 4 biomes match the POC; checked by orchestrator after 1 rework); render specs 19/19; CHECK PASS; perf (SwiftShader, indicative only): tier 2 ≈45% of tier 0 cost. Gap: real-GPU fps not yet measured |
 | T2.2 World from data | Render (sonnet) | in progress | — |
 | T2.5 Audio | Audio (sonnet) | in progress | — |
