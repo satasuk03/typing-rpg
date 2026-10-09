@@ -13,18 +13,30 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T2.5 Audio | Audio (sonnet) | **done** (merged 04fbc98) | 51 unit tests; audio Playwright spec green; `play('key')` p95 0.1 ms (headless); bindings synced to interfaces v1.1 (drift test). **Needs PO listen pass:** `apps/game/src/audio/LISTEN_CHECKLIST.md` at `?scene=audio-test` |
 | T5.1 D1 schema + migrations | Backend (sonnet) | **done** (merged 43eaca3) | 5 STRICT migrations apply clean + idempotent; 15 api tests on real local D1 via `getPlatformProxy` (save If-Match + keep-5, one-open-trial index, idempotent transition, LB around-me + flagged shadow rank, gem ledger append-only, refresh family revocation). Decisions for T5.2: blobs stored as base64 TEXT; flagged owner shadow rank; tie-break achieved_at then user_id |
 | T1.1a Contracts published | Sim (sonnet) | **merged early** (2f68711) | events.ts, view.ts, types.ts, content + shared schemas on main; CHECK PASS |
-| T2.4 HUD (mock events) | UI (sonnet) | changes requested | 22 unit + readability specs green, 0.37 ms/frame avg; review: BREAK banner + pops cover a plate (forest-90wpm), pops hidden under plates, runtime Google Fonts → self-host, accuracy scale pinned to bp |
-| T1.2 Typing engine | Sim (sonnet) | in progress | — |
-| T4.1 Word data + validator | Content (sonnet) | in progress | — |
+| T2.4 HUD (mock events) | UI (sonnet) | **done** (merged 284b5e2, after 1 rework) | readability sweeps (4 scenarios × 40/90 WPM, every 0.1 s): no plate overlap, ≥14 px, contrast ≥4.5, no pop/banner over a live letter; self-hosted OFL fonts, no external requests; works over the real renderer (`?scene=hud-test&backdrop=world`); 0.37 ms/frame |
+| T2.6 Typing VFX: design spec | Art/VFX director (opus) | in progress → `docs/vfx/typing-vfx-spec.md` | — |
+| T1.2 Typing engine | Sim (sonnet) | **done** (merged 9c34986) | 82 rule-named typing tests; property test 120 levels / 697k ticks / 7k guard swaps: no shared first letters, events in tick order; golden typing replays + Chromium parity |
+| T1.3 Combat | Sim (sonnet) | in progress | — |
+| T4.1 Word data + validator | Content (sonnet) | **done** (merged 9d96839) | 1089 entries (T1 491, T2 331, biome 76/71/67, guard 43, boss text), 31 trial passages (1605–1730 chars, tight difficulty spread); validator in check.sh, CONTENT_VERSION 70d9cd08; orchestrator sampled definitions + passages. Blocklist needs human review before release |
+| T4.2 Level/enemy/gear/skill data | Content (sonnet) | **done** (merged 9df36fb) | 6 enemies, Ruin Golem, 10 levels fit to layout anchors, 12 gear, 6 actives + 8 passives; validator cross-checks layouts, sprite + sfx ids; CONTENT_VERSION 9d21ae83. Encounter HP keeps the sim's 36 s TTK (L3–L9 ≈ 2:40); grunt hit 3.85–7.6 solved to the sim damage budget (T6.1 retune). Warning: no 'hollow' vocab for L10 |
+| Trial sim mode | Sim (sonnet) | in progress (unblocks T5.2) | — |
 
 ## Notes
 - Stack pins: three 0.186.1, vite 8.3.4, typescript 7.0.2 (native tsc), vitest 5.0.3, playwright 1.64.0, biome 2.5.15, hono 4.13.13, wrangler 4.149.0, zod 4.
 - Biome excludes `poc/` and `docs/` (POC html is reference-only).
 - Agent worktrees branch from the first commit, not main HEAD — briefs must tell agents to `git merge main` first.
 
+## Open items for later tasks
+- T1.5: BossDef has no HP or hit for the adds (assumed 58.8 HP each); `doomEveryS` semantics (cast-to-cast vs after resolution); whether a blocked hit counts toward `untouched` maxHits.
+- T1.6: `resolveLevel` must filter pools by level `plateLength`; `unlockLevel` = first clear unlocks.
+- Content: add 'hollow' vocab for L10; skill text placeholders `{heal}` / `{hits}`; gear and skill icon art ids are placeholders.
+- T6.3: L9 too dark, L10 orange instead of violet.
+
 ## Orchestrator rulings
 - `LevelView.stats.accuracy` / `TrialView.accuracy` are basis points (0..10000).
 - The game makes no runtime third-party requests (fonts self-hosted).
+
+- Chip hits apply on any plate, guard plates included (doc 01 §1.3). Event order: GuardBlocked/Parried, then Hit{chip}.
 
 ## PO decisions log
 - 2026-10-09: Combo = hybrid. Mechanics use perfect-word combo (5/15/30/50); VFX colour tiers use per-key streak (10/25/50/100).

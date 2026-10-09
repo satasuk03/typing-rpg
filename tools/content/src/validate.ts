@@ -1,4 +1,5 @@
 import type { ContentBundle } from "@hd2d/content";
+import { loadLayouts, loadMonsterSprites, loadSfxIds } from "./layouts.ts";
 import {
   biomePool,
   letterHistogram,
@@ -8,6 +9,7 @@ import {
   tierPool,
   usePool,
 } from "./rules.ts";
+import { type ContentContext, runContentRules } from "./rules-content.ts";
 import { type Filters, type Issue, issue, type RuleInput } from "./types.ts";
 import { computeContentVersion, readWrittenVersion } from "./version.ts";
 
@@ -35,11 +37,17 @@ const histLine = (ws: readonly { text: string }[]): string => {
 export function validateBundle(
   bundle: ContentBundle,
   filters: Filters,
-  opts: { checkWrittenVersion: boolean } = { checkWrittenVersion: true },
+  opts: { checkWrittenVersion: boolean; context?: ContentContext } = { checkWrittenVersion: true },
 ): ValidationReport {
   const issues: Issue[] = ruleSchema(bundle);
   const input = inputFromBundle(bundle);
   issues.push(...runAllRules(input, filters));
+  const context: ContentContext = opts.context ?? {
+    layouts: loadLayouts(),
+    sfxIds: loadSfxIds(),
+    monsterSprites: loadMonsterSprites(),
+  };
+  issues.push(...runContentRules(bundle, context));
   const version = computeContentVersion(bundle);
   if (opts.checkWrittenVersion) {
     const written = readWrittenVersion();
@@ -111,6 +119,7 @@ export function validateBundle(
       )}`,
     );
   }
+  lines.push(...overviewLines(bundle));
   lines.push(`CONTENT_VERSION: ${version}`);
   const errors = issues.filter((i) => i.severity === "error");
   const warns = issues.filter((i) => i.severity === "warn");
@@ -121,4 +130,53 @@ export function validateBundle(
       : `FAIL (${errors.length} errors, ${warns.length} warnings)`,
   );
   return { issues, version, summary: lines.join("\n"), ok: errors.length === 0 };
+}
+
+const ABBR: Record<string, string> = {
+  "moss-slime": "MS",
+  "murk-slime": "PS",
+  "cave-bat": "B",
+  "goblin-scout": "GS",
+  "goblin-raider": "GR",
+};
+
+/** One line per level: biome, encounters x enemies (gimmicks marked F/S), plate band and the star-3 challenge. */
+export function overviewLines(bundle: ContentBundle): string[] {
+  const lines = [
+    "-- chapter overview --",
+    `  enemies ${bundle.enemies.length}, bosses ${bundle.bosses.length}, levels ${bundle.levels.length}, gear ${bundle.gear.length}, actives ${bundle.actives.length}, passives ${bundle.passives.length}`,
+  ];
+  for (const l of bundle.levels) {
+    const encs = l.segments.flatMap((s) => {
+      if (s.kind === "boss") return [`BOSS ${s.bossId}`];
+      if (s.kind !== "encounter") return [];
+      return [
+        s.encounter.waves
+          .map((w) =>
+            w
+              .map(
+                (r) =>
+                  `${ABBR[r.enemy] ?? r.enemy}${r.gimmick === "fading" ? "~F" : r.gimmick === "scrambled" ? "~S" : ""}`,
+              )
+              .join("+"),
+          )
+          .join(" > "),
+      ];
+    });
+    const c = l.star3;
+    const star =
+      c.kind === "untouched"
+        ? `untouched<=${c.maxHits}`
+        : c.kind === "parTime"
+          ? `parTime x${c.slack}`
+          : c.kind === "streak"
+            ? `streak ${c.combo}`
+            : c.kind === "guardian"
+              ? `guardian ${c.parries}`
+              : "noSkills";
+    lines.push(
+      `  ${l.id} ${l.biome.padEnd(6)} band ${l.plateLength.join("-")} par ${l.parRefS}s  [${encs.join(" | ")}]  3-star: ${star}`,
+    );
+  }
+  return lines;
 }

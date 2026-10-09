@@ -29,6 +29,12 @@ function boot(): void {
     return;
   }
 
+  // Dev-only route: ?scene=hud-test (src/dev/hudTestScene.ts).
+  if (new URLSearchParams(location.search).get("scene") === "hud-test") {
+    void import("./dev/hudTestScene").then((m) => m.start(glCanvas));
+    return;
+  }
+
   // Dev-only route: ?scene=level&id=ch1-l03&pose=walk|battle:1|boss renders a level from its layout data.
   if (new URLSearchParams(location.search).get("scene") === "level") {
     void import("./dev/levelScene").then((m) => m.start(glCanvas));
