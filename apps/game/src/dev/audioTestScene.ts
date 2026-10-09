@@ -7,7 +7,14 @@
  */
 
 import type { BiomeName, MusicState } from "../audio";
-import { AudioEngine, BIOMES, createAudioSettingsPanel, MUSIC_STATES, SFX_IDS } from "../audio";
+import {
+  AudioEngine,
+  BIOMES,
+  createAudioSettingsPanel,
+  MUSIC_STATES,
+  SFX_IDS,
+  streakTier,
+} from "../audio";
 
 export interface AudioTestHook {
   engine: AudioEngine;
@@ -78,10 +85,18 @@ export function start(_glCanvas?: HTMLCanvasElement): void {
     parent.append(b);
   };
 
+  // Emulates the sim: CharCorrect(keyStreak) plus KeyStreakTierChanged when a tier threshold is crossed.
+  const keyWithTier = (): void => {
+    const from = streakTier(hook.streak);
+    engine.play("key", { streak: hook.streak++ });
+    const to = streakTier(hook.streak);
+    if (to > from) engine.play("tierUp", { tier: to });
+  };
+
   const sfxRow = group("Effects");
   for (const id of SFX_IDS) {
     btn(sfxRow, id, () => {
-      if (id === "key") engine.play("key", { streak: hook.streak++ });
+      if (id === "key") keyWithTier();
       else engine.play(id, id === "tierUp" ? { tier: 1 + (hook.streak % 4) } : {});
     });
   }
@@ -116,7 +131,7 @@ export function start(_glCanvas?: HTMLCanvasElement): void {
       hook.streak = 0;
       wordTypos++;
     } else if (/^[a-z]$/i.test(k)) {
-      engine.play("key", { streak: hook.streak++ });
+      keyWithTier();
     } else if (k === "Enter") {
       const perfect = e.shiftKey || wordTypos === 0;
       engine.play(perfect ? "perfectWord" : "wordComplete");

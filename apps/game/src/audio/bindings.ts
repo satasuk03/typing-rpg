@@ -38,6 +38,7 @@ export const KNOWN_SIM_EVENTS = [
   "WordCompleted",
   "SentenceWordDone",
   "ComboTierChanged",
+  "KeyStreakTierChanged",
   "BurstWpm",
   "EnemyAttackWindup",
   "GuardWordShown",
@@ -106,7 +107,7 @@ export const AUDIO_SILENT_EVENTS: readonly string[] = [
   "PlateRemoved",
   "TargetAcquired",
   "TargetDropped",
-  "ComboTierChanged", // streak-tier sting is fired from CharCorrect (per-key streak 10/25/50/100, PO decision)
+  "ComboTierChanged", // word-combo tier (5/15/30/50): silent; the key-streak sting is the only tier cue
   "BurstWpm",
   "GuardWordShown",
   "GuardWordTyped",
@@ -155,8 +156,11 @@ export const AUDIO_BINDINGS: Readonly<Record<string, AudioHandler>> = {
   TrialEnded: (_e, a) => a.play("levelUp"),
 
   // typing
-  CharCorrect: (e, a) => a.play("key", { streak: num(e.streak) }),
-  Typo: (_e, a) => a.play("typo"),
+  CharCorrect: (e, a) => a.play("key", { streak: num(e.keyStreak) }),
+  KeyStreakTierChanged: (e, a) => {
+    if (num(e.to) > num(e.from)) a.play("tierUp", { tier: num(e.to) });
+  },
+  Typo: (e, a) => a.play("typo", { heavy: e.kind === "guard" }),
   WordCompleted: (e, a) =>
     a.play(e.perfect === true ? "perfectWord" : "wordComplete", { count: num(e.combo) }),
   SentenceWordDone: (_e, a) => a.play("wordComplete"),

@@ -250,11 +250,19 @@ describe("event bindings table", () => {
       play: (id, p) => void calls.push([id, p]),
       setMusicState: (s) => void calls.push(["state:" + s, null]),
     };
-    expect(dispatchAudioEvent({ type: "CharCorrect", streak: 12 }, api)).toBe(true);
+    expect(dispatchAudioEvent({ type: "CharCorrect", keyStreak: 12 }, api)).toBe(true);
     expect(dispatchAudioEvent({ type: "WordCompleted", perfect: true, combo: 3 }, api)).toBe(true);
     expect(dispatchAudioEvent({ type: "WordCompleted", perfect: false }, api)).toBe(true);
     expect(dispatchAudioEvent({ type: "Hit", crit: true }, api)).toBe(true);
     expect(dispatchAudioEvent({ type: "EncounterStarted", isBoss: true }, api)).toBe(true);
+    expect(
+      dispatchAudioEvent({ type: "KeyStreakTierChanged", from: 0, to: 1, keyStreak: 10 }, api),
+    ).toBe(true);
+    expect(
+      dispatchAudioEvent({ type: "KeyStreakTierChanged", from: 2, to: 0, keyStreak: 0 }, api),
+    ).toBe(true);
+    expect(dispatchAudioEvent({ type: "Typo", kind: "guard" }, api)).toBe(true);
+    expect(dispatchAudioEvent({ type: "ComboTierChanged", from: 0, to: 1 }, api)).toBe(false);
     expect(dispatchAudioEvent({ type: "PlateShown" }, api)).toBe(false);
     expect(calls.map((c) => c[0])).toEqual([
       "key",
@@ -262,7 +270,11 @@ describe("event bindings table", () => {
       "wordComplete",
       "crit",
       "state:boss",
+      "tierUp",
+      "typo",
     ]);
+    expect(calls[5]?.[1]).toEqual({ tier: 1 });
+    expect(calls[6]?.[1]).toEqual({ heavy: true });
     expect(calls[0]?.[1]).toEqual({ streak: 12 });
   });
 });

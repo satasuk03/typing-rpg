@@ -12,7 +12,7 @@ import {
 } from "./settings";
 import { busFor, SFX_VOICES } from "./sfx";
 import { Synth } from "./synth";
-import { mulberry32, streakTier } from "./tiers";
+import { mulberry32 } from "./tiers";
 import type { BiomeName, MixerChannel, MusicState, Rng, Sfx, SfxParams } from "./types";
 
 export interface AudioEngineOptions {
@@ -50,7 +50,6 @@ export class AudioEngine {
   private readonly autoDrive: boolean;
   private biome: BiomeName = "forest";
   private musicState: MusicState = "walk";
-  private lastKeyTier = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<(s: AudioSettings) => void>();
   private unlockCleanup: (() => void) | null = null;
@@ -133,15 +132,6 @@ export class AudioEngine {
     if (ctx.state === "suspended") void ctx.resume().catch(() => {});
     const t = ctx.currentTime;
     try {
-      if (id === "key") {
-        const streak = params.streak ?? 0;
-        const tier = streakTier(streak);
-        SFX_VOICES.key(synth, t, params);
-        if (tier > this.lastKeyTier) SFX_VOICES.tierUp(synth, t + 0.01, { tier });
-        this.lastKeyTier = tier;
-        return true;
-      }
-      if (id === "typo") this.lastKeyTier = 0;
       SFX_VOICES[id](synth, t, params);
       return true;
     } catch (err) {

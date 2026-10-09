@@ -104,9 +104,12 @@ export const SFX_VOICES: Record<Sfx, SfxVoice> = {
   },
 
   /** PORTED `typo`. */
-  typo(s, t) {
-    s.osc("square", 118, 82, t, 0.16, 0.13, { lp: 1100, wet: 0.02 });
-    s.osc("square", 123, 86, t, 0.16, 0.1, { lp: 1100, wet: 0.02 });
+  typo(s, t, p) {
+    // v1.1: a guard-plate typo (heavy) is lower and longer, with an extra low thud.
+    const k = p.heavy ? 0.7 : 1;
+    if (p.heavy) s.osc("sine", 90, 40, t, 0.25, 0.3, { wet: 0.05 });
+    s.osc("square", 118 * k, 82 * k, t, p.heavy ? 0.24 : 0.16, 0.13, { lp: 1100, wet: 0.02 });
+    s.osc("square", 123 * k, 86 * k, t, p.heavy ? 0.24 : 0.16, 0.1, { lp: 1100, wet: 0.02 });
     s.noise(t, 0.06, 0.1, "lowpass", 600, 300, { wet: 0 });
   },
 

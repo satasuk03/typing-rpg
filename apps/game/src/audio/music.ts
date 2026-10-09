@@ -27,6 +27,7 @@ export class Music {
   private readonly layers = {} as Record<MusicLayer, GainNode>;
   private readonly sched = new StepScheduler(90, 4);
   private biome: BiomeName = "forest";
+  private pendingBiome: BiomeName | null = null;
   private state: MusicState = "walk";
   private cfg: BiomeMusic = BIOME_MUSIC.forest;
   private melody = melodyPattern("forest");
@@ -49,9 +50,14 @@ export class Music {
     return this.biome;
   }
 
-  /** Switch biome material. Takes effect at the next loop boundary via the pattern swap (immediate for simplicity). */
+  /** Switch biome material. While playing, the tune/tempo swap lands at the next bar boundary. */
   setBiome(b: BiomeName): void {
     this.biome = b;
+    if (this.sched.isStarted) this.pendingBiome = b;
+    else this.applyBiome(b);
+  }
+
+  private applyBiome(b: BiomeName): void {
     this.cfg = BIOME_MUSIC[b];
     this.melody = melodyPattern(b);
     this.sched.bpm = this.cfg.bpm;
@@ -84,6 +90,10 @@ export class Music {
   }
 
   private step(i: number, t: number): void {
+    if (this.pendingBiome && i % STEPS_PER_BAR === 0) {
+      this.applyBiome(this.pendingBiome);
+      this.pendingBiome = null;
+    }
     const { s, cfg } = this;
     const bar = Math.floor(i / STEPS_PER_BAR);
     const inBar = i % STEPS_PER_BAR;
