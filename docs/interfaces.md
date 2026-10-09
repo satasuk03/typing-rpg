@@ -2,12 +2,19 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.4** (2026-10-09) |
+| **Doc version** | **1.5** (2026-10-09) |
 | **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **1.5** (2026-10-09): T1.5/T1.6 implementations, recorded by the orchestrator.
+  - `ResolvedLevel.foldSentences: boolean` (PO decision): chapter ≤ `BALANCE.SENTENCE_FOLD_CASE_MAX_CHAPTER` (1) makes doom/finisher/secondWind/minigame plates case-insensitive (punctuation and spaces stay exact). The player's `caseMode: "strict"` still wins. Word plates and the Trial are unchanged.
+  - **Not additive:** `ResolvedLevel.star3` is `ResolvedStar`, and parTime carries integer `slackBp` (a float broke hashing). `resolveStar3()` converts; `evaluateStars` accepts either form and an optional `difficulty` ("zen" earns ★ only).
+  - Rewards: `GoldGained` per `EncounterCleared` (gold split evenly, remainder on the last); chest rolls from `deriveRng(seed, "loot", encounterIndex)`; the boss always drops on first clear and 50% on replay; a failed run keeps 50% of collected gold plus the chests already dropped. **The client must use a fresh seed per level run** (the same seed + encounter index repeats the loot).
+  - Published Gear Cache odds: base C40/U33/R20/E6/L1; effective with pity C38.36/U31.65/R21.40/E7.05/**L1.54%** (exact Markov chain, `CACHE_EFFECTIVE_BP`). The 3.16% in doc 02 C8 is the cosmetic Scribe's Chest, not the Gear Cache.
+  - Replay pay: 40%, soft cap ×25% from the 41st replay per day (as in the Python). SRS counts word plates only; due = `levelsPlayed + interval[box]`.
+  - Boss adds: pool = boss HP × 0.5/3.2 split by hpWeight; `doomEveryS` counts from the previous resolution (the first after the phase-2 breather); `hitsTaken` counts hits that dealt HP damage; Frost Lock delays attacks only. `LevelView.boss.{gates,holding,doomsResolved,minDoomSpells}` (optional), stagger status.
 - **1.4** (2026-10-09): API security review (§9.2, §10).
   - Shadow flag is no longer an oracle: pb/rank are computed from the owner's effective best (public or shadow), identically for flagged and ok runs; flagged bests live in `leaderboard_shadow`, and the owner sees them in `top`/`me`/`around`.
   - `LbEntry.userId` is now `publicId` (random, `users.public_id`); the internal id is never exposed.
