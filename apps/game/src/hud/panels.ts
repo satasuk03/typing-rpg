@@ -8,6 +8,7 @@ import {
   COMBO_TIER_COLORS,
   COMBO_TIER_NAMES,
   FONT_DISP,
+  FONT_UI,
   GOLD,
   GOLD_HI,
   INK,
@@ -35,6 +36,31 @@ export interface PanelCtx {
   atbIgnite: number;
   comboPulse: number;
   tierFlash: number;
+  /** Debug collector: text rects (design px) of the hero-panel rows, checked for overlap by invariants. */
+  textRects?: { id: string; rect: Rect }[];
+}
+
+/** Records the rect of a text run that is about to be drawn (design px). */
+function noteText(
+  p: PanelCtx,
+  id: string,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  align: "left" | "right" = "left",
+  ls = 0,
+): void {
+  if (!p.textRects) return;
+  const { c } = p;
+  c.font = `${size}px ${FONT_UI}`;
+  c.letterSpacing = `${ls}px`;
+  const w = c.measureText(text).width;
+  c.letterSpacing = "0px";
+  p.textRects.push({
+    id,
+    rect: { x: align === "right" ? x - w : x, y: y - size / 2, w, h: size },
+  });
 }
 
 export const heroAtbRect = (): Rect => ({
@@ -81,9 +107,9 @@ export function drawHeroPanel(p: PanelCtx, v: LevelView, atbFrac: number, hpFrac
   bar(c, tx + 28, y + 51, w - 92 - 28 - 12, 11, hpFrac, hpCol0, hpCol1, p.heroHpTrail, {
     trailCol: "#ff6a5a",
   });
-  txt(c, `${Math.max(0, Math.round(v.hero.hp))} / ${v.hero.maxHp}`, x + w - 14, y + 72, 12, INK, {
-    align: "right",
-  });
+  const hpText = `${Math.max(0, Math.round(v.hero.hp))} / ${v.hero.maxHp}`;
+  txt(c, hpText, x + w - 14, y + 72, 12, INK, { align: "right" });
+  noteText(p, "hp", hpText, x + w - 14, y + 72, 12, "right");
   // ATB gauge: full / ignite state
   const r = heroAtbRect();
   const full = atbFrac >= 0.999;
@@ -120,15 +146,21 @@ export function drawHeroPanel(p: PanelCtx, v: LevelView, atbFrac: number, hpFrac
     c.fillRect(r.x, r.y - 2, r.w * clamp(atbFrac, 0, 1), r.h + 4);
     c.restore();
   }
-  // barrier + second wind + status chips
+  // barrier (12 px shield glyph + count) + second wind; the row ends >= 8 px before the HP text
   let cx = tx;
   if (v.hero.barrierCharges > 0) {
-    txt(c, `BARRIER ${v.hero.barrierCharges}`, cx, y + 71, 11, "#9fd8ff");
-    cx += 92;
+    const n = String(v.hero.barrierCharges);
+    shieldBadge(c, cx + 6, y + 71, "", false, 6);
+    txt(c, `x${n}`, cx + 16, y + 71, 11, "#9fd8ff");
+    noteText(p, "barrier", `x${n}`, cx + 16, y + 71, 11);
+    p.textRects?.push({ id: "barrier-glyph", rect: { x: cx, y: y + 65, w: 12, h: 12 } });
+    const lw = 16 + Math.max(10, 7 * (n.length + 1));
+    cx += lw + 6;
   }
   if (v.hero.secondWindAvailable) {
     diamond(c, cx + 5, y + 71, 5, "#5af0e0");
     txt(c, "2ND WIND", cx + 14, y + 71, 11, "#9ffff0");
+    noteText(p, "secondwind", "2ND WIND", cx + 14, y + 71, 11);
   }
 }
 
@@ -431,22 +463,31 @@ export function drawBossPlate(p: PanelCtx, v: LevelView, e: EnemyView, st: Enemy
     diamond(c, px, r.y + 68, 6, "#0c0910");
     diamond(c, px, r.y + 68, 4.5, i <= boss.phase ? GOLD : "#3a3040");
   }
-  txt(c, boss.title.toUpperCase(), r.x + r.w - 60, r.y + 68, 10, "#c8b8d8", {
-    align: "right",
-    ls: 1,
-    stroke: false,
-  });
+  if (e.brokenTicksLeft <= 0)
+    txt(c, boss.title.toUpperCase(), r.x + r.w - 60, r.y + 68, 10, "#c8b8d8", {
+      align: "right",
+      ls: 1,
+      stroke: false,
+    });
   if (e.shieldMax > 0) shieldBadge(c, r.x + 30, r.y + 46, String(e.shield), broken, 17);
   e.weaknesses.forEach((wk, i) => {
     damageIcon(c, wk.type, r.x + r.w - 40 + (i - 0.5) * 22, r.y + 46, 7, wk.revealed);
   });
-  if (broken)
-    txt(c, "BREAK", W / 2, r.y + r.h + 16, 16, "#ffffff", {
-      align: "center",
-      f: FONT_DISP,
-      w: 900,
-      glow: "rgba(120,180,255,0.9)",
-    });
+  if (broken) {
+    // T6.3 #13: BREAK status is a chip inside the boss-bar row (nothing hangs below the plate)
+    const label = `BREAK ${Math.ceil(e.brokenTicksLeft / 60)}`;
+    const cw = 76;
+    const cxm = W / 2;
+    const cyc = r.y + 68;
+    c.fillStyle = "#06101e";
+    c.fillRect(cxm - cw / 2 - 1, cyc - 9, cw + 2, 18);
+    const cg = c.createLinearGradient(0, cyc - 8, 0, cyc + 8);
+    cg.addColorStop(0, "#6aa8ff");
+    cg.addColorStop(1, "#2a58c0");
+    c.fillStyle = cg;
+    c.fillRect(cxm - cw / 2, cyc - 8, cw, 16);
+    txt(c, label, cxm, cyc + 1, 11, "#ffffff", { align: "center", ls: 1, w: 700 });
+  }
 }
 
 export const TOP_LABEL_RECT = (W: number): Rect => ({ x: W / 2 - 150, y: 18, w: 300, h: 34 });
