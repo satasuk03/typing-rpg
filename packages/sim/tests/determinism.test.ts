@@ -55,6 +55,15 @@ describe("typing-only level determinism (T1.2)", () => {
     expect(typingFixture.combatGoldens["boss-sword"]?.outcome).toBe("cleared");
   });
 
+  test("T1.5 boss replays: the real Ruin Golem level clears at 40 WPM; at 20 WPM a Second Wind mid-boss is replayed exactly", () => {
+    const golem = typingFixture.combatGoldens["golem-40wpm"];
+    expect(golem?.outcome).toBe("cleared");
+    expect(golem?.skillsCast).toBeGreaterThan(5);
+    const sw = typingFixture.combatGoldens["golem-20wpm-sw"];
+    expect(sw?.secondWindUsed).toBe(true);
+    expect(sw?.outcome).toBe("cleared");
+  });
+
   test("the sessions actually clear the level (the golden covers walk, encounters, guards and the boss finisher)", () => {
     for (const g of Object.values(typingFixture.goldens)) expect(g.outcome).toBe("cleared");
   });

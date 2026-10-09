@@ -3,16 +3,16 @@
 // Rules: docs/interfaces.md §3.3 (damage chain D31, weakness D11, guard D13, Second Wind D17) and doc 01 §1.3, §1.6-1.8.
 // Every damage step is mulBp with floor, in this order: source mult -> crit -> weak -> broken -> staggered -> passives.
 import type { DamageType } from "@hd2d/content";
-import { heroImpactTarget } from "./attack.ts";
+import { gatedAtFloor, heroImpactTarget } from "./attack.ts";
 import { K } from "./balance.ts";
-import type { Emit } from "./bus.ts";
 import {
-  assignWordPlate,
-  enemyById,
-  killEnemy,
-  revertGuardPlate,
-  showFinisher,
-} from "./encounter.ts";
+  bossAttacksSuspended,
+  detachBossPlates,
+  restoreBossPlates,
+  shiftBossTimers,
+} from "./bossPlates.ts";
+import type { Emit } from "./bus.ts";
+import { assignWordPlate, enemyById, killEnemy, revertGuardPlate } from "./encounter.ts";
 import type { EntityId, HitKind, HitOrigin } from "./events.ts";
 import { type Milli, mulBp, toDisplay } from "./fixed.ts";
 import { failLevel, setPhase } from "./flow.ts";
@@ -105,8 +105,6 @@ export function dealDamage(
 ): boolean {
   const run = state.run;
   const { dmgM, weak, broken } = resolveDamage(state, enemy, spec);
-  const hpBefore = enemy.hpM;
-  const floor = gateFloorM(enemy);
   enemy.hpM -= dmgM;
   run.stats.damageByOriginM[spec.origin] += dmgM;
   if (spec.skillId !== null) run.stats.damageBySkillM[spec.skillId] += dmgM;
@@ -141,7 +139,6 @@ export function dealDamage(
     const points = spec.shieldPoints ?? (weak ? (spec.crit ? 2 : 1) : 0);
     if (points > 0) shieldHit(state, enemy, points, emit);
   }
-  if (floor > 0 && enemy.hpM === floor && hpBefore > floor) onGateReached(state, enemy, emit);
   return false;
 }
 
@@ -183,6 +180,20 @@ function startBreak(state: LevelState, enemy: EnemyState, emit: Emit): void {
   emit({ type: "Break", tick: state.tick, enemyId: enemy.id, untilTick: until });
 }
 
+/**
+ * Step 1: a Doom Spell stagger that ran out ends (StatusEnded). Phase gates are not reacted to here: the boss script
+ * (boss.ts, step 5) polls the boss's HP against its gate, so a chip typed on the same tick is seen on that tick's step.
+ */
+export function expireStaggers(state: LevelState, emit: Emit): void {
+  const enc = state.enc as EncounterState;
+  const t = state.tick;
+  for (const e of enc.enemies) {
+    if (!e.alive || e.staggerUntil === null || t < e.staggerUntil) continue;
+    e.staggerUntil = null;
+    emit({ type: "StatusEnded", tick: t, targetId: e.id, status: "stagger" });
+  }
+}
+
 /** Step 1 of the tick: end Breaks that ran out; the shield refills and the attack timer restarts from a full interval. */
 export function expireBreaks(state: LevelState, emit: Emit): void {
   const enc = state.enc as EncounterState;
@@ -194,11 +205,6 @@ export function expireBreaks(state: LevelState, emit: Emit): void {
     emit({ type: "BreakEnded", tick: t, enemyId: e.id });
     restartAttackCycle(state, e);
   }
-}
-
-/** Damage reached an enemy's phase gate. Generic seam: T1.5 adds the 66% / 33% gates and phase scripts here. */
-function onGateReached(state: LevelState, enemy: EnemyState, emit: Emit): void {
-  if (enemy.isBoss && enemy.gateHpM === FINAL_GATE_M) showFinisher(state, enemy, emit);
 }
 
 // ---------------------------------------------------------------- hero offense: chips and impacts
@@ -236,7 +242,7 @@ export function resolveHeroImpacts(state: LevelState, emit: Emit): void {
   for (const p of due) {
     // the aimed enemy may have died on the way: re-aim at the focus (no living enemy: the attack whiffs)
     let target = enemyById(enc, p.targetId);
-    if (target === null || !target.alive) target = heroImpactTarget(enc);
+    if (target === null || !target.alive || gatedAtFloor(target)) target = heroImpactTarget(enc);
     if (target === null) continue;
     const baseM = mulBp(run.heroAtkM, w.atkMultBp);
     for (let h = 0; h < w.hits && target.alive; h++) {
@@ -348,6 +354,7 @@ export function damageHero(
  */
 export function resolveImpact(state: LevelState, enemy: EnemyState, emit: Emit): void {
   const run = state.run;
+  const enc = state.enc as EncounterState;
   const t = state.tick;
   const parried = enemy.guardResult === "parry";
   const blocked = enemy.guardResult === "block";
@@ -392,15 +399,17 @@ export function resolveImpact(state: LevelState, enemy: EnemyState, emit: Emit):
     run.stats.blocks++;
     if (hasPassive(run, "ironWill")) emitPassive(state, "ironWill", enemy.id, emit);
     emit({ type: "GuardBlocked", tick: t, enemyId: enemy.id, damage: toDisplay(dmgM) });
-  } else if (outcome === "hit") {
-    run.stats.hitsTaken++;
   }
+  // ruling (T1.5, ★★★ "untouched"): a hit counts when it dealt HP damage to the hero (a block that still hurt counts; a
+  // parry or a fully absorbed barrier hit does not). Doom failures and minigame misses count the same way (boss.ts).
+  const hpBefore = run.heroHpM;
   const died = damageHero(
     state,
     dmgM,
     { sourceId: enemy.id, cause: "attack", blocked: outcome === "blocked" },
     emit,
   );
+  if (run.heroHpM < hpBefore) run.stats.hitsTaken++;
   if (died) {
     heroDown(state, emit);
     return;
@@ -412,7 +421,12 @@ export function resolveImpact(state: LevelState, enemy: EnemyState, emit: Emit):
     enemy.windupShown = false;
     enemy.guardResult = null;
     enemy.nextImpact = null;
-    if (enemy.brokenUntil === null && run.options.difficulty !== "zen")
+    if (
+      enemy.brokenUntil === null &&
+      run.options.difficulty !== "zen" &&
+      !enc.finisherShown &&
+      !bossAttacksSuspended(enc, enemy)
+    )
       scheduleAttack(state, enemy, t + enemy.intervalTicks);
   }
 }
@@ -439,6 +453,7 @@ function startSecondWind(state: LevelState, emit: Emit): void {
   if (enc.targetPlateId !== null) dropTarget(state, "phaseChanged", emit);
   for (const p of [...enc.plates]) removePlate(state, p, "phaseEnded", emit);
   for (const e of enc.enemies) e.plateId = null;
+  if (enc.boss !== null) detachBossPlates(enc.boss); // Doom Spell / falling words come back after the freeze
   const pool = run.def.words.secondWind.filter((w) => w.length > 0);
   const text =
     pool.length > 0
@@ -492,7 +507,7 @@ export function externalRevive(state: LevelState, source: "gem" | "feather", emi
  * Unfreezes the encounter after a revive: absolute-tick timers shift by the freeze length, every living enemy gets a
  * fresh word plate, and enemy attack timers restart from a full interval.
  */
-function resumeEncounter(state: LevelState, emit: Emit): void {
+export function resumeEncounter(state: LevelState, emit: Emit): void {
   const enc = state.enc as EncounterState;
   const t = state.tick;
   const delta = enc.frozenAt === null ? 0 : t - enc.frozenAt;
@@ -508,11 +523,19 @@ function resumeEncounter(state: LevelState, emit: Emit): void {
       d.untilTick += delta;
       d.nextTick += delta;
     }
+  }
+  if (enc.boss !== null) {
+    shiftBossTimers(enc.boss, delta);
+    restoreBossPlates(state, emit); // before the enemies' word plates: keeps the first letters distinct
+  }
+  for (const e of enc.enemies) {
+    if (!e.alive) continue;
     if (!enc.finisherShown) assignWordPlate(state, e, emit);
     e.guardResult = null;
     e.windupShown = false;
     e.nextImpact = null;
-    if (e.brokenUntil === null && !enc.finisherShown) restartAttackCycle(state, e);
+    if (e.brokenUntil === null && !enc.finisherShown && !bossAttacksSuspended(enc, e))
+      restartAttackCycle(state, e);
   }
 }
 

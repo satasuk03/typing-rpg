@@ -1,49 +1,49 @@
 {
-  "description": "Scripted typing sessions (tests/typingHarness.ts scriptedSession) on the fixture level (goldens, combat on since T1.3) and reference-bot combat replays (combatGoldens: boss/sword, dagger+shields, glass hero with Second Wind), replayed through replay(): final-state hash and event-stream hash. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
+  "description": "Scripted typing sessions (tests/typingHarness.ts scriptedSession) on the fixture level (goldens, combat on since T1.3) and reference-bot combat replays (combatGoldens: boss/sword, dagger+shields, glass hero with Second Wind, T1.5 Ruin Golem level at 40 and 20 WPM), replayed through replay(): final-state hash and event-stream hash. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
   "simVersion": 1,
   "goldens": {
     "1": {
-      "state": "e4b0d070",
-      "events": "a2552017",
-      "inputs": 371,
-      "endTick": 3229,
+      "state": "388fea15",
+      "events": "7af91652",
+      "inputs": 906,
+      "endTick": 5957,
       "outcome": "cleared"
     },
     "42": {
-      "state": "7aea1f7d",
-      "events": "c0c59cf1",
-      "inputs": 411,
-      "endTick": 3499,
+      "state": "9c0a8ec4",
+      "events": "4c3c33ae",
+      "inputs": 820,
+      "endTick": 5645,
       "outcome": "cleared"
     },
     "2024": {
-      "state": "17e53007",
-      "events": "e4c69e55",
-      "inputs": 423,
-      "endTick": 3672,
+      "state": "afacc9c1",
+      "events": "4fec2f9d",
+      "inputs": 924,
+      "endTick": 6136,
       "outcome": "cleared"
     },
     "3735928559": {
-      "state": "1d1e6f0c",
-      "events": "e53ab887",
-      "inputs": 381,
-      "endTick": 3270,
+      "state": "8f4fd862",
+      "events": "70fa1ff7",
+      "inputs": 818,
+      "endTick": 5445,
       "outcome": "cleared"
     }
   },
   "combatGoldens": {
     "boss-sword": {
-      "state": "a80a9c11",
-      "events": "9c4c4ec1",
-      "inputs": 185,
-      "endTick": 4776,
+      "state": "81e279ce",
+      "events": "65329580",
+      "inputs": 338,
+      "endTick": 7675,
       "outcome": "cleared",
-      "autoAttacks": 21,
+      "autoAttacks": 34,
       "secondWindUsed": false,
       "skillsCast": 0
     },
     "dagger-shields": {
-      "state": "83728d56",
+      "state": "80df829e",
       "events": "260f50d7",
       "inputs": 58,
       "endTick": 1563,
@@ -53,7 +53,7 @@
       "skillsCast": 0
     },
     "glass-hero": {
-      "state": "5075639a",
+      "state": "b1cc0a12",
       "events": "32459b3a",
       "inputs": 40,
       "endTick": 1179,
@@ -63,7 +63,7 @@
       "skillsCast": 0
     },
     "kit-starter": {
-      "state": "4fbe2b8d",
+      "state": "96e58405",
       "events": "c6be7a8c",
       "inputs": 67,
       "endTick": 1789,
@@ -73,7 +73,7 @@
       "skillsCast": 3
     },
     "kit-dagger-crowd": {
-      "state": "1809d93a",
+      "state": "a3966ea2",
       "events": "4083c5c6",
       "inputs": 60,
       "endTick": 1494,
@@ -83,7 +83,7 @@
       "skillsCast": 3
     },
     "kit-hammer-hurt": {
-      "state": "88e53044",
+      "state": "61f6677d",
       "events": "5d281bbe",
       "inputs": 67,
       "endTick": 2094,
@@ -91,6 +91,26 @@
       "autoAttacks": 6,
       "secondWindUsed": false,
       "skillsCast": 3
+    },
+    "golem-40wpm": {
+      "state": "d4d4209f",
+      "events": "c678ae63",
+      "inputs": 628,
+      "endTick": 15326,
+      "outcome": "cleared",
+      "autoAttacks": 50,
+      "secondWindUsed": false,
+      "skillsCast": 16
+    },
+    "golem-20wpm-sw": {
+      "state": "182a1d0f",
+      "events": "0c35349e",
+      "inputs": 926,
+      "endTick": 36595,
+      "outcome": "cleared",
+      "autoAttacks": 45,
+      "secondWindUsed": true,
+      "skillsCast": 18
     }
   }
 }

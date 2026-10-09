@@ -281,6 +281,10 @@ export const BALANCE = {
   PACE_MAX: 120,
   RECENT_WORDS: 6, // word assignment anti-repeat window
   SECOND_WIND_FALLBACK_TEXT: "I will not give up", // used when the level's secondWind pool is empty
+  // T1.5 (TS-only): typing gimmicks and boss structure
+  FADE_DELAY_S: 1.5, // Fading word: the plate's letters fade this long after it appears (doc 01 4.1 "Ghost")
+  DOOM_FALLBACK_TAIL: " and the old stones fall", // Doom Spell text built as <free-letter word> + tail when the pool is empty
+  MINIGAME_FIRST_SPAWN_S: 2.6, // Falling Rubble: delay before the first word (the spawn period afterwards comes from the BossDef)
 } as const;
 
 const ticks = (s: number): number => Math.round(s * TICK_HZ);
@@ -445,6 +449,17 @@ function deriveConstants(B: typeof BALANCE) {
     WALK_HEAL_BP: bp(B.WALK_HEAL),
     PHASE_HEAL_BP: bp(B.PHASE_HEAL),
     SECOND_WIND_T: ticks(B.SECOND_WIND_S),
+    // ---- T1.5: gimmicks and boss ----
+    FADE_DELAY_T: ticks(B.FADE_DELAY_S),
+    /** Doom Spell timer: chars / (pace_cps x DOOM_TIMER_PACE_EFF) + DOOM_TIMER_BONUS_S (doc 01 4.2), in integer ticks. */
+    DOOM_TIMER_PACE_EFF_BP: bp(B.DOOM_TIMER_PACE_EFF),
+    DOOM_TIMER_BONUS_T: ticks(B.DOOM_TIMER_BONUS_S),
+    /** Boss adds' HP pool = boss HP x BOSS_ADDS_HP_ENC / BOSS_HP_ENC (economy_sim: 0.5 of the 3.2 encounter-units boss). */
+    BOSS_ADDS_HP_NUM: Math.round(B.BOSS_ADDS_HP_ENC * 1000),
+    BOSS_ADDS_HP_DEN: Math.round(B.BOSS_HP_ENC * 1000),
+    BOSS_HIT_MULT_BP: bp(B.BOSS_HIT_MULT),
+    DOOM_FALLBACK_TAIL: B.DOOM_FALLBACK_TAIL as string,
+    MINIGAME_FIRST_SPAWN_T: ticks(B.MINIGAME_FIRST_SPAWN_S),
     SECOND_WIND_HP_BP: bp(B.SECOND_WIND_HP),
     PREMIUM_REVIVE_HP_BP: bp(B.PREMIUM_REVIVE_HP),
     FAIL_GOLD_KEEP_BP: bp(B.FAIL_GOLD_KEEP),

@@ -2,12 +2,14 @@
 // this file must stay pure and deterministic.
 //  - scripted typing sessions on the boss fixture level (T1.2, now with combat on)
 //  - T1.3 combat replays: a reference bot plays six scenarios (three with skills and passives, T1.4); the recorded inputs are replayed through replay()
+import { contentBundle } from "@hd2d/content";
 import {
   type ActiveSkillId,
   canonicalJson,
   fnv1a32,
   type PassiveId,
   replay,
+  resolveLevel,
 } from "../src/index.ts";
 import { runBot } from "./bot/refBot.ts";
 import {
@@ -60,6 +62,10 @@ export const COMBAT_GOLDEN_SCENARIOS = [
   "kit-starter",
   "kit-dagger-crowd",
   "kit-hammer-hurt",
+  // T1.5: the real Ruin Golem level (resolveLevel on the content bundle): phases, adds with gimmicks, Doom Spells,
+  // Falling Rubble, the Finisher; and a sloppy 20 WPM run that misses rubble words and uses Second Wind mid-boss
+  "golem-40wpm",
+  "golem-20wpm-sw",
 ] as const;
 type Scenario = (typeof COMBAT_GOLDEN_SCENARIOS)[number];
 
@@ -68,6 +74,14 @@ export interface CombatGolden extends TypingGolden {
   secondWindUsed: boolean;
   skillsCast: number;
 }
+
+const GOLEM_LEVEL = "ch1-l10";
+const resolveGolem = () => resolveLevel(contentBundle, GOLEM_LEVEL, { dueWeakWords: [] });
+/** Per-scenario seed and pace (default seed 4242, pace 35). */
+const SCENARIO_RUN: Partial<Record<Scenario, { seed: number; pace: number }>> = {
+  "golem-40wpm": { seed: 4242, pace: 40 },
+  "golem-20wpm-sw": { seed: 4242, pace: 20 },
+};
 
 const withKit = (
   archetype: "sword" | "dagger" | "staff" | "hammer",
@@ -142,6 +156,20 @@ function combatScenario(name: Scenario) {
         wpm: 45,
         accuracy: 0.93,
       };
+    case "golem-40wpm":
+      return {
+        def: resolveGolem(),
+        loadout: withKit("sword", ["fireball", "aegis"], ["cleanCut", "steadyHands", "ironWill"]),
+        wpm: 40,
+        accuracy: 0.94,
+      };
+    case "golem-20wpm-sw":
+      return {
+        def: resolveGolem(),
+        loadout: withKit("sword", ["fireball", "aegis"], ["cleanCut", "steadyHands", "ironWill"]),
+        wpm: 20,
+        accuracy: 0.88,
+      };
     case "kit-hammer-hurt":
       // a sloppy typist taking hits: Mending Light, Piercing Thrust, Riposte, Comeback, Hammer knockback
       return {
@@ -162,9 +190,11 @@ function combatScenario(name: Scenario) {
 
 export function combatGolden(name: Scenario): CombatGolden {
   const { def, loadout, wpm, accuracy } = combatScenario(name);
-  const seed = 4242;
-  const bot = runBot(def, loadout, seed, mkOptions(), { wpm, accuracy, maxTicks: 40_000 });
-  const res = replay(def, loadout, seed, mkOptions(), bot.inputs);
+  const run = SCENARIO_RUN[name] ?? { seed: 4242, pace: 35 };
+  const seed = run.seed;
+  const options = mkOptions({ pace: run.pace });
+  const bot = runBot(def, loadout, seed, options, { wpm, accuracy, maxTicks: 72_000 });
+  const res = replay(def, loadout, seed, options, bot.inputs);
   return {
     state: res.hash,
     events: fnv1a32(canonicalJson(res.events)).toString(16).padStart(8, "0"),

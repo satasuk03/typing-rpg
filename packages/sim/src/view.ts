@@ -108,6 +108,12 @@ export interface LevelView {
     title: string;
     phase: 1 | 2 | 3;
     gateHpFrac: number | null;
+    /** T1.5 (additive, optional so existing mocks still typecheck; the sim always sets them): the HP fractions of the phase gates (e.g. [0.66, 0.33]) for the phase pips. */
+    gates?: number[];
+    /** T1.5 (additive): why the boss is clamped at its gate right now ("adds" alive, or a Doom Spell still owed/active). */
+    holding?: "adds" | "doom" | null;
+    doomsResolved?: number;
+    minDoomSpells?: number;
   } | null;
   doom: { plateId: PlateId; ticksLeft: number; totalTicks: number } | null;
   minigame: { lanes: number; cleared: number; missed: number } | null;

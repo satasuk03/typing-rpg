@@ -2,6 +2,7 @@
 // Shared by the level runtime (level.ts) and combat (combat.ts).
 import type { Emit } from "./bus.ts";
 import type { HitKind, PlateId } from "./events.ts";
+import { fadeTick, scrambleWord } from "./gimmick.ts";
 import { cancelAttack, enemyDef } from "./guard.ts";
 import type { EncounterState, EnemyState, PlateState } from "./state.ts";
 import { clearEnemyStatuses } from "./statuses.ts";
@@ -31,12 +32,37 @@ export function assignWordPlate(
   });
   enc.recent.push(word);
   while (enc.recent.length > RECENT_LIMIT) enc.recent.shift();
+  // typing gimmicks (T1.5): a scrambled plate shows shuffled letters; a fading plate fades FADE_DELAY after it is shown
+  let display: string | undefined;
+  if (enemy.gimmick === "scrambled") {
+    // the replaced plate (guard swap, break) is leaving, so its letters are free again
+    const scrambled = scrambleWord(enc.gimmickRng, word, visibleFirstLetters(enc, replacesPlateId));
+    if (scrambled !== null) display = scrambled;
+  }
   const plate = addPlate(
     state,
-    { ownerId: enemy.id, kind: "word", text: word, replacesPlateId },
+    {
+      ownerId: enemy.id,
+      kind: "word",
+      text: word,
+      replacesPlateId,
+      display,
+      gimmick: enemy.gimmick,
+      // the clock starts when typing is live (a plate spawned during the intro does not fade before the fight)
+      fadeAt:
+        enemy.gimmick === "fading" ? fadeTick(Math.max(state.tick, enc.typingFromTick)) : null,
+    },
     emit,
   );
   enemy.plateId = plate.id;
+  if (plate.scrambled)
+    emit({
+      type: "WordScrambled",
+      tick: state.tick,
+      plateId: plate.id,
+      enemyId: enemy.id,
+      display: plate.display,
+    });
   return plate;
 }
 
@@ -64,7 +90,6 @@ export function killEnemy(state: LevelState, enemy: EnemyState, byKind: HitKind,
   enemy.alive = false;
   enemy.hpM = 0;
   enemy.brokenUntil = null;
-  enemy.staggerUntil = null;
   cancelAttack(enemy);
   enc.finisherShown = false;
   clearEnemyStatuses(state, enemy, emit);

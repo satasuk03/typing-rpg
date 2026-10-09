@@ -1,14 +1,23 @@
-// Level runtime: segment flow, encounters, getView and getResult. Typing rules live in typing.ts, combat in combat.ts.
-// Boss phases (T1.5), skills and passives (T1.4) and rewards (T1.6) plug in through the seams marked in combat.ts.
+// Level runtime: segment flow, encounters, getView and getResult. Typing rules live in typing.ts, combat in combat.ts,
+// the Ruin Golem script in boss.ts and the typing gimmicks in gimmick.ts. Rewards (T1.6) plug in at the level end.
 // Tick processing order: docs/interfaces.md §3.2 (inputs are applied first, then step runs steps 1-7 for the tick).
 import type { WeaponArchetype } from "@hd2d/content";
 import { K } from "./balance.ts";
+import {
+  bossHold,
+  clearRubble,
+  completeDoom,
+  endBreather,
+  gateFor,
+  initBossState,
+  stepBoss,
+} from "./boss.ts";
 import { type Emit, emitTo } from "./bus.ts";
 import {
   chipHit,
   expireBreaks,
+  expireStaggers,
   externalRevive,
-  FINAL_GATE_M,
   resolveHeroImpacts,
   resolveImpact,
   secondWindFailed,
@@ -20,6 +29,7 @@ import { SimError } from "./errors.ts";
 import type { HitOrigin, SimEvent } from "./events.ts";
 import { BP, type Milli, mulBp, mulDiv, toDisplay } from "./fixed.ts";
 import { failLevel, isTerminal, setPhase } from "./flow.ts";
+import { stepGimmicks } from "./gimmick.ts";
 import { enemyDef, holdAttacks, initAttack, stepEnemyAttacks } from "./guard.ts";
 import { deepClone } from "./hash.ts";
 import type { SimInput } from "./input.ts";
@@ -29,7 +39,14 @@ import { below, deriveRng } from "./rng.ts";
 import { chargeSkills, checkSkillCasts, resolveSkillImpacts, tickDots } from "./skills.ts";
 import type { EncounterState, EnemyState, RunState } from "./state.ts";
 import { stepFreezes } from "./statuses.ts";
-import type { LevelOptions, LevelResult, LevelState, Loadout, ResolvedLevel } from "./types.ts";
+import type {
+  Gimmick,
+  LevelOptions,
+  LevelResult,
+  LevelState,
+  Loadout,
+  ResolvedLevel,
+} from "./types.ts";
 import {
   accuracyBp,
   comboMultBp,
@@ -183,7 +200,8 @@ function stepOne(state: LevelState, emit: Emit): void {
   } else {
     if (state.phase === "combat") run.activeTicks++;
     if (state.phase === "combat" && state.enc !== null) {
-      expireBreaks(state, emit); // step 1: timers and statuses (freeze)
+      expireBreaks(state, emit); // step 1: timers and statuses (break, stagger, freeze)
+      expireStaggers(state, emit);
       stepFreezes(state, emit);
       resolveHeroImpacts(state, emit); // step 2: scheduled hero impacts: auto-attacks, then skills, then DoT ticks
       resolveSkillImpacts(state, emit);
@@ -191,6 +209,10 @@ function stepOne(state: LevelState, emit: Emit): void {
       if (run.options.tutorial && run.stats.wordsCompleted < K.TUTORIAL_HOLD_ATTACKS_UNTIL_WORDS)
         holdAttacks(state); // tutorial: enemies hold their attacks until the hero has typed a few words
       stepEnemyAttacks(state, resolveImpact, emit); // step 3: enemy timers
+      if (state.phase === "combat") {
+        stepGimmicks(state, emit); // step 4: gimmick timers (Fading words)
+        stepBoss(state, emit); // step 5: boss script (doom deadline, rubble, phase gates)
+      }
       if (state.phase === "combat") checkSkillCasts(state, emit); // step 6: auto-cast
     }
     // step 7: deaths, wave/encounter/segment transitions
@@ -232,6 +254,9 @@ function transitions(state: LevelState, emit: Emit): void {
         break;
       case "rewards":
         enterSegment(state, state.segmentIndex + 1, emit);
+        break;
+      case "bossBreather":
+        endBreather(state, emit);
         break;
       case "secondWind":
         secondWindFailed(state, emit);
@@ -307,6 +332,7 @@ function startEncounter(state: LevelState, emit: Emit): void {
     aiRng: deriveRng(state.seed, "enemyAi", index),
     combatRng: deriveRng(state.seed, "combat", index),
     gimmickRng: deriveRng(state.seed, "gimmick", index),
+    boss: null,
     recent: [],
     finisherShown: false,
     steadyLeft: K.STEADY_FORGIVEN,
@@ -326,6 +352,7 @@ function startEncounter(state: LevelState, emit: Emit): void {
   spawnNextWave(state, emit);
   if (boss !== null) {
     const be = enc.enemies[0] as EnemyState;
+    enc.boss = initBossState(state, enc.enemies);
     emit({
       type: "BossIntroStarted",
       tick: t,
@@ -346,30 +373,53 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
   if (seg === undefined || seg.kind === "walk") throw new SimError("spawnNextWave: bad segment");
   enc.waveIndex++;
   const boss = run.def.boss;
-  const refs =
-    seg.kind === "boss"
-      ? [{ enemyId: (boss as NonNullable<typeof boss>).enemyId, gimmick: null }]
-      : (seg.waves[enc.waveIndex] ?? []);
+  const bossSeg = seg.kind === "boss";
+  if (bossSeg && boss === null) throw new SimError("boss segment without def.boss");
+  // A boss wave is [boss, ...adds]: the boss is slot 0 (enemies[0] everywhere), its phase-1 adds follow.
+  // Boss adds (orchestrator ruling, T1.5): BossDef carries no add stats, so an add is its EnemyDef scaled by the level's
+  // encounter scaling, exactly like a normal wave: HP = addsPool x hpWeight / sum(add hpWeights), hit = addsGruntHit x
+  // hitWeight. resolveLevel sets addsPool = boss HP x BOSS_ADDS_HP_ENC / BOSS_HP_ENC (0.5 / 3.2 = 117.6 at L10, i.e. 58.8 per add
+  // on average, the economy_sim add HP: two equal adds of 0.5 x 235.3 / 2) and addsGruntHit = the level's encounter gruntHit.
+  const refs: { enemyId: string; gimmick: Gimmick | null }[] =
+    boss !== null && bossSeg
+      ? [{ enemyId: boss.enemyId, gimmick: null }, ...boss.phase1.adds]
+      : ((seg as { waves: { enemyId: string; gimmick: Gimmick | null }[][] }).waves[
+          enc.waveIndex
+        ] ?? []);
+  const firstAdd = bossSeg ? 1 : 0; // refs[firstAdd..] share the pool
   let weightSum = 0;
-  for (const r of refs) weightSum += enemyDef(state, r.enemyId).hpWeightBp;
+  for (let i = firstAdd; i < refs.length; i++)
+    weightSum += enemyDef(state, (refs[i] as { enemyId: string }).enemyId).hpWeightBp;
+  const addsPoolM =
+    boss === null
+      ? 0
+      : (boss.phase1.addsHpPoolM ?? mulDiv(boss.hpM, K.BOSS_ADDS_HP_NUM, K.BOSS_ADDS_HP_DEN));
+  const addsHitM =
+    boss === null ? 0 : (boss.phase1.addsGruntHitM ?? mulDiv(boss.hitM, BP, K.BOSS_HIT_MULT_BP));
   const spawned: EnemyState[] = [];
   refs.forEach((r, slot) => {
     const def = enemyDef(state, r.enemyId);
-    const isBossEnemy = seg.kind === "boss";
+    const isBossEnemy = bossSeg && slot === 0;
+    const b = boss as NonNullable<typeof boss>;
     const maxHpM = isBossEnemy
-      ? (boss as NonNullable<typeof boss>).hpM
-      : Math.max(
-          1000,
-          mulDiv((seg as { hpPoolM: Milli }).hpPoolM, def.hpWeightBp, Math.max(1, weightSum)),
-        );
+      ? b.hpM
+      : bossSeg
+        ? Math.max(1000, mulDiv(addsPoolM, def.hpWeightBp, Math.max(1, weightSum)))
+        : Math.max(
+            1000,
+            mulDiv((seg as { hpPoolM: Milli }).hpPoolM, def.hpWeightBp, Math.max(1, weightSum)),
+          );
     const hitM = isBossEnemy
-      ? (boss as NonNullable<typeof boss>).hitM
-      : mulBp((seg as { gruntHitM: Milli }).gruntHitM, def.hitWeightBp);
+      ? b.hitM
+      : bossSeg
+        ? mulBp(addsHitM, def.hitWeightBp)
+        : mulBp((seg as { gruntHitM: Milli }).gruntHitM, def.hitWeightBp);
     spawned.push({
       id: state.nextId++,
       defId: r.enemyId,
       slot,
       isBoss: isBossEnemy,
+      gimmick: r.gimmick,
       alive: true,
       hpM: maxHpM,
       maxHpM,
@@ -379,9 +429,8 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
       revealed: [],
       brokenUntil: null,
       staggerUntil: null,
-      // T1.3: a boss cannot be damaged to death; reaching 1 milli shows the Finisher. T1.5 replaces this with the
-      // 66% / 33% phase gates (and sets the final gate when the last phase starts).
-      gateHpM: isBossEnemy ? FINAL_GATE_M : null,
+      // the boss starts behind its phase-1 gate (66%); boss.ts moves the gate at each phase change (33%, then 1 milli)
+      gateHpM: isBossEnemy ? gateFor(b, maxHpM, 1) : null,
       plateId: null,
       spawnTick: t,
       intervalTicks: 0,
@@ -420,9 +469,11 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
     const p = below(enc.aiRng, K.INITIAL_ENEMY_ATB_MAX_BP + 1);
     initAttack(state, e, p);
   }
-  if (enc.focusEnemyId === null && spawned[0] !== undefined) {
-    enc.focusEnemyId = spawned[0].id;
-    emit({ type: "FocusChanged", tick: t, enemyId: spawned[0].id });
+  // a boss wave starts focused on its first add (economy_sim kills the adds first); otherwise on the first enemy
+  const first = bossSeg && spawned[1] !== undefined ? spawned[1] : spawned[0];
+  if (enc.focusEnemyId === null && first !== undefined) {
+    enc.focusEnemyId = first.id;
+    emit({ type: "FocusChanged", tick: t, enemyId: first.id });
   }
 }
 
@@ -436,6 +487,14 @@ const HOOKS: TypingHooks = {
       return;
     }
     chargeSkills(state, plate, emit); // every completed word/guard plate charges both skills
+    if (plate.kind === "doom") {
+      completeDoom(state, plate, emit);
+      return;
+    }
+    if (plate.kind === "minigame") {
+      clearRubble(state, plate, emit);
+      return;
+    }
     const enemy = enemyById(enc, plate.ownerId);
     if (enemy === null) return;
     if (plate.kind === "guard") {
@@ -470,6 +529,8 @@ const enemyStatuses = (e: Readonly<EnemyState>, t: number): StatusView[] => {
     ticksLeft: Math.max(0, d.untilTick - t),
     stacks: 1,
   }));
+  if (e.staggerUntil !== null)
+    out.push({ id: "stagger", ticksLeft: Math.max(0, e.staggerUntil - t), stacks: 1 });
   if (e.frozenUntil !== null)
     out.push({ id: "freeze", ticksLeft: Math.max(0, e.frozenUntil - t), stacks: 1 });
   return out;
@@ -505,7 +566,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
     display: p.display,
     typedIndex: p.typed,
     isTarget: enc !== null && enc.targetPlateId === p.id,
-    faded: false,
+    faded: p.faded,
     hadTypo: !p.perfect,
     lastTypoTick: p.lastTypoTick,
     lane: p.lane,
@@ -617,12 +678,34 @@ export function getView(state: Readonly<LevelState>): LevelView {
             enemyId: bossEnemy.id,
             name: bossDef.name,
             title: bossDef.title,
-            phase: 1,
-            gateHpFrac: null,
+            phase: enc?.boss?.phase ?? 1,
+            gateHpFrac:
+              bossEnemy.gateHpM === null || (enc?.boss?.phase ?? 1) === 3
+                ? null
+                : bossEnemy.gateHpM / bossEnemy.maxHpM,
+            // T1.5 (additive): for the phase pips and the "why is my damage 0" hint
+            gates: [bossDef.phase1.endAtHpBp / BP, bossDef.phase2.endAtHpBp / BP],
+            holding: bossHold(enc as EncounterState, bossDef),
+            doomsResolved: enc?.boss?.doomsResolved ?? 0,
+            minDoomSpells: bossDef.phase2.minDoomSpells,
           }
         : null,
-    doom: null,
-    minigame: null,
+    doom:
+      enc?.boss?.doom != null && enc.boss.doom.plateId !== null
+        ? {
+            plateId: enc.boss.doom.plateId,
+            ticksLeft: Math.max(0, enc.boss.doom.deadline - t),
+            totalTicks: enc.boss.doom.totalTicks,
+          }
+        : null,
+    minigame:
+      enc?.boss != null && bossDef !== null && enc.boss.phase === 3
+        ? {
+            lanes: bossDef.phase3.minigame.lanes,
+            cleared: enc.boss.cleared,
+            missed: enc.boss.missed,
+          }
+        : null,
     secondWind:
       swPlate === undefined || state.phaseUntil === null
         ? null

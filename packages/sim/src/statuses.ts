@@ -112,6 +112,9 @@ export function clearEnemyStatuses(state: LevelState, enemy: EnemyState, emit: E
   for (const d of enemy.dots)
     emit({ type: "StatusEnded", tick: state.tick, targetId: enemy.id, status: d.status });
   enemy.dots = [];
+  if (enemy.staggerUntil !== null)
+    emit({ type: "StatusEnded", tick: state.tick, targetId: enemy.id, status: "stagger" });
+  enemy.staggerUntil = null;
   if (enemy.frozenUntil !== null)
     emit({ type: "StatusEnded", tick: state.tick, targetId: enemy.id, status: "freeze" });
   enemy.frozenUntil = null;

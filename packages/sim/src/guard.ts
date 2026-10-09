@@ -5,6 +5,7 @@
 // Rules: doc 01 §1.7, interfaces §3.3 "Guard (D13)" and §3.2 step 3.
 
 import { K } from "./balance.ts";
+import { bossAttacksSuspended } from "./bossPlates.ts";
 import type { Emit } from "./bus.ts";
 import { SimError } from "./errors.ts";
 import { mulBp } from "./fixed.ts";
@@ -97,9 +98,12 @@ export function initAttack(state: LevelState, enemy: EnemyState, progressBp: num
 /** Starts a fresh attack cycle from now (after a Break or a revive): a full interval, no head start; zen never attacks. */
 export function restartAttackCycle(state: LevelState, enemy: EnemyState): void {
   const t = state.tick;
+  const enc = state.enc as EncounterState;
   enemy.cycleStart = t;
   cancelAttack(enemy);
   if (state.run.options.difficulty === "zen") return;
+  // T1.5: the boss's attacks are suspended in phase 3 and once the Finisher is shown (a Break ending then must not resume them)
+  if (enc.finisherShown || bossAttacksSuspended(enc, enemy)) return;
   scheduleAttack(state, enemy, t + enemy.intervalTicks);
 }
 
@@ -170,7 +174,7 @@ export function stepEnemyAttacks(state: LevelState, resolve: ImpactResolver, emi
   const t = state.tick;
   for (const enemy of enc.enemies) {
     if (state.phase !== "combat") return; // the hero went down mid-tick: the encounter is frozen
-    if (!enemy.alive || enemy.nextImpact === null) continue;
+    if (!enemy.alive || enemy.nextImpact === null || enc.finisherShown) continue;
     if (!enemy.windupShown && t >= enemy.nextImpact - enemy.guardTicks)
       startGuard(state, enemy, emit);
     if (enemy.nextImpact !== null && t >= enemy.nextImpact) resolve(state, enemy, emit);
