@@ -7,12 +7,12 @@
  * fake projector puts the enemies). Test hooks: `window.__hudDebug`.
  */
 
-import type { HudAnchor, HudDebugSnapshot } from "../hud";
+import type { HudAnchor, HudDebugSnapshot, HudProjector } from "../hud";
 import { Hud } from "../hud";
+import { loadHudFonts } from "../hud/fonts";
 import { checkSnapshot } from "../hud/invariants";
 import type { MockScenario } from "../hud/mock/mockDriver";
 import { MockDriver } from "../hud/mock/mockDriver";
-import { GOOGLE_FONTS_URL } from "../hud/theme";
 
 export interface HudDebugApi {
   ready: boolean;
@@ -36,24 +36,6 @@ declare global {
 }
 
 const SCENARIOS: MockScenario[] = ["forest", "cave", "boss", "stress"];
-
-function loadFonts(): Promise<void> {
-  return new Promise((resolve) => {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = GOOGLE_FONTS_URL;
-    const done = () => resolve();
-    link.onload = () => {
-      const loads = ['22px "Press Start 2P"', '12px "Silkscreen"', '700 22px "Cinzel"'].map((f) =>
-        document.fonts.load(f).catch(() => []),
-      );
-      void Promise.all(loads).then(done);
-    };
-    link.onerror = done;
-    document.head.appendChild(link);
-    setTimeout(done, 2500);
-  });
-}
 
 /** Fake projector: placeholder world positions per scenario (CSS px). */
 function makeProjector(scenario: MockScenario, w: number, h: number) {
@@ -113,6 +95,100 @@ function drawBackdrop(cv: HTMLCanvasElement, scenario: MockScenario): void {
   }
 }
 
+interface WorldBackdrop {
+  /** Project an enemy/hero anchor through the REAL camera of a level built from layout data. */
+  projector: HudProjector;
+  frame(dt: number): void;
+}
+
+/**
+ * `?backdrop=world[&id=<levelId>]`: builds a level with WorldBuilder + RenderWorld (like ?scene=level)
+ * and projects the HUD anchors through its camera, using the encounter's slot anchors. Enemy sprites
+ * are the same placeholders levelScene uses. Proves the projector contract on the real renderer.
+ */
+async function makeWorldBackdrop(
+  glCanvas: HTMLCanvasElement,
+  scenario: MockScenario,
+  q: URLSearchParams,
+): Promise<WorldBackdrop> {
+  const { RenderWorld } = await import("../render");
+  const { buildWorld, levelIds, loadLevel, toRenderBiome } = await import("../render/world");
+  const boss = scenario === "boss";
+  const wanted = q.get("id");
+  const id =
+    wanted ??
+    (boss
+      ? levelIds().find((l) => loadLevel(l).encounters.some((e) => e.boss))
+      : levelIds().find((l) => loadLevel(l).biome === (scenario === "cave" ? "cave" : "forest"))) ??
+    levelIds()[0] ??
+    "ch1-l01";
+  const layout = loadLevel(id);
+  const world = new RenderWorld({
+    biome: toRenderBiome(layout.biome),
+    quality: 0,
+    autoQuality: false,
+  });
+  world.init(glCanvas);
+  const handle = buildWorld(layout, world, world.source);
+  const encIndex = boss
+    ? (layout.encounters.find((e) => e.boss)?.index ?? 1)
+    : Number(q.get("enc") ?? 1);
+  const pose = boss ? "boss" : (`battle:${encIndex}` as const);
+  const enc = handle.encounter(encIndex);
+
+  const hero = world.addActor("hero", "idle", { rim: 1.3, blobW: 1.25 });
+  const frames = world.source.frames("hero", "idle");
+  const f0 = frames[0];
+  if (f0) hero.setFrame(f0);
+  hero.place(enc.hero.x, 0, enc.hero.z);
+  world.shadowFor(hero, enc.hero.x, enc.hero.z);
+  const kinds = [
+    { key: "monster.goblin", scale: 1.35, flyY: 0 },
+    { key: "monster.bat", scale: 1.35, flyY: 1.7 },
+    { key: "monster.slimeG", scale: 1.35, flyY: 0 },
+  ];
+  const slots = enc.slots.map((sl, i) => {
+    const k = boss
+      ? { key: "monster.golem", scale: 1.6, flyY: 0 }
+      : (kinds[i % kinds.length] ?? { key: "monster.goblin", scale: 1.35, flyY: 0 });
+    const a = world.addActor(k.key, "idle", { scale: k.scale, rim: 1.4, blobW: k.scale * 1.1 });
+    a.place(sl.x, k.flyY, sl.z);
+    world.shadowFor(a, sl.x, sl.z);
+    return { x: sl.x, z: sl.z, scale: k.scale, flyY: k.flyY };
+  });
+
+  handle.setLetterbox(boss);
+  const cam = handle.cameraPose(pose);
+  world.camera.setTarget(cam);
+  world.camera.snap();
+  handle.update(1 / 60, cam.x);
+  world.update(1 / 60);
+  handle.warmUp(3, cam.x);
+
+  const toPx = (x: number, y: number, z: number): { x: number; y: number } => {
+    const n = world.camera.project(x, y, z);
+    return { x: (n.x * 0.5 + 0.5) * window.innerWidth, y: (-n.y * 0.5 + 0.5) * window.innerHeight };
+  };
+  return {
+    projector(a) {
+      if (a.kind === "hero") {
+        const y = a.part === "head" ? 2.2 : a.part === "feet" ? 0 : 1.1;
+        return toPx(enc.hero.x, y, enc.hero.z);
+      }
+      const sl = slots[a.slot % Math.max(1, slots.length)];
+      if (!sl) return null;
+      const h = 2.0 * sl.scale;
+      const y = sl.flyY + (a.part === "head" ? h : a.part === "feet" ? 0 : h / 2);
+      return toPx(sl.x, y, sl.z);
+    },
+    frame(dt) {
+      handle.update(dt, world.camera.pose.x);
+      world.update(dt, 0);
+      world.render();
+    },
+  };
+}
+
 export function start(glCanvas: HTMLCanvasElement): void {
   const q = new URLSearchParams(location.search);
   const scenarioParam = q.get("scenario") as MockScenario | null;
@@ -134,10 +210,14 @@ export function start(glCanvas: HTMLCanvasElement): void {
 
   const hudCanvas = document.getElementById("hud") as HTMLCanvasElement;
   // backdrop canvas behind the HUD in place of the WebGL scene
-  glCanvas.style.display = "none";
+  const worldMode = q.get("backdrop") === "world";
   const back = document.createElement("canvas");
   back.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
-  glCanvas.parentElement?.insertBefore(back, hudCanvas);
+  if (!worldMode) {
+    glCanvas.style.display = "none";
+    glCanvas.parentElement?.insertBefore(back, hudCanvas);
+  }
+  let worldBackdrop: WorldBackdrop | null = null;
 
   const hud = new Hud(hudCanvas);
   hud.setSettings({
@@ -149,10 +229,14 @@ export function start(glCanvas: HTMLCanvasElement): void {
   const resize = (): void => {
     const w = window.innerWidth;
     const h = window.innerHeight;
+    hud.resize(w, h, window.devicePixelRatio || 1);
+    if (worldMode) {
+      if (worldBackdrop) hud.setProjector(worldBackdrop.projector);
+      return;
+    }
     back.width = w;
     back.height = h;
     drawBackdrop(back, scenario);
-    hud.resize(w, h, window.devicePixelRatio || 1);
     hud.setProjector(makeProjector(scenario, w, h));
   };
   window.addEventListener("resize", resize);
@@ -207,7 +291,11 @@ export function start(glCanvas: HTMLCanvasElement): void {
   window.__hudDebug = api;
 
   const boot = async (): Promise<void> => {
-    if (q.get("fonts") !== "0") await loadFonts();
+    if (q.get("fonts") !== "0") await loadHudFonts();
+    if (worldMode) {
+      worldBackdrop = await makeWorldBackdrop(glCanvas, scenario, q);
+      hud.setProjector(worldBackdrop.projector);
+    }
     hud.pushEvents(driver.start());
     const total = Math.round(at * 60);
     for (let i = 0; i < total; i++) stepOnce(i >= total - 90);
@@ -216,6 +304,7 @@ export function start(glCanvas: HTMLCanvasElement): void {
 
     if (pause) {
       const loop = (): void => {
+        worldBackdrop?.frame(0);
         hud.render(driver.view, 1, 0);
         requestAnimationFrame(loop);
       };
@@ -235,7 +324,7 @@ export function start(glCanvas: HTMLCanvasElement): void {
         stepped = true;
         if (acc >= DT) hud.update(driver.view, 1, DT);
       }
-      void stepped;
+      worldBackdrop?.frame(stepped ? DT : 0);
       hud.render(driver.view, acc / DT, stepped ? DT : 0);
       requestAnimationFrame(loop);
     };

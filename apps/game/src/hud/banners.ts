@@ -1,9 +1,10 @@
 /** Banners: encounter start, wave, boss intro name plate, level clear/fail, downed. */
 
 import type { Ctx } from "./draw";
-import { clamp, diamond, eOut, setFont, txt } from "./draw";
+import { clamp, diamond, setFont, txt } from "./draw";
+import type { Rect } from "./layout";
 import type { HudSettings } from "./settings";
-import { FONT_DISP, GOLD, INK } from "./theme";
+import { FONT_DISP, FONT_UI, GOLD, INK } from "./theme";
 
 export type BannerStyle = "enc" | "wave" | "victory" | "fail" | "down" | "boss";
 
@@ -47,11 +48,11 @@ export function bannerAlpha(age: number, dur: number): number {
 }
 
 const STYLE = {
-  enc: { size: 48, col: "#f4d690", out: "#2a1406", glow: "rgba(255,170,70,0.6)", cy: 0.42 },
-  wave: { size: 44, col: "#bfe4ff", out: "#06101e", glow: "rgba(100,170,255,0.6)", cy: 0.42 },
-  victory: { size: 64, col: "#ffe08a", out: "#2a1406", glow: "rgba(255,170,70,0.7)", cy: 0.35 },
-  fail: { size: 56, col: "#ff8a7a", out: "#1e0606", glow: "rgba(255,60,40,0.6)", cy: 0.4 },
-  down: { size: 48, col: "#ffb0a0", out: "#1e0606", glow: "rgba(255,60,40,0.5)", cy: 0.4 },
+  enc: { size: 48, col: "#f4d690", out: "#2a1406", glow: "rgba(255,170,70,0.6)", cy: 0.26 },
+  wave: { size: 44, col: "#bfe4ff", out: "#06101e", glow: "rgba(100,170,255,0.6)", cy: 0.26 },
+  victory: { size: 64, col: "#ffe08a", out: "#2a1406", glow: "rgba(255,170,70,0.7)", cy: 0.26 },
+  fail: { size: 56, col: "#ff8a7a", out: "#1e0606", glow: "rgba(255,60,40,0.6)", cy: 0.26 },
+  down: { size: 48, col: "#ffb0a0", out: "#1e0606", glow: "rgba(255,60,40,0.5)", cy: 0.26 },
   boss: { size: 78, col: "#f4d690", out: "#0a0406", glow: "rgba(255,170,80,0.7)", cy: 0.64 },
 } as const;
 
@@ -59,7 +60,7 @@ export function drawBanner(c: Ctx, b: Banner, W: number, H: number, s: HudSettin
   const st = STYLE[b.style];
   const k = b.age / b.dur;
   const a = bannerAlpha(b.age, b.dur);
-  const slide = s.reducedMotion ? 0 : k < 0.12 ? (1 - eOut(k / 0.12)) * 160 : 0;
+  const slide = 0;
   const cy = Math.round(H * st.cy);
   const glow = 20 * s.effectsIntensity;
   c.save();
@@ -109,4 +110,20 @@ export function drawBanner(c: Ctx, b: Banner, W: number, H: number, s: HudSettin
   if (b.sub && b.style !== "boss")
     txt(c, b.sub, W / 2 + slide, cy + 26, 14, INK, { align: "center", ls: 3 });
   c.restore();
+}
+
+/** Rect (design px) of a banner's text; plates and pops treat it as an obstacle. */
+export function bannerRect(c: Ctx, b: Banner, W: number, H: number): Rect {
+  const st = STYLE[b.style];
+  const cy = Math.round(H * st.cy);
+  setFont(c, st.size, FONT_DISP, 900);
+  c.letterSpacing = `${b.style === "boss" ? 12 : 10}px`;
+  let w = c.measureText(b.text).width;
+  c.letterSpacing = "3px";
+  setFont(c, 14, FONT_UI, "");
+  w = Math.max(w, c.measureText(b.sub).width);
+  c.letterSpacing = "0px";
+  const top = b.style === "boss" ? cy - 62 : cy - 6 - st.size / 2 - 8;
+  const bottom = b.style === "boss" ? cy + 70 : cy + 38;
+  return { x: Math.round(W / 2 - w / 2 - 12), y: top, w: Math.ceil(w + 24), h: bottom - top };
 }

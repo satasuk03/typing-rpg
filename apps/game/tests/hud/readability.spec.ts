@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import type { HudDebugSnapshot } from "../../src/hud";
+import { checkSnapshot } from "../../src/hud/invariants";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 test.use({ viewport: { width: 1280, height: 720 } });
@@ -26,6 +27,12 @@ async function open(page: import("@playwright/test").Page, c: Case, extra = ""):
     if (m.type() === "error") errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push(String(e)));
+  // offline-first: no third-party requests (fonts are self-hosted)
+  page.on("request", (r) => {
+    const u = r.url();
+    if (!u.startsWith("http://localhost:5173") && !u.startsWith("data:") && !u.startsWith("blob:"))
+      errors.push(`external request: ${u}`);
+  });
   await page.goto(
     `/?scene=hud-test&scenario=${c.scenario}&wpm=${c.wpm}&at=${c.at}&pause=1${extra}`,
   );
@@ -74,6 +81,8 @@ for (const c of CASES) {
       expect(p.contrast, `plate ${p.id} contrast`).toBeGreaterThanOrEqual(4.5);
       expect(p.letters.length).toBeGreaterThan(0);
     }
+    // pops, tags and banners never cover a live plate's letters (same checks as the sweep)
+    expect(checkSnapshot(snap)).toEqual([]);
     expect(errors).toEqual([]);
   });
 }
@@ -83,7 +92,7 @@ test("readability holds over a 40 s sweep of every scenario (40 and 90 wpm)", as
   for (const scenario of ["forest", "cave", "boss", "stress"]) {
     for (const wpm of [40, 90]) {
       const errors = await open(page, { name: "sweep", scenario, wpm, at: 0 });
-      const res = await page.evaluate(() => window.__hudDebug?.sweep(40, 0.25));
+      const res = await page.evaluate(() => window.__hudDebug?.sweep(40, 0.1));
       expect(res?.violations, `${scenario}@${wpm}`).toEqual([]);
       expect(res?.maxPlates).toBeGreaterThan(0);
       expect(errors).toEqual([]);
@@ -112,3 +121,18 @@ test("HUD frame cost with 6 plates and active pops", async ({ page }) => {
   expect(res?.p95Ms ?? 99).toBeLessThan(8);
   expect(errors).toEqual([]);
 });
+
+for (const w of [
+  { name: "world-forest", scenario: "forest", wpm: 40, at: 6.9 },
+  { name: "world-boss", scenario: "boss", wpm: 40, at: 11.9 },
+]) {
+  test(`projector contract on the real renderer: ${w.name}`, async ({ page }) => {
+    test.setTimeout(90_000);
+    const errors = await open(page, w, "&backdrop=world");
+    const snap = await page.evaluate(() => window.__hudDebug?.snapshot());
+    await page.screenshot({ path: path.join(dir, "__shots__", `hud-${w.name}.png`) });
+    expect(snap?.plates.length).toBeGreaterThan(0);
+    expect(snap ? checkSnapshot(snap) : ["no snapshot"]).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}

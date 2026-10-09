@@ -139,9 +139,8 @@ export function drawStatsPanel(p: PanelCtx, v: LevelView): void {
   const y = 18;
   const h = 104;
   frame(c, x, y, w, h);
-  // accuracy scale is not pinned in the interface: accept 0..1, 0..100 or basis points
-  const a = v.stats.accuracy;
-  const acc = Math.round(a <= 1 ? a * 100 : a > 100 ? a / 100 : a);
+  // view.stats.accuracy is basis points (0..10000), like accuracyBp elsewhere
+  const acc = Math.round(v.stats.accuracy / 100);
   const rows: [string, string, string][] = [
     ["WPM", String(Math.round(v.stats.netWpm)), "#fff3d6"],
     ["ACCURACY", `${acc}%`, acc >= 95 ? "#a8f290" : acc >= 85 ? "#ffe070" : "#ff8a7a"],

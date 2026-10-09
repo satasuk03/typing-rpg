@@ -1119,7 +1119,7 @@ export class MockDriver {
       secondWind: null,
       stats: {
         netWpm: wpm,
-        accuracy: total === 0 ? 1 : this.correct / total,
+        accuracy: total === 0 ? 10000 : Math.round((this.correct / total) * 10000),
         burstWpm: wpm,
         elapsedTicks: t,
         activeTicks: t,

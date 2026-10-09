@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_POPS,
+  MAX_STACK_Y,
   POP_LIFETIME,
   POP_STACK_STEP,
   PopSystem,
@@ -99,6 +100,34 @@ describe("damage pops: lifetime and stacking", () => {
       return ps.pops.map((p) => [p.vx, p.stackY]);
     };
     expect(run()).toEqual(run());
+  });
+});
+
+describe("tag merging and stack cap", () => {
+  it("merges same-moment tags into one row and de-duplicates WEAK", () => {
+    const ps = new PopSystem();
+    const a = { kind: "enemy", id: 1 } as const;
+    ps.spawn("crit", "58", a);
+    ps.spawnTag("tag", "CRIT", a);
+    ps.spawnTag("weak", "WEAK", a);
+    ps.spawnTag("weak", "SLASH WEAK", a);
+    const tags = ps.pops.filter((p) => p.kind === "weak" || p.kind === "tag");
+    expect(tags.length).toBe(1);
+    expect(tags[0]?.text).toBe("CRIT · SLASH WEAK");
+    expect(ps.pops.length).toBe(2);
+  });
+  it("does not merge tags on another anchor or after the window", () => {
+    const ps = new PopSystem();
+    ps.spawnTag("tag", "CRIT", { kind: "enemy", id: 1 });
+    ps.spawnTag("tag", "CRIT", { kind: "enemy", id: 2 });
+    ps.update(0.5);
+    ps.spawnTag("tag", "CRIT", { kind: "enemy", id: 1 });
+    expect(ps.pops.length).toBe(3);
+  });
+  it("caps the stack height", () => {
+    const ps = new PopSystem();
+    for (let i = 0; i < 12; i++) ps.spawn("crit", "1", { kind: "hero" });
+    expect(Math.max(...ps.pops.map((p) => p.stackY))).toBeLessThanOrEqual(MAX_STACK_Y);
   });
 });
 

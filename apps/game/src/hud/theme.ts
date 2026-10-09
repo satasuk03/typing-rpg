@@ -4,8 +4,6 @@ export const FONT_PIX =
   '"Press Start 2P", "Silkscreen", ui-monospace, Menlo, Consolas, "Courier New", monospace';
 export const FONT_DISP = '"Cinzel", Georgia, "Times New Roman", serif';
 export const FONT_UI = '"Silkscreen", "Press Start 2P", ui-monospace, Menlo, Consolas, monospace';
-export const GOOGLE_FONTS_URL =
-  "https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap";
 
 export const GOLD = "#e9c46a";
 export const GOLD_HI = "#fff0b8";

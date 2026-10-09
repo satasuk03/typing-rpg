@@ -33,5 +33,17 @@ export function checkSnapshot(s: HudDebugSnapshot): string[] {
       if (a && b && rectsOverlap(a.rect, b.rect, 0)) out.push(`plates ${a.id} and ${b.id} overlap`);
     }
   }
+  // pops, tags and banners must never intersect a live plate's letters
+  const hit = (a: { x: number; y: number; w: number; h: number }, b: typeof a): boolean =>
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  for (const p of s.plates)
+    for (const l of p.letters) {
+      s.popRects.forEach((r, i) => {
+        if (hit(r, l)) out.push(`pop/tag ${i} covers a letter of plate ${p.id}`);
+      });
+      s.bannerRects.forEach((r, i) => {
+        if (hit(r, l)) out.push(`banner ${i} covers a letter of plate ${p.id}`);
+      });
+    }
   return out;
 }

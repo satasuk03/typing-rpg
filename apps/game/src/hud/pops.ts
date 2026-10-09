@@ -38,6 +38,9 @@ export interface Pop {
   vx: number;
   /** Size multiplier (1 = default). */
   size: number;
+  /** Placement offset (design px) chosen by the HUD to dodge plates; cached so pops do not jitter. */
+  offX: number;
+  offY: number;
 }
 
 export const POP_LIFETIME: Record<PopKind, number> = {
@@ -76,6 +79,10 @@ export const POP_STACK_STEP: Record<PopKind, number> = {
 /** Pops spawned on the same anchor within this window are stacked instead of overlapped. */
 export const STACK_WINDOW = 0.45;
 export const MAX_POPS = 28;
+/** Cap on the stack height so many same-tick pops cannot climb the whole screen. */
+export const MAX_STACK_Y = 170;
+
+const TAG_KINDS: readonly PopKind[] = ["weak", "tag", "perfect"];
 
 const anchorKey = (a: PopAnchor): string =>
   a.kind === "enemy"
@@ -116,7 +123,10 @@ export class PopSystem {
       stackY,
       vx: this.rnd() * 14,
       size,
+      offX: 0,
+      offY: 0,
     };
+    pop.stackY = Math.min(pop.stackY, MAX_STACK_Y);
     this.pops.push(pop);
     while (this.pops.length > MAX_POPS) {
       // drop the least important oldest pop (chips first)
@@ -125,6 +135,29 @@ export class PopSystem {
       this.pops.splice(idx, 1);
     }
     return pop;
+  }
+
+  /**
+   * Tags spawned on one anchor in the same moment are merged into ONE row ("CRIT · WEAK").
+   * A "...WEAK" part replaces a shorter "WEAK" part instead of duplicating it.
+   */
+  spawnTag(kind: PopKind, text: string, anchor: PopAnchor): Pop {
+    const key = anchorKey(anchor);
+    const cur = this.pops.find(
+      (p) => TAG_KINDS.includes(p.kind) && anchorKey(p.anchor) === key && p.age < STACK_WINDOW,
+    );
+    if (!cur) return this.spawn(kind, text, anchor);
+    const parts = cur.text.split(" · ");
+    for (const np of text.split(" · ")) {
+      if (parts.includes(np)) continue;
+      const i = np.endsWith("WEAK") ? parts.findIndex((x) => x.endsWith("WEAK")) : -1;
+      if (i >= 0) {
+        if (np.length > (parts[i] ?? "").length) parts[i] = np;
+      } else parts.push(np);
+    }
+    cur.text = parts.join(" · ");
+    if (parts.some((x) => x.endsWith("WEAK"))) cur.kind = "weak";
+    return cur;
   }
 
   update(dt: number): void {

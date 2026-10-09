@@ -3,7 +3,7 @@
  * (transient effects). Never mutates sim state. All public coordinates are CSS pixels.
  */
 import type { EnemyView, LevelView, PlateView, SimEvent } from "@hd2d/sim";
-import { BannerSystem, drawBanner } from "./banners";
+import { BannerSystem, bannerRect, drawBanner } from "./banners";
 import type { Ctx } from "./draw";
 import { clamp, eOut, txt } from "./draw";
 import { EffectLayers, PlateFx } from "./fx";
@@ -100,6 +100,9 @@ export interface HudDebugSnapshot {
   viewport: { w: number; h: number; dpr: number; scale: number };
   plates: HudDebugPlate[];
   pops: number;
+  /** CSS-px bounding boxes of live pops/tags and banner text, for the readability assertion. */
+  popRects: Rect[];
+  bannerRects: Rect[];
   fx: number;
   banners: number;
   frame: { avgMs: number; p95Ms: number; maxMs: number; count: number };
@@ -154,6 +157,8 @@ export class Hud {
   private typoFlash = 0;
   private hurtFlash = 0;
   private frameMs: number[] = [];
+  private popRects: Rect[] = [];
+  private bannerRects: Rect[] = [];
 
   constructor(private canvas: HTMLCanvasElement) {
     const c = canvas.getContext("2d");
@@ -362,7 +367,7 @@ export class Hud {
         const entry = this.entries.get(e.plateId);
         const rect = this.getPlateRect(e.plateId);
         if (entry && (e.reason === "completed" || e.reason === "expired"))
-          this.ghosts.push({ geom: entry.geom, box: { ...entry.box }, age: 0, dur: 0.32 });
+          this.ghosts.push({ geom: entry.geom, box: { ...entry.box }, age: 0, dur: 0.16 });
         this.emit({ type: "plateRemoved", plateId: e.plateId, reason: e.reason, rect });
         break;
       }
@@ -380,15 +385,15 @@ export class Hud {
           anchor,
           e.kind === "skill" ? 1.15 : 1,
         );
-        if (e.weak) this.pops.spawn("weak", "WEAK", anchor);
-        if (e.crit) this.pops.spawn("tag", "CRIT", anchor);
+        if (e.crit) this.pops.spawnTag("tag", "CRIT", anchor);
+        if (e.weak) this.pops.spawnTag("weak", "WEAK", anchor);
         break;
       }
       case "Break":
         this.pops.spawn("break", "BREAK", { kind: "enemy", id: e.enemyId });
         break;
       case "WeaknessRevealed":
-        this.pops.spawn("weak", `${e.damageType.toUpperCase()} WEAK`, {
+        this.pops.spawnTag("weak", `${e.damageType.toUpperCase()} WEAK`, {
           kind: "enemy",
           id: e.enemyId,
         });
@@ -538,6 +543,12 @@ export class Hud {
       const f = this.anchorDesign(e, "feet");
       avoid.push(enemyBarsRect(f.x, f.y));
     }
+    this.bannerRects.length = 0;
+    for (const b of this.banners.banners) {
+      const br = bannerRect(c, b, W, H);
+      avoid.push(br);
+      this.bannerRects.push(this.toCss(br));
+    }
     const minLanes = view.minigame?.lanes ?? 3;
     for (const p of view.plates) {
       const g = measurePlate(c, p);
@@ -686,7 +697,7 @@ export class Hud {
         isTarget: false,
         fx: this.plateFx,
         settings: set,
-        alpha: 1 - k,
+        alpha: (1 - k) * 0.5,
         letterRects: [],
       });
     }
@@ -722,34 +733,172 @@ export class Hud {
     c.setTransform(1, 0, 0, 1, 0, 0);
   }
 
+  /**
+   * Pops are obstacles-aware: a live (or just-completed ghost) plate is a hard obstacle. Each pop is
+   * nudged to the nearest free spot (up / down / sideways) and the chosen offset is cached so it does
+   * not jitter. Rects are recorded for the readability assertion.
+   */
   private drawPops(c: Ctx): void {
     const set = this.settings;
     const s = this.s;
     c.setTransform(this.dpr * s, 0, 0, this.dpr * s, 0, 0);
-    for (const p of this.pops.pops) this.drawPop(c, p, set);
+    const obst: Rect[] = [];
+    for (const en of this.entries.values()) obst.push(inflate(en.box, 4));
+    for (const g of this.ghosts) obst.push(inflate(g.box, 4));
+    this.popRects.length = 0;
+    const placed: Rect[] = [];
+    for (const p of this.pops.pops) {
+      const pose = this.popPose(c, p, set);
+      const base: Rect = { x: pose.x - pose.w / 2, y: pose.y - pose.h / 2, w: pose.w, h: pose.h };
+      const at = (ox: number, oy: number): Rect => ({ ...base, x: base.x + ox, y: base.y + oy });
+      const ok = (r: Rect): boolean =>
+        r.x >= 4 &&
+        r.x + r.w <= this.W - 4 &&
+        r.y >= 56 &&
+        r.y + r.h <= this.H - 4 &&
+        !obst.some((o) => overlapsRect(r, o)) &&
+        !placed.some((o) => overlapsRect(r, o));
+      if (!ok(at(p.offX, p.offY))) {
+        if (ok(at(0, 0))) {
+          p.offX = 0;
+          p.offY = 0;
+        } else {
+          const best = this.freeSpot(base, [...obst, ...placed], ok);
+          p.offX = best.x;
+          p.offY = best.y;
+        }
+      }
+      if (Number.isNaN(p.offX)) {
+        p.offX = 0; // retry next frame
+        p.offY = 0;
+        continue;
+      }
+      const fx = pose.x + p.offX;
+      const fy = pose.y + p.offY;
+      this.drawPop(c, p, set, fx, fy, pose.punch);
+      placed.push(inflate(at(p.offX, p.offY), 2));
+      this.popRects.push(this.toCss(at(p.offX, p.offY)));
+    }
     c.globalAlpha = 1;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
-  private drawPop(c: Ctx, p: Pop, set: HudSettings): void {
+  /** Smallest offset that clears every obstacle; tries single moves, then two-axis combinations. */
+  private freeSpot(
+    base: Rect,
+    obst: readonly Rect[],
+    ok: (r: Rect) => boolean,
+  ): { x: number; y: number } {
+    const gap = 6;
+    const dxs = [0];
+    const dys = [0];
+    for (const o of obst) {
+      if (!overlapsRect(base, o)) continue;
+      dys.push(o.y - gap - (base.y + base.h), o.y + o.h + gap - base.y);
+      dxs.push(o.x - gap - (base.x + base.w), o.x + o.w + gap - base.x);
+    }
+    let best: { x: number; y: number; c: number } | null = null;
+    for (const dx of dxs)
+      for (const dy of dys) {
+        const r: Rect = { ...base, x: base.x + dx, y: base.y + dy };
+        if (!ok(r)) continue;
+        const c = dx * dx + (dy > 0 ? 1.15 : 1) * dy * dy;
+        if (!best || c < best.c) best = { x: dx, y: dy, c };
+      }
+    if (!best) {
+      // crowded: scan a grid around the pop for the nearest free spot
+      for (let dy = -320; dy <= 320; dy += 10)
+        for (let dx = -420; dx <= 420; dx += 12) {
+          const r: Rect = { ...base, x: base.x + dx, y: base.y + dy };
+          if (!ok(r)) continue;
+          const c = dx * dx + dy * dy;
+          if (!best || c < best.c) best = { x: dx, y: dy, c };
+        }
+    }
+    // still nothing (screen full of plates): hide this pop rather than cover a word
+    return best ?? { x: Number.NaN, y: Number.NaN };
+  }
+
+  /** Font + size + animated centre of a pop (design px) and its bounding box. */
+  private popPose(
+    c: Ctx,
+    p: Pop,
+    set: HudSettings,
+  ): { x: number; y: number; w: number; h: number; punch: number } {
     const s = this.s;
     const a = this.popAnchorCss(p.anchor);
     const x = a.x / s + p.vx * p.age;
     let y = a.y / s - p.stackY - 12;
-    const k = p.age / p.dur;
-    c.globalAlpha = popAlpha(p);
     const rm = set.reducedMotion;
-    const sc = popScale(p.age, rm);
-    const intensity = set.effectsIntensity;
-    const punch = 1 + (sc - 1) * Math.max(0.3, intensity);
+    const punch = 1 + (popScale(p.age, rm) - 1) * Math.max(0.3, set.effectsIntensity);
+    let sz = 18;
+    let font = FONT_DISP;
+    let weight = "700";
+    let ls = 0;
+    let text = p.text;
     switch (p.kind) {
       case "dmg":
       case "crit":
       case "hurt": {
         const bounce = rm ? 0 : Math.max(0, Math.sin(Math.min(1, p.age / 0.32) * Math.PI)) * 22;
         y -= bounce + p.age * 18;
-        const base = p.kind === "crit" ? 62 : p.kind === "hurt" ? 40 : 50;
-        const sz = base * p.size * punch;
+        sz = (p.kind === "crit" ? 62 : p.kind === "hurt" ? 40 : 50) * p.size * punch;
+        weight = "900";
+        break;
+      }
+      case "chip":
+        y -= p.age * 30;
+        sz = 18 * p.size * punch;
+        break;
+      case "heal":
+        y -= p.age * 26;
+        sz = 30 * punch;
+        weight = "900";
+        break;
+      case "break":
+        y -= p.age * 10;
+        sz = 64 * punch * p.size;
+        weight = "900";
+        ls = 4;
+        break;
+      case "skill":
+        y -= p.age * 40;
+        sz = 18 * punch;
+        font = FONT_UI;
+        ls = 2;
+        break;
+      case "gold":
+        y -= eOut(Math.min(1, p.age / 0.6)) * 50;
+        sz = 26 * punch;
+        weight = "900";
+        break;
+      default:
+        y -= Math.min(1, p.age / 0.2) * 14;
+        sz = 15 * Math.min(punch, 1.3);
+        font = FONT_UI;
+        ls = 2;
+        break;
+    }
+    c.font = `${weight} ${sz}px ${font}`;
+    c.letterSpacing = `${ls}px`;
+    const tw = c.measureText(text).width;
+    c.letterSpacing = "0px";
+    text = "";
+    const isTag = ["weak", "perfect", "block", "parry", "tag"].includes(p.kind);
+    const w = isTag ? tw + 28 : tw + sz * 0.3;
+    const h = isTag ? sz + 14 : sz * 1.15;
+    return { x, y, w, h, punch };
+  }
+
+  private drawPop(c: Ctx, p: Pop, set: HudSettings, x: number, y: number, punch: number): void {
+    c.globalAlpha = popAlpha(p);
+    const rm = set.reducedMotion;
+    const intensity = set.effectsIntensity;
+    switch (p.kind) {
+      case "dmg":
+      case "crit":
+      case "hurt": {
+        const sz = (p.kind === "crit" ? 62 : p.kind === "hurt" ? 40 : 50) * p.size * punch;
         c.save();
         c.translate(x, y);
         if (p.kind === "crit") c.rotate(-0.08);
@@ -782,8 +931,7 @@ export class Hud {
         c.restore();
         break;
       }
-      case "chip": {
-        y -= p.age * 30;
+      case "chip":
         txt(c, p.text, x, y, 18 * p.size * punch, "#d8d0c0", {
           align: "center",
           f: FONT_DISP,
@@ -791,9 +939,7 @@ export class Hud {
           sw: 4,
         });
         break;
-      }
-      case "heal": {
-        y -= p.age * 26;
+      case "heal":
         txt(c, p.text, x, y, 30 * punch, "#a8f290", {
           align: "center",
           f: FONT_DISP,
@@ -801,9 +947,7 @@ export class Hud {
           sw: 5,
         });
         break;
-      }
       case "break": {
-        y -= p.age * 10;
         const sz = 64 * punch * p.size;
         c.save();
         c.translate(x, y);
@@ -844,12 +988,24 @@ export class Hud {
         c.restore();
         break;
       }
-      case "weak":
-      case "perfect":
-      case "block":
-      case "parry":
-      case "tag": {
-        y -= Math.min(1, p.age / 0.2) * 14;
+      case "skill":
+        txt(c, p.text, x, y, 18 * punch, "#ffd9a0", {
+          align: "center",
+          ls: 2,
+          w: 700,
+          glow: intensity > 0 ? "rgba(255,170,80,0.7)" : null,
+          gb: 10 * intensity,
+        });
+        break;
+      case "gold":
+        txt(c, p.text, x, y, 26 * punch, "#ffd860", {
+          align: "center",
+          f: FONT_DISP,
+          w: 900,
+          sw: 6,
+        });
+        break;
+      default: {
         const col =
           p.kind === "weak"
             ? "#c0287a"
@@ -861,31 +1017,8 @@ export class Hud {
                   ? "#1a8a9a"
                   : "#7a4ab0";
         this.tagPlate(c, x, y, p.text, col, 15 * Math.min(punch, 1.3));
-        break;
-      }
-      case "skill":
-        y -= p.age * 40;
-        txt(c, p.text, x, y, 18 * punch, "#ffd9a0", {
-          align: "center",
-          ls: 2,
-          w: 700,
-          glow: intensity > 0 ? "rgba(255,170,80,0.7)" : null,
-          gb: 10 * intensity,
-        });
-        break;
-      case "gold": {
-        y -= eOut(Math.min(1, p.age / 0.6)) * 50;
-        txt(c, p.text, x, y, 26 * punch, "#ffd860", {
-          align: "center",
-          f: FONT_DISP,
-          w: 900,
-          sw: 6,
-        });
-        break;
       }
     }
-    void k;
-    void x;
   }
 
   private tagPlate(c: Ctx, x: number, y: number, text: string, col: string, sz: number): void {
@@ -949,6 +1082,8 @@ export class Hud {
       viewport: { w: this.cssW, h: this.cssH, dpr: this.dpr, scale: this.s },
       plates,
       pops: this.pops.pops.length,
+      popRects: this.popRects.map((r) => ({ ...r })),
+      bannerRects: this.bannerRects.map((r) => ({ ...r })),
       fx: this.fx.count,
       banners: this.banners.banners.length,
       frame: {
@@ -966,3 +1101,10 @@ export class Hud {
 
 export type { PlateView, PopKind };
 export { BOSS_PLATE_W, ENEMY_BAR_W, keyStreakColor, PLATE_PALETTES };
+
+function inflate(r: Rect, n: number): Rect {
+  return { x: r.x - n, y: r.y - n, w: r.w + 2 * n, h: r.h + 2 * n };
+}
+function overlapsRect(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
