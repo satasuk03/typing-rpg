@@ -136,8 +136,12 @@ export class PooledParticles {
   private readonly spn: Float32Array;
   private readonly rot: Float32Array;
 
-  /** W4: alpha gain applied at upload; TypingWorldFx sets the additive pool to `world.additiveGain` (0.75 forest .. 1 cave). */
+  /** W4: alpha gain applied at upload; TypingWorldFx sets the additive pool to `world.additiveGain` (0.6 forest, 0.5 cave). */
   gain = 1;
+  /** W5: extra alpha gain for glow-kind particles (soft white discs); sparks, pixels and hex shards keep `gain`. */
+  glowGain = 1;
+  /** W5: size factor for glow-kind particles. */
+  glowSize = 1;
 
   constructor(
     cap: number,
@@ -341,12 +345,15 @@ export class PooledParticles {
     const C = this.aCol.array as Float32Array;
     const S = this.aSz.array as Float32Array;
     const gain = this.gain;
+    const glowGain = this.glowGain;
+    const glowSize = this.glowSize;
     let n = 0;
     for (let i = 0; i < this.count; i++) {
       if ((this.delay[i] as number) > 0) continue;
       const mx = this.max[i] as number;
       const k = 1 - (this.life[i] as number) / mx;
       let a = (this.col[i * 4 + 3] as number) * Math.min(1, (1 - k) * 2.2) * gain;
+      if ((this.kind[i] as number) === PK_GLOW) a *= glowGain;
       const fi = this.fadeIn[i] as number;
       if (fi) a *= Math.min(1, k / fi);
       P[n * 3] = this.px[i] as number;
@@ -360,7 +367,9 @@ export class PooledParticles {
       C[n * 4 + 2] = this.col[i * 4 + 2] as number;
       C[n * 4 + 3] = a;
       const s0 = this.size0[i] as number;
-      S[n * 4] = s0 + ((this.size1[i] as number) - s0) * k;
+      S[n * 4] =
+        (s0 + ((this.size1[i] as number) - s0) * k) *
+        ((this.kind[i] as number) === PK_GLOW ? glowSize : 1);
       S[n * 4 + 1] = this.st[i] as number;
       S[n * 4 + 2] = this.kind[i] as number;
       S[n * 4 + 3] = (this.spn[i] as number) ? (this.rot[i] as number) : 0;

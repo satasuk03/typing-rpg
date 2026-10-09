@@ -211,7 +211,7 @@ export class Projectiles {
         s.fire
           .at(s.x, s.y, s.z)
           .size(1.2 + 0.1 * Math.sin(kit.time * 30))
-          .intensity(1.3 * g * kit.glare);
+          .intensity(1.3 * g * kit.glare * kit.caveDim);
         s.fire.mesh.rotation.z += dt * 8;
         s.glow
           .color(1.2, 0.42, 0.1)
@@ -219,7 +219,7 @@ export class Projectiles {
           .size(2.4)
           .intensity(0.6 * g * kit.glare);
         // held light rides with the ball
-        kit.lights.setAura(s.x, s.y, s.z + 0.3, 1, 0.5, 0.18, 3.2 * g * kit.glare, 6);
+        kit.lights.setAura(s.x, s.y, s.z + 0.3, 1, 0.5, 0.18, 3.2 * g * kit.glare * kit.caveDim, 6);
         for (let j = 0; j < kit.n(3); j++) {
           const sp = kit.p(
             s.x + (kit.rnd() - 0.5) * 0.3,

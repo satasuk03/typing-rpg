@@ -87,6 +87,12 @@ interface GodRay {
  *   world.dispose();
  */
 const FOREST_ADD_GAIN = 0.6;
+/** W5: the cave runs exposure 1.3, so the same additive amount clips earlier than on the forest: 0.5 there (was 1; the forest runs 0.6). */
+const CAVE_ADD_GAIN = 0.5;
+/** W5: cave dim of the additive white discs (see `RenderWorld.discGain`). */
+const CAVE_DISC_DIM = 0.6;
+const CAVE_DISC_SIZE = 0.5;
+const CAVE_ARC_DIM = 0.55;
 
 export class RenderWorld {
   readonly scene = new Scene();
@@ -225,7 +231,32 @@ export class RenderWorld {
    * additive flares clip a 96 px window of a bright backdrop to white; this is the one knob that keeps them coloured.
    */
   get additiveGain(): number {
-    return FOREST_ADD_GAIN + (1 - FOREST_ADD_GAIN) * Math.min(1, Math.max(0, this.mood.caveK));
+    return (
+      FOREST_ADD_GAIN +
+      (CAVE_ADD_GAIN - FOREST_ADD_GAIN) * Math.min(1, Math.max(0, this.mood.caveK))
+    );
+  }
+
+  /**
+   * W5 (R3-1): extra gain on the additive white discs (glow and star quads, and glow-kind particles): 1 on the forest (it
+   * already runs `additiveGain` 0.6), `1 - CAVE_DISC_DIM` in the cave, where a stack of them clipped a 96 px window white.
+   * Rings, beams, lines, shards and sparks are not touched, so a hit still reads by shape.
+   */
+  get discGain(): number {
+    return 1 - CAVE_DISC_DIM * Math.min(1, Math.max(0, this.mood.caveK));
+  }
+
+  /**
+   * W5: size factor of the same white discs in the cave. A hit flare that keeps its peak but covers less area punches
+   * without clipping a 96 px window white around the target.
+   */
+  get discSize(): number {
+    return 1 - CAVE_DISC_SIZE * Math.min(1, Math.max(0, this.mood.caveK));
+  }
+
+  /** W5: arc (slash / crit crescent) gain: the 3-4 HDR cores clip a white blob where two crescents cross in the cave. */
+  get arcGain(): number {
+    return 1 - CAVE_ARC_DIM * Math.min(1, Math.max(0, this.mood.caveK));
   }
 
   /** Set the HD-2D look on/off ("raw pixels" comparison mode). */

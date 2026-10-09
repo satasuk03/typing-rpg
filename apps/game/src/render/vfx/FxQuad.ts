@@ -1,5 +1,5 @@
 import { Mesh, PlaneGeometry, type ShaderMaterial, type Vector3 } from "three";
-import { type FxKindId, fxMaterial } from "../materials/fx";
+import { FxKind, type FxKindId, fxMaterial } from "../materials/fx";
 import { HERO_DAMP } from "../materials/heroGuard";
 import type { RenderWorld } from "../RenderWorld";
 
@@ -13,6 +13,8 @@ export class FxQuad {
   private readonly col: Vector3;
   private readonly col2: Vector3;
   private readonly geo: PlaneGeometry;
+  /** W5: white-disc kinds (glow, star, parry disc) take the cave dim and size factors; shapes (ring, beam, line, guard) do not. */
+  private readonly disc: boolean;
 
   constructor(
     private readonly world: RenderWorld,
@@ -20,6 +22,7 @@ export class FxQuad {
     renderOrder = 7,
     seed = 0,
   ) {
+    this.disc = kind === FxKind.Glow || kind === FxKind.Star || kind === FxKind.Disc;
     this.geo = new PlaneGeometry(1, 1);
     this.mat = fxMaterial(world.lighting, kind, [1, 1, 1], [1, 1, 1], 0, seed, HERO_DAMP);
     this.mesh = new Mesh(this.geo, this.mat);
@@ -41,7 +44,7 @@ export class FxQuad {
   }
   /** Intensity (`uI`); the quad is hidden at <= 0. */
   intensity(v: number): this {
-    const g = v * this.world.additiveGain;
+    const g = v * this.world.additiveGain * (this.disc ? this.world.discGain : 1);
     (this.mat.uniforms.uI as { value: number }).value = g;
     this.mesh.visible = g > 0.002;
     return this;
@@ -56,7 +59,8 @@ export class FxQuad {
     return this;
   }
   size(w: number, h: number = w): this {
-    this.mesh.scale.set(w, h, 1);
+    const k = this.disc ? this.world.discSize : 1;
+    this.mesh.scale.set(w * k, h * k, 1);
     return this;
   }
   get visible(): boolean {
