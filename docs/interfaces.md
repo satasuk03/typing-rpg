@@ -2,12 +2,20 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.2** (2026-10-09) |
+| **Doc version** | **1.3** (2026-10-09) |
 | **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **1.3** (2026-10-09): additive changes recorded by the orchestrator after the T1.2–T1.4 implementations, plus the Trial sim.
+  - View: `LevelView.stats.accuracy` and `TrialView.accuracy` are basis points (0..10000).
+  - `LevelResult.stats.damageBySkillM?: Record<ActiveSkillId, number>` (burn included). `SkillView` and `HeroView.statuses` (burn, bleed, freeze, barrier) are populated. `StatusApplied` and `StatusEnded` are emitted. `HeroPose "cast"` is used.
+  - `TutorialCue` triggers: `target` = first combat start; `atb` = first correct char that charges the gauge; `guard` = first guard word shown; `skill` = first plate that charges an equipped skill; `combo` = combo first reaches 5. They are emitted only when the tutorial option is on.
+  - Chips: on any plate, guard plates included, at completion (WordCompleted → GuardWordTyped → PlateRemoved → Hit{chip}). Block and parry resolve at impact. Chips are untyped (never weak, never touch shields) but get the BREAK multiplier.
+  - Trial: `replayTrial(..., opts?: {collectEvents?: boolean})`; exports `resimTrialLog`, `decodeTrialLog`, `trialClaimMismatches`, `trialScore`. `resolveTrial` lives in `trial.ts`. Trial typing reuses `CharCorrect`/`Typo` with `plateId 0` and `kind "trial"`. Comparison is case-sensitive; Escape and `abandon` are ignored.
+  - Sim exports `BALANCE`, `K` and the `meta/*` functions (`computeHeroStats`, `parLoadout`, `parHpM`, `buildLoadout`, …). `critChanceBp(enc, run?)`. `RunState` and `EncounterState` are sim-internal (in `state.ts`).
+  - Balance calls to revisit in T6.1: Fireball 1.3× ATK (−35% vs doc 01; at −40% the skill share fell below 15%). New TS-only keys: `BARRIER_CAP` 3, `DOT_TICK_S` 1, dagger bleed 4 s at 0.1 ATK/s.
 - **1.2** (2026-10-09): T5.2 follow-ups, all in §9.
   - auth/anon device secret: `AuthAnonRequest.deviceSecret`; a known `deviceId` no longer yields tokens by itself.
   - `compress.ts` helpers exported from `@hd2d/shared`.
