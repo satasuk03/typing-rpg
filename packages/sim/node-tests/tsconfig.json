@@ -1,5 +1,12 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": { "types": ["node"], "lib": ["ES2022", "DOM"] },
-  "include": ["./*.ts", "../tests/toy.ts", "../playwright.config.ts"]
+  "include": [
+    "./*.ts",
+    "../tests/toy.ts",
+    "../tests/typingGolden.ts",
+    "../scripts/gen-tables.ts",
+    "./tables.test.ts",
+    "../playwright.config.ts"
+  ]
 }
