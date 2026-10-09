@@ -19,3 +19,6 @@ apps/game/tests/vfx/_zoom.spec.ts
 # T6.2 browser-bot playtest screenshots
 apps/game/tests/level/__bot_shots__/
 apps/game/tests/perf/out/
+
+# contact sheets are committed as JPEG only
+apps/game/tests/vfx/__shots__/sheets/*.png
