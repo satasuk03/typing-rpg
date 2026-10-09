@@ -37,6 +37,11 @@ export const keyStreakTierOf = (streak: number): KeyStreakTier => {
   for (const th of K.KEY_STREAK_TIERS) if (streak >= th) t++;
   return t as KeyStreakTier;
 };
+/** PO 2026-10-09: a typo drops the key streak ONE colour tier (to the floor of the tier below), not to 0. Tier 1 or 0 -> 0. VFX only. */
+export const keyStreakAfterTypo = (streak: number): number => {
+  const t = keyStreakTierOf(streak);
+  return t >= 2 ? (K.KEY_STREAK_TIERS[t - 2] as number) : 0;
+};
 /** ComboMult = 1 + COMBO_PER x min(combo, COMBO_CAP), in basis points (<= 15_000 with the defaults). */
 export const comboMultBp = (combo: number): number =>
   BP + K.COMBO_PER_BP * Math.min(combo, K.COMBO_CAP);
@@ -406,7 +411,7 @@ function typo(state: LevelState, plate: PlateState | null, got: string, emit: Em
     penalty,
   });
   if (steady) emitPassive(state, "steadyHands", null, emit);
-  setKeyStreak(state, 0, emit);
+  setKeyStreak(state, keyStreakAfterTypo(run.keyStreak), emit);
   if (newCombo !== comboBefore) {
     if (hasPassive(run, "comeback")) run.comebackLost += comboBefore - newCombo;
     setCombo(state, newCombo, emit);

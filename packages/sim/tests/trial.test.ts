@@ -129,7 +129,7 @@ describe("Trial rules", () => {
     expect(t.typedIndex).toBe(0);
   });
 
-  test("a typo resets the key streak (and its tier); correct keys build it", () => {
+  test("a typo at tier 1 resets the key streak to 0 (and its tier); correct keys build it", () => {
     const p = passageOf(def, SEED);
     const s = createTrial(def, SEED);
     const events = ev(s, typeAt(p.slice(0, 12)));
@@ -140,6 +140,21 @@ describe("Trial rules", () => {
     expect(s.keyStreak).toBe(0);
     expect(after.map((e) => e.type)).toEqual(["Typo", "KeyStreakTierChanged"]);
     expect(getTrialView(s).keyStreakTier).toBe(0);
+  });
+
+  test("a typo drops the key streak one tier: 30 (T2) -> 10 (T1), then 10 -> 0; the score inputs are unaffected", () => {
+    const p = passageOf(def, SEED);
+    const s = createTrial(def, SEED);
+    ev(s, typeAt(p.slice(0, 30)));
+    expect(getTrialView(s).keyStreakTier).toBe(2);
+    const e1 = ev(s, [{ tick: 30, key: "#" }]);
+    expect(s.keyStreak).toBe(10);
+    expect(e1.filter((e) => e.type === "KeyStreakTierChanged")).toMatchObject([
+      { from: 2, to: 1, keyStreak: 10 },
+    ]);
+    ev(s, [{ tick: 31, key: "#" }]);
+    expect(s.keyStreak).toBe(0);
+    expect(s.typos).toBe(2);
   });
 
   test("spaces are typed characters: they count as correct chars, and a missing space is a typo", () => {

@@ -135,8 +135,9 @@ export function applyTrialInput(state: TrialState, input: SimInput): SimEvent[] 
     const before = state.keyStreak;
     const from = state.keyStreakTier;
     state.typos++;
-    state.keyStreak = 0;
-    state.keyStreakTier = 0;
+    // PO 2026-10-09: a typo drops the streak one colour tier (VFX only; not in score or claim). Same rule as typing.ts.
+    state.keyStreak = from >= 2 ? (STREAK_TIERS[from - 2] as number) : 0;
+    state.keyStreakTier = streakTier(state.keyStreak);
     state.lastTypoTick = tick;
     events.push({
       type: "Typo",
@@ -152,7 +153,15 @@ export function applyTrialInput(state: TrialState, input: SimInput): SimEvent[] 
       keyStreakBefore: before,
       penalty: "none",
     });
-    if (from !== 0) events.push({ type: "KeyStreakTierChanged", tick, from, to: 0, keyStreak: 0 });
+    if (state.keyStreakTier !== from) {
+      events.push({
+        type: "KeyStreakTierChanged",
+        tick,
+        from,
+        to: state.keyStreakTier,
+        keyStreak: state.keyStreak,
+      });
+    }
   }
   return events;
 }
