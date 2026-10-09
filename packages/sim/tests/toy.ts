@@ -22,6 +22,8 @@ export const TOY_DURATION_TICKS = 600;
 export type ToyState = TrialState & { rng: RngState; acc: number; keys: number; log: number[] };
 
 export function createToy(seed: number): ToyState {
+  // The toy is a bare kernel fixture: it has none of the real TrialState fields (T5.1), so the object is cast. Its
+  // golden hashes (fixtures/golden-replay.json) depend on this exact shape.
   return {
     kind: "trial",
     simVersion: 1,
@@ -31,7 +33,7 @@ export function createToy(seed: number): ToyState {
     acc: 0,
     keys: 0,
     log: [],
-  };
+  } as unknown as ToyState;
 }
 
 const terminal = (s: ToyState): boolean => s.tick >= TOY_DURATION_TICKS;

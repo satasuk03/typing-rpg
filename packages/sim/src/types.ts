@@ -190,7 +190,18 @@ export interface TrialState {
   kind: "trial";
   simVersion: 1;
   tick: Tick;
-  seed: number /* ...sim-internal */;
+  seed: number;
+  // ---- sim-internal (trial.ts); plain data ----
+  trialId: string;
+  durationTicks: number;
+  passage: string;
+  started: boolean; // true after the first accepted key (the client clock origin, D25)
+  typedIndex: number; // chars [0, typedIndex) are typed; stop-on-error: a typo does not advance it
+  correctChars: number;
+  typos: number;
+  keyStreak: number;
+  keyStreakTier: 0 | 1 | 2 | 3 | 4;
+  lastTypoTick: number; // -1 = none
 }
 /** Sim-internal shapes (plain data); real definitions live in state.ts (T1.2). Re-exported under the contract names. */
 export type { EncounterState, RunState } from "./state.ts";

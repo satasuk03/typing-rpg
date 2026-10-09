@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import { build } from "esbuild";
 import { goldenHashes } from "../tests/toy.ts";
+import { type TrialGolden, trialGoldens } from "../tests/trialHarness.ts";
 import {
   type CombatGolden,
   combatGoldens,
@@ -24,7 +25,12 @@ const typingGolden = readJson<{
   combatGoldens: Record<string, CombatGolden>;
 }>("../tests/fixtures/golden-typing.json");
 
+const trialGolden = readJson<{ goldens: Record<string, TrialGolden> }>(
+  "../tests/fixtures/golden-trial.json",
+);
+
 type Parity = {
+  trialGoldens: () => Record<string, TrialGolden>;
   goldenHashes: () => Record<string, string>;
   typingGoldens: () => Record<string, TypingGolden>;
   combatGoldens: () => Record<string, CombatGolden>;
@@ -69,6 +75,20 @@ test("typing-only level: Chromium scripted-session replays equal Node's and the 
   console.log("browser:", JSON.stringify(browser));
   expect(browser).toEqual(node);
   expect(browser).toEqual(typingGolden.goldens);
+});
+
+test("Typing Trial: Chromium scripted-session replays equal Node's and the golden fixture", async ({
+  page,
+}) => {
+  await loadBundle(page);
+  const browser = await page.evaluate(() =>
+    (globalThis as unknown as { __parity: Parity }).__parity.trialGoldens(),
+  );
+  const node = trialGoldens();
+  console.log("node   :", JSON.stringify(node));
+  console.log("browser:", JSON.stringify(browser));
+  expect(browser).toEqual(node);
+  expect(browser).toEqual(trialGolden.goldens);
 });
 
 test("combat replays (reference bot: boss, shields, Second Wind): Chromium equals Node and the golden fixture", async ({

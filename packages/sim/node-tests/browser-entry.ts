@@ -1,4 +1,5 @@
 import { goldenHashes } from "../tests/toy.ts";
+import { type TrialGolden, trialGoldens } from "../tests/trialHarness.ts";
 import {
   type CombatGolden,
   combatGoldens,
@@ -12,10 +13,12 @@ import {
       goldenHashes: () => Record<string, string>;
       typingGoldens: () => Record<string, TypingGolden>;
       combatGoldens: () => Record<string, CombatGolden>;
+      trialGoldens: () => Record<string, TrialGolden>;
     };
   }
 ).__parity = {
   goldenHashes,
   typingGoldens,
   combatGoldens,
+  trialGoldens,
 };

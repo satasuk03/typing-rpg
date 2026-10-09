@@ -116,6 +116,7 @@ export function replayTrial(
   def: ResolvedTrial,
   seed: number,
   inputs: readonly SimInput[],
+  opts?: { collectEvents?: boolean },
 ): ReplayResult<TrialState, TrialResult> {
   return runReplay<TrialState, TrialResult>(
     {
@@ -128,5 +129,6 @@ export function replayTrial(
       maxTick: def.durationTicks,
     },
     inputs,
+    opts,
   );
 }

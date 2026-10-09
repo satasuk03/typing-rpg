@@ -1,0 +1,42 @@
+{
+  "description": "Scripted Typing Trial sessions (tests/trialHarness.ts) on a synthetic 4-passage pool, replayed through replayTrial(): final-state hash, hdk1 log hash and result per seed. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
+  "simVersion": 1,
+  "goldens": {
+    "1": {
+      "hash": "0129c833",
+      "log": "7e416d93",
+      "correctChars": 954,
+      "typos": 65,
+      "wpmX100": 19080,
+      "accuracyBp": 9362,
+      "inputs": 1052
+    },
+    "42": {
+      "hash": "eb67367f",
+      "log": "dc40ce8f",
+      "correctChars": 972,
+      "typos": 69,
+      "wpmX100": 19440,
+      "accuracyBp": 9337,
+      "inputs": 1076
+    },
+    "2024": {
+      "hash": "611530b9",
+      "log": "2a7d0b38",
+      "correctChars": 971,
+      "typos": 75,
+      "wpmX100": 19420,
+      "accuracyBp": 9282,
+      "inputs": 1075
+    },
+    "3735928559": {
+      "hash": "120954b7",
+      "log": "1e0d3c7d",
+      "correctChars": 963,
+      "typos": 75,
+      "wpmX100": 19260,
+      "accuracyBp": 9277,
+      "inputs": 1074
+    }
+  }
+}
