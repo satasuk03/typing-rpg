@@ -1,0 +1,463 @@
+/** Bars and panels: hero HP/ATB, skills, stats, combo + key streak, enemy bars, boss plate. */
+import type { EnemyView, LevelView, SkillView } from "@hd2d/sim";
+import type { Ctx } from "./draw";
+import { bar, clamp, damageIcon, diamond, frame, shieldBadge, txt } from "./draw";
+import type { Rect } from "./layout";
+import type { HudSettings } from "./settings";
+import {
+  COMBO_TIER_COLORS,
+  COMBO_TIER_NAMES,
+  FONT_DISP,
+  GOLD,
+  GOLD_HI,
+  INK,
+  KEY_STREAK_NAMES,
+  KEY_STREAK_THRESHOLDS,
+  keyStreakColor,
+  keyStreakProgress,
+} from "./theme";
+
+export const HERO_PANEL = { x: 22, y: 18, w: 340, h: 104 } as const;
+export const STATS_PANEL_W = 220;
+export const BOSS_PLATE_W = 500;
+export const BOSS_PLATE_H = 78;
+export const SKILL_R = 32;
+
+export interface PanelCtx {
+  c: Ctx;
+  W: number;
+  H: number;
+  time: number;
+  settings: HudSettings;
+  /** Smoothed (interpolated) values supplied by the Hud. */
+  heroHpTrail: number;
+  atbPulse: number;
+  atbIgnite: number;
+  comboPulse: number;
+  tierFlash: number;
+}
+
+export const heroAtbRect = (): Rect => ({
+  x: HERO_PANEL.x + 136,
+  y: HERO_PANEL.y + 82,
+  w: 150,
+  h: 8,
+});
+
+export function drawHeroPanel(p: PanelCtx, v: LevelView, atbFrac: number, hpFrac: number): void {
+  const { c, time, settings } = p;
+  const { x, y, w, h } = HERO_PANEL;
+  frame(c, x, y, w, h);
+  // diamond emblem
+  const sz = 70;
+  const px = x + 12;
+  const py = y + 17;
+  c.save();
+  c.translate(px + sz / 2, py + sz / 2);
+  c.rotate(Math.PI / 4);
+  const d = sz * 0.7;
+  c.fillStyle = "#0a0810";
+  c.fillRect(-d / 2 - 3, -d / 2 - 3, d + 6, d + 6);
+  const gr = c.createLinearGradient(-d / 2, -d / 2, d / 2, d / 2);
+  gr.addColorStop(0, "#3a5a68");
+  gr.addColorStop(1, "#16222e");
+  c.fillStyle = gr;
+  c.fillRect(-d / 2, -d / 2, d, d);
+  c.strokeStyle = GOLD;
+  c.lineWidth = 2;
+  c.strokeRect(-d / 2, -d / 2, d, d);
+  c.rotate(-Math.PI / 4);
+  txt(c, "A", 0, 2, 26, "#fff4dc", { f: FONT_DISP, w: 900, align: "center", sw: 4 });
+  c.restore();
+  const tx = x + 92;
+  txt(c, "ARIN", tx, y + 27, 24, "#fff4dc", { f: FONT_DISP, w: 700, ls: 2 });
+  txt(c, v.hero.archetype.toUpperCase(), x + w - 18, y + 27, 12, "#b8a8c8", {
+    align: "right",
+    ls: 2,
+  });
+  const hpCol0 = hpFrac > 0.5 ? "#a8f290" : hpFrac > 0.25 ? "#ffe070" : "#ff7a6a";
+  const hpCol1 = hpFrac > 0.5 ? "#3a9a48" : hpFrac > 0.25 ? "#c08a20" : "#b02838";
+  txt(c, "HP", tx, y + 56, 12, "#9ff0a0");
+  bar(c, tx + 28, y + 51, w - 92 - 28 - 12, 11, hpFrac, hpCol0, hpCol1, p.heroHpTrail, {
+    trailCol: "#ff6a5a",
+  });
+  txt(c, `${Math.max(0, Math.round(v.hero.hp))} / ${v.hero.maxHp}`, x + w - 14, y + 72, 12, INK, {
+    align: "right",
+  });
+  // ATB gauge: full / ignite state
+  const r = heroAtbRect();
+  const full = atbFrac >= 0.999;
+  txt(c, "ATB", tx, y + 86, 12, "#8fe0ff");
+  const blink = full && !settings.reducedFlash && Math.floor(time * 8) % 2 === 0;
+  bar(
+    c,
+    r.x,
+    r.y,
+    r.w,
+    r.h,
+    atbFrac,
+    full ? (blink ? "#fff4b0" : "#ffd25a") : "#a8f0ff",
+    full ? "#ff9a30" : "#2f88e8",
+    undefined,
+    { ticks: 4 },
+  );
+  if (full || p.atbIgnite > 0) {
+    c.save();
+    if (settings.effectsIntensity > 0) {
+      c.shadowColor = "rgba(255,200,90,0.9)";
+      c.shadowBlur = 14 * settings.effectsIntensity;
+    }
+    c.strokeStyle = "rgba(255,220,140,0.9)";
+    c.strokeRect(r.x - 0.5, r.y - 0.5, r.w + 1, r.h + 1);
+    c.restore();
+    if (full) txt(c, "FULL", r.x + r.w + 6, r.y + 5, 11, GOLD_HI, { stroke: true });
+  }
+  if (p.atbPulse > 0) {
+    c.save();
+    c.globalCompositeOperation = "lighter";
+    c.globalAlpha = p.atbPulse * (settings.reducedFlash ? 0.4 : 0.8);
+    c.fillStyle = "#bfe8ff";
+    c.fillRect(r.x, r.y - 2, r.w * clamp(atbFrac, 0, 1), r.h + 4);
+    c.restore();
+  }
+  // barrier + second wind + status chips
+  let cx = tx;
+  if (v.hero.barrierCharges > 0) {
+    txt(c, `BARRIER ${v.hero.barrierCharges}`, cx, y + 71, 11, "#9fd8ff");
+    cx += 92;
+  }
+  if (v.hero.secondWindAvailable) {
+    diamond(c, cx + 5, y + 71, 5, "#5af0e0");
+    txt(c, "2ND WIND", cx + 14, y + 71, 11, "#9ffff0");
+  }
+}
+
+export function drawStatsPanel(p: PanelCtx, v: LevelView): void {
+  const { c, W } = p;
+  const w = STATS_PANEL_W;
+  const x = W - 22 - w;
+  const y = 18;
+  const h = 104;
+  frame(c, x, y, w, h);
+  // accuracy scale is not pinned in the interface: accept 0..1, 0..100 or basis points
+  const a = v.stats.accuracy;
+  const acc = Math.round(a <= 1 ? a * 100 : a > 100 ? a / 100 : a);
+  const rows: [string, string, string][] = [
+    ["WPM", String(Math.round(v.stats.netWpm)), "#fff3d6"],
+    ["ACCURACY", `${acc}%`, acc >= 95 ? "#a8f290" : acc >= 85 ? "#ffe070" : "#ff8a7a"],
+    ["GOLD", String(v.goldCollected), "#ffd860"],
+  ];
+  rows.forEach(([k, val, col], i) => {
+    txt(c, k, x + 20, y + 28 + i * 25, 12, "#b0a0c0", { ls: 1 });
+    txt(c, val, x + w - 20, y + 28 + i * 25, 16, col, { align: "right", f: FONT_DISP, w: 700 });
+  });
+}
+
+export const COMBO_AREA = (W: number): Rect => ({ x: W - 252, y: 128, w: 232, h: 170 });
+
+/** Word combo (mechanical) + key streak (VFX tier colours) - hybrid PO decision. */
+export function drawComboDisplay(p: PanelCtx, v: LevelView): void {
+  const { c, W, time, settings } = p;
+  const rm = settings.reducedMotion;
+  const right = W - 30;
+  const y0 = 128;
+  if (v.combo >= 2) {
+    const sc = 1 + (rm ? 0 : p.comboPulse * 0.28);
+    const col = COMBO_TIER_COLORS[v.comboTier] ?? "#fff0c8";
+    txt(c, String(v.combo), right - 96, y0 + 34, 50 * sc, col, {
+      align: "right",
+      f: FONT_DISP,
+      w: 900,
+      sw: 7,
+      glow: v.comboTier >= 2 && settings.effectsIntensity > 0 ? "rgba(255,150,60,0.8)" : null,
+      gb: 18 * settings.effectsIntensity,
+    });
+    txt(c, "COMBO", right, y0 + 26, 15, INK, { align: "right", ls: 2 });
+    const tn = COMBO_TIER_NAMES[v.comboTier] ?? "";
+    txt(c, `x${v.comboMult.toFixed(1)}${tn ? `  ${tn}` : ""}`, right, y0 + 48, 12, col, {
+      align: "right",
+    });
+  }
+  // key streak
+  const ks = v.keyStreak;
+  const prog = keyStreakProgress(ks);
+  const tier = Math.max(v.keyStreakTier, prog.tier);
+  const col = keyStreakColor(tier, time, rm);
+  const sy = y0 + 76;
+  if (ks > 0) {
+    const sc = 1 + (rm ? 0 : p.tierFlash * 0.25);
+    txt(c, String(ks), right - 132, sy + 2, 30 * sc, col, {
+      align: "right",
+      f: FONT_DISP,
+      w: 900,
+      sw: 5,
+      glow: tier >= 1 && settings.effectsIntensity > 0 ? col : null,
+      gb: 12 * settings.effectsIntensity,
+    });
+    txt(c, "KEY STREAK", right, sy - 8, 12, INK, { align: "right", ls: 1 });
+    const name = KEY_STREAK_NAMES[tier] ?? "";
+    if (name) txt(c, name, right, sy + 8, 12, col, { align: "right", ls: 2 });
+    // progress to next tier, segmented at 10 / 25 / 50 / 100
+    const bw = 190;
+    const bx = right - bw;
+    const by = sy + 22;
+    c.fillStyle = "rgba(0,0,0,0.8)";
+    c.fillRect(bx - 2, by - 2, bw + 4, 9);
+    c.fillStyle = "#1e1624";
+    c.fillRect(bx, by, bw, 5);
+    const total = KEY_STREAK_THRESHOLDS[KEY_STREAK_THRESHOLDS.length - 1] ?? 100;
+    c.fillStyle = col;
+    c.fillRect(bx, by, bw * clamp(ks / total, 0, 1), 5);
+    for (let i = 1; i < KEY_STREAK_THRESHOLDS.length; i++) {
+      const t = KEY_STREAK_THRESHOLDS[i] ?? 0;
+      const mx = bx + (bw * t) / total;
+      c.fillStyle = ks >= t ? "#ffffff" : "rgba(255,255,255,0.45)";
+      c.fillRect(mx - 1, by - 3, 2, 11);
+    }
+  }
+}
+
+function skillName(id: string): string {
+  const m: Record<string, string> = {
+    slashWave: "SLASH WAVE",
+    piercingThrust: "PIERCE",
+    fireball: "FIREBALL",
+    frostLock: "FROST LOCK",
+    mendingLight: "MENDING",
+    aegis: "AEGIS",
+  };
+  return m[id] ?? id.toUpperCase();
+}
+function skillIcon(id: string): string {
+  const m: Record<string, string> = {
+    slashWave: "slash",
+    piercingThrust: "pierce",
+    fireball: "fire",
+    frostLock: "ice",
+    mendingLight: "light",
+    aegis: "shield",
+  };
+  return m[id] ?? "arcane";
+}
+const SKILL_COL: Record<string, string> = {
+  fire: "#ff9a40",
+  ice: "#8ae0ff",
+  light: "#fff08a",
+  slash: "#e8eef6",
+  pierce: "#b8e0ff",
+  blunt: "#d8b080",
+  arcane: "#d49aff",
+  shield: "#8ab8ff",
+};
+
+export const skillCenter = (i: number, H: number): { x: number; y: number } => ({
+  x: 64 + i * 92,
+  y: H - 82,
+});
+export const SKILL_AREA = (H: number): Rect => ({ x: 20, y: H - 150, w: 200, h: 134 });
+
+export function drawSkill(p: PanelCtx, sk: SkillView, charge: number): void {
+  const { c, time, settings } = p;
+  const { x: cx, y: cy } = skillCenter(sk.slot, p.H);
+  const R = SKILL_R;
+  const ic = skillIcon(sk.id);
+  const col = SKILL_COL[ic] ?? "#ffffff";
+  c.beginPath();
+  c.arc(cx, cy, R + 7, 0, 7);
+  c.fillStyle = "rgba(8,6,12,0.88)";
+  c.fill();
+  c.lineWidth = 3;
+  c.strokeStyle = "#000";
+  c.stroke();
+  c.lineWidth = 1.5;
+  c.strokeStyle = "#7a6448";
+  c.stroke();
+  c.beginPath();
+  c.arc(cx, cy, R, 0, 7);
+  c.fillStyle = "#14101c";
+  c.fill();
+  damageIcon(c, ic, cx, cy, 13);
+  const prog = clamp(sk.ready ? 1 : charge, 0, 1);
+  if (!sk.ready) {
+    c.beginPath();
+    c.moveTo(cx, cy);
+    c.arc(cx, cy, R, -Math.PI / 2 + prog * Math.PI * 2, Math.PI * 1.5);
+    c.closePath();
+    c.fillStyle = "rgba(6,4,10,0.62)";
+    c.fill();
+  }
+  c.beginPath();
+  c.arc(cx, cy, R + 3.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * prog);
+  c.lineWidth = 4;
+  c.strokeStyle = col;
+  c.stroke();
+  if (sk.ready && settings.effectsIntensity > 0) {
+    c.save();
+    c.globalCompositeOperation = "lighter";
+    const a =
+      (0.25 + (settings.reducedFlash ? 0 : 0.15 * Math.sin(time * 5))) * settings.effectsIntensity;
+    const rg = c.createRadialGradient(cx, cy, 0, cx, cy, R * 1.9);
+    rg.addColorStop(0, `rgba(255,200,110,${a})`);
+    rg.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = rg;
+    c.fillRect(cx - R * 2, cy - R * 2, R * 4, R * 4);
+    c.restore();
+  }
+  txt(c, skillName(sk.id), cx, cy + R + 22, 11, "#d8c8e8", { align: "center", ls: 1 });
+  txt(
+    c,
+    sk.ready ? "READY" : `${Math.round(prog * 100)}%`,
+    cx,
+    cy + R + 38,
+    11,
+    sk.ready ? GOLD_HI : "#a898b8",
+    {
+      align: "center",
+    },
+  );
+}
+
+// ---------------------------------------------------------------- enemies
+
+export const ENEMY_BAR_W = 88;
+export const enemyBarsRect = (fx: number, fy: number): Rect => ({
+  x: fx - 74,
+  y: fy + 8,
+  w: 156,
+  h: 48,
+});
+
+export interface EnemyBarState {
+  hpFrac: number;
+  hpTrail: number;
+  atbFrac: number;
+}
+
+export function drawEnemyBars(
+  p: PanelCtx,
+  e: EnemyView,
+  fx: number,
+  fy: number,
+  st: EnemyBarState,
+): void {
+  const { c } = p;
+  const x = fx;
+  const y = fy + 14;
+  const broken = e.brokenTicksLeft > 0;
+  bar(c, x - 44, y, ENEMY_BAR_W, 7, st.hpFrac, "#ff8a7a", "#b42838", st.hpTrail);
+  bar(
+    c,
+    x - 44,
+    y + 12,
+    ENEMY_BAR_W,
+    4,
+    broken ? 0 : st.atbFrac,
+    e.isGuard ? "#ff8060" : "#ffd070",
+    e.isGuard ? "#c02818" : "#ff8a30",
+    undefined,
+    { edge: "rgba(0,0,0,0)" },
+  );
+  if (e.shieldMax > 0) shieldBadge(c, x - 58, y + 6, String(e.shield), broken, 13);
+  e.weaknesses.forEach((wk, i) => {
+    damageIcon(c, wk.type, x + 58 + i * 20, y + 6, 6, wk.revealed);
+  });
+  if (broken) {
+    txt(c, `BREAK ${Math.ceil(e.brokenTicksLeft / 60)}`, x, y + 32, 13, "#ffffff", {
+      align: "center",
+      glow: "rgba(120,180,255,0.9)",
+    });
+  } else if (e.statuses.length > 0) {
+    e.statuses.slice(0, 4).forEach((s, i) => {
+      const sx = x - 44 + i * 30;
+      c.fillStyle = "rgba(0,0,0,0.75)";
+      c.fillRect(sx, y + 22, 28, 14);
+      txt(
+        c,
+        `${s.id.slice(0, 3).toUpperCase()}${s.stacks > 1 ? s.stacks : ""}`,
+        sx + 14,
+        y + 29,
+        10,
+        "#e8d8ff",
+        {
+          align: "center",
+          stroke: false,
+        },
+      );
+    });
+  }
+}
+
+export const bossPlateRect = (W: number): Rect => ({
+  x: Math.round(W / 2 - BOSS_PLATE_W / 2),
+  y: 18,
+  w: BOSS_PLATE_W,
+  h: BOSS_PLATE_H,
+});
+
+export function drawBossPlate(p: PanelCtx, v: LevelView, e: EnemyView, st: EnemyBarState): void {
+  const { c, W } = p;
+  const boss = v.boss;
+  if (!boss) return;
+  const r = bossPlateRect(W);
+  frame(c, r.x, r.y, r.w, r.h, { col: "#c06a5a" });
+  txt(c, boss.name.toUpperCase(), W / 2, r.y + 24, 22, "#ffe0c0", {
+    align: "center",
+    f: FONT_DISP,
+    w: 900,
+    ls: 4,
+    glow: "rgba(255,120,80,0.6)",
+    gb: 10 * p.settings.effectsIntensity,
+  });
+  const bx = r.x + 56;
+  const bw = r.w - 112;
+  bar(c, bx, r.y + 40, bw, 11, st.hpFrac, "#ff9a6a", "#a82030", st.hpTrail, {
+    trailCol: "#fff0d0",
+    ticks: 3,
+  });
+  if (boss.gateHpFrac !== null) {
+    const gx = bx + bw * clamp(boss.gateHpFrac, 0, 1);
+    c.fillStyle = "#ffffff";
+    c.fillRect(gx - 1, r.y + 36, 2, 19);
+    diamond(c, gx, r.y + 35, 4, "#ffffff");
+  }
+  const broken = e.brokenTicksLeft > 0;
+  bar(c, bx, r.y + 56, bw, 4, broken ? 0 : st.atbFrac, "#ffd070", "#ff8a30", undefined, {
+    edge: "rgba(0,0,0,0)",
+  });
+  // phase pips
+  txt(c, "PHASE", bx, r.y + 68, 10, "#c8b8d8", { ls: 1, stroke: false });
+  for (let i = 1; i <= 3; i++) {
+    const px = bx + 52 + i * 18;
+    diamond(c, px, r.y + 68, 6, "#0c0910");
+    diamond(c, px, r.y + 68, 4.5, i <= boss.phase ? GOLD : "#3a3040");
+  }
+  txt(c, boss.title.toUpperCase(), r.x + r.w - 60, r.y + 68, 10, "#c8b8d8", {
+    align: "right",
+    ls: 1,
+    stroke: false,
+  });
+  if (e.shieldMax > 0) shieldBadge(c, r.x + 30, r.y + 46, String(e.shield), broken, 17);
+  e.weaknesses.forEach((wk, i) => {
+    damageIcon(c, wk.type, r.x + r.w - 40 + (i - 0.5) * 22, r.y + 46, 7, wk.revealed);
+  });
+  if (broken)
+    txt(c, "BREAK", W / 2, r.y + r.h + 16, 16, "#ffffff", {
+      align: "center",
+      f: FONT_DISP,
+      w: 900,
+      glow: "rgba(120,180,255,0.9)",
+    });
+}
+
+export const TOP_LABEL_RECT = (W: number): Rect => ({ x: W / 2 - 150, y: 18, w: 300, h: 34 });
+
+export function drawTopLabel(p: PanelCtx, v: LevelView): void {
+  const { c, W } = p;
+  const r = TOP_LABEL_RECT(W);
+  frame(c, r.x, r.y, r.w, r.h, { crest: false });
+  const enc =
+    v.encounterIndex === null ? "" : `ENCOUNTER ${v.encounterIndex + 1}/${v.encounterCount}`;
+  const wave = v.waveIndex === null ? "" : `  WAVE ${v.waveIndex + 1}`;
+  const label = enc ? enc + wave : v.phase === "walk" ? "EXPLORING" : v.levelId.toUpperCase();
+  txt(c, label, W / 2, r.y + 18, 14, "#f6e6c4", { align: "center", f: FONT_DISP, w: 700, ls: 2 });
+}

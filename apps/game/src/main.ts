@@ -29,6 +29,12 @@ function boot(): void {
     return;
   }
 
+  // Dev-only route: ?scene=hud-test (src/dev/hudTestScene.ts).
+  if (new URLSearchParams(location.search).get("scene") === "hud-test") {
+    void import("./dev/hudTestScene").then((m) => m.start(glCanvas));
+    return;
+  }
+
   const renderer = new WebGLRenderer({ canvas: glCanvas, antialias: false });
   renderer.setClearColor(0x080a12, 1);
   const scene = new Scene();
