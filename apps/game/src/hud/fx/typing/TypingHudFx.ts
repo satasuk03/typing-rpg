@@ -856,6 +856,7 @@ export class TypingHudFx {
       this.sparks.count > 0 ||
       this.guard.count > 0 ||
       this.streaks.count > 0 ||
+      this.orbs.count > 0 ||
       this.shatter.fragments > 0;
     if (anyFx) this.buildKeepOut();
     c.save();
@@ -873,8 +874,9 @@ export class TypingHudFx {
         I_ELEMENT + 5,
       );
     this.shatter.drawAbove(c, S, this.sprites, set.effectsIntensity);
-    c.restore();
+    // word orbs (sentence plates): collapse streaks + orb glow sit beside the next word's first letter
     if (this.orbs.count > 0) this.orbs.draw(c, S, this.sprites, set.effectsIntensity);
+    c.restore();
     c.globalCompositeOperation = "source-over";
     if (this.benching) tp = this.lap("shatter", tp);
     if (this.streaks.count > 0) {
@@ -979,6 +981,7 @@ export class TypingHudFx {
       this.sparks.count > 0 ||
       this.guard.count > 0 ||
       this.streaks.count > 0 ||
+      this.orbs.count > 0 ||
       this.shatter.fragments > 0
     ) {
       this.buildKeepOut();
