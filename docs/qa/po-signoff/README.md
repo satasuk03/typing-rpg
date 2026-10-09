@@ -30,7 +30,7 @@ These stills come from current `main`, after the round-2 fixes: W3 and W4 (world
 | 13 | `13-finisher-x-slash.jpg` | Finisher: letterbox, X-slash flare, HUD dimmed. The full-frame white here is deliberate, as the cinematic peak. | L10 route as #09 | `FinisherCompleted` + 300 ms (t ≈ 111) |
 | 14 | `14-golem-dissolve-victory.jpg` | The Golem dissolves into cyan/gold motes, then the chest drop. | L10 route as #09 | `FinisherCompleted` + 930 ms |
 | 15 | `15-cache-reveal-rare.jpg` | Cache reveal: chest, rarity beam, item card, and the pity odds next to it. | `?api=off&dev=1&screen=cache` → Open (H2 capture) | about 0.9 s after Open |
-| 16 | `16-known-limit-cave-hit-glare.jpg` | **Known limit, not a showcase.** In the cave/dungeon at 80–90 WPM, a hit flare can blank the target into a white disc (here the bat behind "laugh"). See below. | L09 route as #05 | encounter 2, t ≈ 36 |
+| 16 | `16-after-cave-hit.jpg` | **After R3-1 (W5).** The same L09 moment as the old #16 (BREAK + WEAK + PARRY!): the bat behind "laugh" is now a readable pale shape inside the Break ring instead of a white disc. Hits are still bright in the cave: gold crescents, hex shards, ring, sparks. | L09 route as #05 | encounter 2, t ≈ 44.9 (Break) |
 
 ## How to judge "juicy" (for the PO)
 
@@ -42,19 +42,20 @@ Play the L05 route by hand first, then the L10 route. Ask yourself:
 4. **Typo:** do you notice the streak drop (the colour steps down one tier) without feeling punished or startled?
 5. **Boss moments:** do the intro card, Break, phase change, Doom sentence and finisher each feel like an event? Is the Golem still clearly a stone golem during them?
 6. **Readability:** in every one of these moments, can you always read the *next letter* you must type, and the guard timer?
-7. **Calm vs. noise:** in the forest, does it feel crisp and colourful rather than washed white? (In the cave, see the known limit below.)
+7. **Calm vs. noise:** in the forest, does it feel crisp and colourful rather than washed white? (In the cave, #16.)
 
 ## Known limits
 
-- **R3-1. Cave/dungeon hit glare (open; the one item still a problem).** Measured as FX-only clipped pixels, in the worst 96 px window per frame, on bot runs.
-  - **Cave and dungeon:**
-    - L09 at 90 WPM: 29% of combat frames reach ≥ 60% and 49% reach ≥ 35%.
-    - L10 at 90 WPM: 9.6% of frames reach ≥ 60% and 26% reach ≥ 35%.
-  - **Forest, for comparison:** L05 at 60 WPM: 0.3% of frames reach ≥ 60% and 2.5% reach ≥ 35%. The forest is fixed.
-  - **Cause:** mostly auto-attack, crit and fireball flares at full HDR. The round-2 glare fix scales by biome brightness on purpose, so the dark biomes kept full strength.
-  - **Not a regression:** the cave path is unchanged since round 2. Round 2 measured glare only in the forest.
-  - **Effect:** at 80–90 WPM, enemies in L09/L10 are often hidden behind a white disc for 0.2–0.5 s ([16]). Word plates are never covered.
-  - **Fix (W, small):** a cave glare factor of about 0.7 on the auto-attack, crit and fireball star/flash/arc. Cap the star core HDR at about 2.2 in caves. Target: ≤ 5% of frames ≥ 60%.
+- **R3-1. Cave/dungeon hit glare (closed by W5).** Measured as FX-only clipped pixels in the worst 96 px window per frame, on bot runs (same probe as round 3, now `apps/game/tests/vfx/metal-w5-glare.metal.ts`).
+
+  | Run | ≥ 60% before | ≥ 60% after | ≥ 35% before | ≥ 35% after |
+  |---|---|---|---|---|
+  | L09 at 90 WPM | 29.9% | 3.3% | 49.0% | 13.4% |
+  | L10 at 90 WPM | 9.3% | 0.1% | 24.8% | 1.3% |
+  | L05 at 60 WPM (forest, unchanged code path) | 0.4% | 0.4% | 2.8% | 2.4% |
+
+  - **Fix:** the cave now runs additive gain 0.5 (the forest runs 0.6; the cave grade is exposure 1.3). On top of that the white discs (glow, star, parry disc, glow-kind particles) take x0.4 gain and x0.5 size, the slash/crit crescents x0.45, and the flash lights, hex flash and fireball body x0.4. Rings, line rings, hex shards and sparks (x0.76 HDR) are kept, so hits still read by shape [16].
+  - **Left:** the enemy's own white hit-flash sprite is unchanged and is not counted by the probe.
 - **Accepted, near the no-effect baseline:**
   - Boss Break body clip peaks at 16% (target was 10%). It is a short white core inside a readable golem [09].
   - Phase change at +100 ms reaches 24%, for about 0.2 s.
@@ -67,13 +68,12 @@ Play the L05 route by hand first, then the L10 route. Ask yourself:
 
 ## Verdict
 
-**Ready for PO sign-off: no, one short W pass away (R3-1, cave/dungeon hit glare).**
+**Ready for PO sign-off: yes, pending the Art Director's look at the W5 stills (R3-1 fixed, `docs/qa/t6.3-w5/`).**
 
 - **Ready now:**
   - All round-2 P1s are closed or acceptable.
   - The forest is crisp and still spectacular.
   - The tier step-down cue is subtle.
   - The boss beats (intro, Break, Doom, real tier 4, finisher) are at the art bar.
-- **Why not yet:** L09 and L10 are the chapter's climax, and there the same white-disc problem that blocked the forest in round 2 shows up on 10–29% of frames at 90 WPM.
-- **Next step:** fix R3-1 and re-run the glare probe. The deck can then be signed off as is, with #16 replaced by an L09 after-still.
-- **Preview:** the PO can already review #01–#15 now.
+- **R3-1:** closed by W5 (table above). L09 and L10 now stay below 5% of frames at ≥ 60% FX-only clipping at 90 WPM.
+- **Preview:** the PO can review #01–#16 now.

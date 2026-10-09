@@ -247,7 +247,7 @@ export class BladeGlow {
           )
           .at(mx, my, this.z + 0.1)
           .size(w, len)
-          .intensity(1.35 * f * k * (0.5 + 0.5 * gl));
+          .intensity(1.35 * f * k * (0.5 + 0.5 * gl) * (0.5 + 0.5 * this.world.discGain));
         this.beam.mesh.rotation.z = rot;
         this.beamHalo
           .color(c[0], c[1], c[2])

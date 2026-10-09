@@ -511,6 +511,8 @@ export class TypingWorldFx {
     this.blade.update(dt, this.time, this.aura, this.settings);
     this.lights.update(dt);
     this.poolA.gain = this.world.additiveGain;
+    this.poolA.glowGain = this.world.discGain;
+    this.poolA.glowSize = this.world.discSize;
     this.poolA.update(dt);
     this.poolB.update(dt);
     this.poolA.upload();

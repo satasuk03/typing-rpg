@@ -63,6 +63,9 @@ export const HERO_LIGHT_R = LIGHT_MAX_RADIUS;
 
 const BIG_TARGET_K = 0.35;
 
+/** W5: the cave star core HDR cap (the cave dim itself is `RenderWorld.discGain`). */
+const CAVE_STAR_CAP = 2.2;
+
 export class FxKit {
   readonly add: PooledParticles;
   readonly norm: PooledParticles;
@@ -157,6 +160,15 @@ export class FxKit {
     return 0.35 + 0.65 * Math.min(1, this.glare);
   }
 
+  /**
+   * W5 (R3-1): the cave / boss hollow dim (`RenderWorld.discGain`: 0.4 at caveK 1, 1 on the forest) for the flash lights,
+   * the post flash, the hex flash, the fireball body and the spark HDR. The star / glow discs take it centrally in
+   * `FxQuad`. Rings, line rings and shards keep their strength, so a hit still reads by shape.
+   */
+  get caveDim(): number {
+    return this.deps.world.discGain;
+  }
+
   /** Extra additive scale while one hit plays (1 normally; `bigTargetK` for a boss). */
   localK = 1;
 
@@ -241,7 +253,8 @@ export class FxKit {
   ): void {
     const dir = o.dir ?? 0;
     const lk = Math.min(1, this.localK); // a big pale target (the Golem): fewer, dimmer sparks over its stone
-    const hdr = (0.6 + 0.4 * Math.min(1, this.glare)) * (0.5 + 0.5 * lk); // forest: 0.76x, so a crowd does not clip to white
+    const hdr =
+      (0.6 + 0.4 * Math.min(1, this.glare)) * (0.5 + 0.5 * lk) * (0.6 + 0.4 * this.caveDim); // forest: 0.76x so a crowd does not clip to white; W5 cave: x0.76
     const c0 = col[0] * hdr;
     const c1 = col[1] * hdr;
     const c2 = col[2] * hdr;
@@ -371,7 +384,10 @@ export class FxKit {
     q.rot = rot;
     // forest: the star core HDR is capped at 1.6 (cave: uncapped), keeping the hue instead of clipping to white
     const mx = Math.max(c[0], c[1], c[2]);
-    const cap = this.glare < 1 ? 1.6 + (mx - 1.6) * Math.max(0, (this.glare - 0.4) / 0.6) : mx;
+    let cap = this.glare < 1 ? 1.6 + (mx - 1.6) * Math.max(0, (this.glare - 0.4) / 0.6) : mx;
+    // W5: cave star core HDR cap 2.2 (a 3-4 HDR core clips a 96 px white disc; hue kept below the cap)
+    const ck = Math.min(1, Math.max(0, this.deps.world.currentMood?.caveK ?? 1));
+    if (this.caveDim < 1) cap = Math.min(cap, CAVE_STAR_CAP + (mx - CAVE_STAR_CAP) * (1 - ck));
     const f = mx > cap ? cap / mx : 1;
     q.r = c[0] * f;
     q.g = c[1] * f;
@@ -487,7 +503,8 @@ export class FxKit {
     c: Rgb,
     i: number,
   ): void {
-    const g = this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * this.glare * this.glare; // the lattice shader boosts x3.5 late in its life
+    const g =
+      this.scale.k <= 0 ? 0 : (0.5 + 0.5 * this.scale.k) * this.glare * this.glare * this.caveDim; // the lattice shader boosts x3.5 late in its life
     if (g <= 0) return;
     const q = this.quad();
     q.x = x;
@@ -531,7 +548,17 @@ export class FxKit {
     life: number,
   ): void {
     if (this.scale.k <= 0) return;
-    this.lights.flash(x, y, z, c[0], c[1], c[2], intensity * this.glare, radius, life);
+    this.lights.flash(
+      x,
+      y,
+      z,
+      c[0],
+      c[1],
+      c[2],
+      intensity * this.glare * this.caveDim,
+      radius,
+      life,
+    );
   }
 
   /** Camera shake scaled by the settings (0 under reduced motion / k = 0). */
@@ -543,7 +570,12 @@ export class FxKit {
   /** Capped full-screen flash. No-op without the typing world fx, or under reduced flash / k = 0. */
   postFlash(amount: number, c: Rgb, ms: number, cap: number): void {
     if (this.scale.reducedFlash || this.scale.k <= 0) return;
-    this.deps.postFlash?.(amount * this.glare, c, ms, cap * this.glare);
+    this.deps.postFlash?.(
+      amount * this.glare * this.caveDim,
+      c,
+      ms,
+      cap * this.glare * this.caveDim,
+    );
   }
 
   // ------------------------------------------------------------------------------- per frame
@@ -551,7 +583,7 @@ export class FxKit {
   /** @hot `dt` is the stage's dilated dt. */
   update(dt: number): void {
     this.time += dt;
-    this.arcs.gain = 0.3 + 0.7 * Math.min(1, (this.glare - 0.4) / 0.6); // 0.3 forest .. 1 cave (W4: 0.4 clipped the crit arc core)
+    this.arcs.gain = (0.3 + 0.7 * Math.min(1, (this.glare - 0.4) / 0.6)) * this.deps.world.arcGain; // 0.3 forest .. 1 cave (W4: 0.4 clipped the crit arc core)
     this.arcs.update(dt);
     this.ghosts.update(dt);
     this.stars.update(dt);
