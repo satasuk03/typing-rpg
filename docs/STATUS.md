@@ -42,6 +42,11 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
 | T5.2 API + anti-cheat | Backend (sonnet) | **merged** (723a921); security follow-up in progress | 40 integration + 7 heuristics tests on real local D1: forged result → 422 `resim_mismatch` with nothing written; forged timing (5 ms / constant IKIs) → shadow-flagged, owner-only; replay byte-identical, concurrent submits → one write; refresh reuse revokes the family; KV top-100 cron. **Follow-up done** (8ce43e0): device-secret auth (sha256 only, constant-time, no existence oracle), shared `compress.ts`, save 404, status table in interfaces v1.2, expiry/TTL sweep. 560 tests. **Opus security review done:** no ship-blockers, no injection, no auth bypass, no fake scores. **All fixed** (bfb115c, interfaces v1.4): flagged/ok responses identical (test), shadow table, per-user seed sequence + abandon_rate flag, CORS allowlist, fail-closed limits, body cap, JWT aud, 10 s refresh grace, publicId, period key on run, headers. 66 api tests |
 | T5.3 Client net layer + Trial screen | Backend (sonnet) | **done** (merged 7b4d8d3) | save merge helpers (400-case property test: idempotent, no lost chests, gold never summed); auth/sync/trial unit tests; **e2e vs real wrangler dev (orchestrator re-ran, 3/3):** legit 60 s Trial accepted + on the board with server WPM = client WPM; save persists across reload + second browser; forged claim → 422 shown in UI. Run with `pnpm --filter game test:net` |
 
+| Quiet perf re-measure (2026-10-09) | Orchestrator | **done** | Metal frame-budget 8/8 (p95 16.7–16.8 ms); typingSettings 3/3; typing-fx L1/L10 ×2, 0 violations (flake not reproduced); **typingPerf 0.74–0.76 ms/key vs 0.45: real regression** → HUD perf fix in progress. `docs/perf.md` |
+| T6.3 art review round 2 | Art director (opus) | in progress | Metal captures of main → `docs/qa/t6.3-review-2.md` |
+| T6.3 W3 world leftovers (Golem intro wash, forest fireball glare, parry/BREAK visibility) | VFX (sonnet) | in progress | |
+| HUD typing FX perf | UI (sonnet) | in progress | |
+
 ## Notes
 - Stack pins: three 0.186.1, vite 8.3.4, typescript 7.0.2 (native tsc), vitest 5.0.3, playwright 1.64.0, biome 2.5.15, hono 4.13.13, wrangler 4.149.0, zod 4.
 - Biome excludes `poc/` and `docs/` (POC html is reference-only).
