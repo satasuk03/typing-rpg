@@ -1,0 +1,28 @@
+{
+  "name": "hd2d",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --filter game dev",
+    "build": "pnpm --filter game build",
+    "test": "vitest run",
+    "test:e2e": "pnpm --filter game test:e2e",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "bot": "pnpm --filter @hd2d/bot start",
+    "balance": "pnpm --filter @hd2d/balance start",
+    "check": "bash scripts/check.sh"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "^24.0.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

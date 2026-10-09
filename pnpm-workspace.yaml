@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+  - workers/*
+  - tools/*
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
