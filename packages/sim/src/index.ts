@@ -1,6 +1,7 @@
 // Public API of @hd2d/sim (docs/interfaces.md §3).
 
 export * from "./api.ts";
+export { BALANCE, K } from "./balance.ts";
 export * from "./bus.ts";
 export * from "./errors.ts";
 export * from "./events.ts";

@@ -1,11 +1,8 @@
 /**
  * Skill and passive description text with the real numbers (T3.2 gap): `{dmg}`, `{charge}`, `{secs}`, `{heal}`, `{hits}`
  * are filled from BALANCE.SKILLS / BALANCE.PASSIVES, so the screen can never disagree with the sim.
- *
- * NOTE: `@hd2d/sim` does not re-export BALANCE or K (the T1.3 export did not land), so this imports the pure data
- * module directly. Switch to `import { BALANCE } from "@hd2d/sim"` once the sim index exports it.
  */
-import { BALANCE } from "../../../../packages/sim/src/balance";
+import { BALANCE } from "@hd2d/sim";
 
 type Row = Record<string, number | string | undefined>;
 
