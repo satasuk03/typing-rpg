@@ -2,7 +2,7 @@ import { AuthAnonRequest, AuthRefreshRequest } from "@hd2d/shared";
 import { Hono } from "hono";
 import type { UserRow } from "../db/index.ts";
 import {
-  getUserByDevice,
+  getDeviceWithUser,
   getUserById,
   insertDeviceStmt,
   insertRefreshTokenStmt,
@@ -12,6 +12,12 @@ import {
 import { randomToken, sha256Hex, signJwt } from "../lib/crypto.ts";
 import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, type Ctx, parseBody, rateLimit, secretOf } from "../lib/http.ts";
+
+type AuthAnonBody = {
+  deviceId: string;
+  deviceSecret: string;
+  turnstileToken?: string;
+};
 
 export const ACCESS_TTL_MS = 15 * 60_000;
 export const REFRESH_TTL_MS = 90 * 24 * 3_600_000;
@@ -39,14 +45,42 @@ function friendCode(): string {
   return [...b].map((x) => FRIEND_ALPHABET[x % FRIEND_ALPHABET.length]).join("");
 }
 
+/** Constant-time equality of two equal-length hex strings (sha256 digests). */
+function digestsEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+// Unknown deviceId -> create user + device (storing sha256(deviceSecret)) + a new token family.
+// Known deviceId  -> tokens ONLY with the matching deviceSecret; wrong/missing secret -> 401 (the id is not a credential).
 authRoutes.post("/anon", async (c) => {
   await rateLimit(c, "auth", clientIp(c));
-  const body = await parseBody(c, AuthAnonRequest, 4096);
+  let body: AuthAnonBody;
+  try {
+    body = await parseBody(c, AuthAnonRequest, 4096);
+  } catch (e) {
+    // A missing/malformed secret is an authentication failure, not a schema error (no device-existence oracle).
+    if (
+      e instanceof ApiError &&
+      e.code === "bad_request" &&
+      Array.isArray(e.details) &&
+      e.details.length > 0 &&
+      e.details.every((i: { path?: unknown[] }) => i.path?.[0] === "deviceSecret")
+    ) {
+      throw new ApiError("unauthorized", "device secret required");
+    }
+    throw e;
+  }
   // turnstileToken is optional in the slice and not verified here.
   const db = c.env.DB;
   const now = c.get("deps").now();
-  let user = await getUserByDevice(db, body.deviceId);
-  if (!user) {
+  const secretHash = await sha256Hex(body.deviceSecret);
+  const deny = () => new ApiError("unauthorized", "device authentication failed");
+  let dev = await getDeviceWithUser(db, body.deviceId);
+  let user: UserRow | null = null;
+  if (!dev) {
     const id = crypto.randomUUID();
     const code = friendCode();
     try {
@@ -57,14 +91,18 @@ authRoutes.post("/anon", async (c) => {
           friendCode: code,
           now,
         }),
-        insertDeviceStmt(db, body.deviceId, id, now),
+        insertDeviceStmt(db, body.deviceId, id, now, secretHash),
       ]);
+      user = await getUserById(db, id);
     } catch (e) {
-      // Lost a race on the same deviceId: fall through to the winner's account.
-      user = await getUserByDevice(db, body.deviceId);
-      if (!user) throw e;
+      // Lost a race on the same deviceId: authenticate against the winner's secret.
+      dev = await getDeviceWithUser(db, body.deviceId);
+      if (!dev) throw e;
     }
-    user ??= await getUserById(db, id);
+  }
+  if (dev) {
+    if (dev.secretHash === null || !digestsEqual(dev.secretHash, secretHash)) throw deny();
+    user = dev.user;
   }
   if (!user) throw new ApiError("internal", "user creation failed");
   const refreshToken = randomToken(32);

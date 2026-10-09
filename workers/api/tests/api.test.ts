@@ -13,6 +13,7 @@ import {
   humanKeys,
   type J,
   makeClient,
+  newDeviceSecret,
   passageOf,
   signup,
   startRun,
@@ -60,11 +61,13 @@ describe("health", () => {
 describe("auth", () => {
   test("anon -> refresh rotation -> reuse of an old refresh token revokes the family", async () => {
     const device = crypto.randomUUID();
-    const a = await api("POST", "/auth/anon", { body: { deviceId: device } });
+    const deviceSecret = newDeviceSecret();
+    const a = await api("POST", "/auth/anon", { body: { deviceId: device, deviceSecret } });
     expect(a.status).toBe(200);
     expect(a.body.accessExpiresAt - clock.t).toBe(15 * 60_000);
-    // same device -> same account
-    const again = await api("POST", "/auth/anon", { body: { deviceId: device } });
+    // same device + matching secret -> same account (legit re-login)
+    const again = await api("POST", "/auth/anon", { body: { deviceId: device, deviceSecret } });
+    expect(again.status).toBe(200);
     expect(again.body.userId).toBe(a.body.userId);
 
     const r1 = await api("POST", "/auth/refresh", { body: { refreshToken: a.body.refreshToken } });
@@ -89,16 +92,66 @@ describe("auth", () => {
     expect(dead.status).toBe(401);
     expect(dead.body.error.code).toBe("refresh_reused");
     // a device re-login starts a fresh family
-    const fresh = await api("POST", "/auth/anon", { body: { deviceId: device } });
+    const fresh = await api("POST", "/auth/anon", { body: { deviceId: device, deviceSecret } });
     expect(fresh.status).toBe(200);
+  });
+
+  test("SECURITY: a known deviceId is not a credential (wrong/missing secret -> 401, no tokens)", async () => {
+    const device = crypto.randomUUID();
+    const deviceSecret = newDeviceSecret();
+    const owner = await api("POST", "/auth/anon", { body: { deviceId: device, deviceSecret } });
+    expect(owner.status).toBe(200);
+    // only sha256(secret) is stored, never the secret
+    const row = await dbOf()
+      .prepare("SELECT device_secret_hash h FROM devices WHERE device_id=?1")
+      .bind(device)
+      .first<J>();
+    expect(row.h).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.h).not.toBe(deviceSecret);
+    const attempts: unknown[] = [
+      { deviceId: device, deviceSecret: newDeviceSecret() }, // wrong secret
+      { deviceId: device }, // missing secret
+      { deviceId: device, deviceSecret: "short" }, // malformed secret
+      { deviceId: device, deviceSecret: "" },
+    ];
+    for (const body of attempts) {
+      const r = await api("POST", "/auth/anon", { body });
+      expect(r.status).toBe(401);
+      expect(r.body.error.code).toBe("unauthorized");
+      expect(r.body.accessToken).toBeUndefined();
+      expect(r.body.refreshToken).toBeUndefined();
+    }
+    // the attacker created nothing; the owner is unaffected
+    expect(await count("SELECT COUNT(*) n FROM users WHERE id=?1", owner.body.userId)).toBe(1);
+    expect(await count("SELECT COUNT(*) n FROM devices WHERE device_id=?1", device)).toBe(1);
+    // a pre-0006 device (no stored hash) can never be taken over via /auth/anon either
+    const legacy = crypto.randomUUID();
+    await dbOf()
+      .prepare(
+        "INSERT INTO devices (device_id, user_id, created_at, last_seen_at) VALUES (?1, ?2, 1, 1)",
+      )
+      .bind(legacy, owner.body.userId)
+      .run();
+    const l = await api("POST", "/auth/anon", {
+      body: { deviceId: legacy, deviceSecret: newDeviceSecret() },
+    });
+    expect(l.status).toBe(401);
+    // the legit client still gets in
+    const ok = await api("POST", "/auth/anon", { body: { deviceId: device, deviceSecret } });
+    expect(ok.status).toBe(200);
+    expect(ok.body.userId).toBe(owner.body.userId);
   });
 
   test("unknown refresh token, bad body, missing/expired/garbage access token", async () => {
     const bad = await api("POST", "/auth/refresh", { body: { refreshToken: "x".repeat(43) } });
     expect(bad.body.error.code).toBe("refresh_invalid");
-    expect((await api("POST", "/auth/anon", { body: { deviceId: "nope" } })).body.error.code).toBe(
-      "bad_request",
-    );
+    expect(
+      (
+        await api("POST", "/auth/anon", {
+          body: { deviceId: "nope", deviceSecret: newDeviceSecret() },
+        })
+      ).body.error.code,
+    ).toBe("bad_request");
     expect((await api("GET", "/save")).body.error.code).toBe("unauthorized");
     expect((await api("GET", "/save", { token: "a.b.c" })).body.error.code).toBe("unauthorized");
     const u = await signup(api);
@@ -117,7 +170,11 @@ describe("auth", () => {
     const statuses: number[] = [];
     for (let i = 0; i < 3; i++) {
       statuses.push(
-        (await limited("POST", "/auth/anon", { body: { deviceId: crypto.randomUUID() } })).status,
+        (
+          await limited("POST", "/auth/anon", {
+            body: { deviceId: crypto.randomUUID(), deviceSecret: newDeviceSecret() },
+          })
+        ).status,
       );
     }
     expect(statuses).toEqual([200, 200, 429]);
@@ -169,6 +226,17 @@ describe("save", () => {
       headers: { "If-Match": '"0"' },
     });
     expect(dupe.status).toBe(409);
+  });
+
+  test("If-Match != 0 when no save exists -> 404 not_found (not a schema-violating 409)", async () => {
+    const u = await signup(api);
+    const r = await api("PUT", "/save", {
+      token: u.token,
+      body: { blob: "AAAA", summary },
+      headers: { "If-Match": '"3"' },
+    });
+    expect(r.status).toBe(404);
+    expect(r.body.error.code).toBe("not_found");
   });
 
   test("oversize blob -> 413 payload_too_large; saves are per user", async () => {
@@ -571,6 +639,36 @@ describe("leaderboard cache (cron)", () => {
     await env.LB_CACHE.delete("lb:trial_wpm:S1");
     const live = await api("GET", "/lb/trial?scope=season");
     expect(live.body.top.some((e: J) => e.userId === u.userId)).toBe(true);
+  });
+
+  test("cron sweep: expired open tickets -> expired; replays past TTL deleted; live ones kept", async () => {
+    const u = await signup(api);
+    const t = await startRun(api, u.token);
+    const { sweepExpired } = await import("../src/lib/sweep.ts");
+    await sweepExpired(env.DB, t.issuedAt + 1000); // earlier tests' stale tickets may be swept; this one is live
+    expect(await count("SELECT COUNT(*) n FROM runs WHERE id=?1 AND status='open'", t.runId)).toBe(
+      1,
+    );
+    // seed two replays for this run's user: one past TTL, one live
+    const old = await startRun(api, (await signup(api)).token);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO run_replays (run_id, log_b64, expires_at) VALUES (?1, 'x', ?2)",
+      ).bind(old.runId, t.issuedAt - 1),
+      env.DB.prepare(
+        "INSERT INTO run_replays (run_id, log_b64, expires_at) VALUES (?1, 'y', ?2)",
+      ).bind(t.runId, t.issuedAt + 10 ** 9),
+    ]);
+    const r = await sweepExpired(env.DB, t.expiresAt + 1);
+    expect(r.expiredRuns).toBeGreaterThanOrEqual(2);
+    expect(r.deletedReplays).toBe(1);
+    expect(
+      await count("SELECT COUNT(*) n FROM runs WHERE id=?1 AND status='expired'", t.runId),
+    ).toBe(1);
+    expect(await count("SELECT COUNT(*) n FROM run_replays WHERE run_id=?1", t.runId)).toBe(1);
+    expect(await count("SELECT COUNT(*) n FROM run_replays WHERE run_id=?1", old.runId)).toBe(0);
+    // the user can start a fresh ticket
+    expect((await startRun(api, u.token)).runId).not.toBe(t.runId);
   });
 
   test("the scheduled handler is exported", async () => {

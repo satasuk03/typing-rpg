@@ -2,12 +2,17 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.1** (2026-10-09) |
+| **Doc version** | **1.2** (2026-10-09) |
 | **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **1.2** (2026-10-09): T5.2 follow-ups, all in §9.
+  - auth/anon device secret: `AuthAnonRequest.deviceSecret`; a known `deviceId` no longer yields tokens by itself.
+  - `compress.ts` helpers exported from `@hd2d/shared`.
+  - `PUT /save` with `If-Match` ≠ 0 and no save returns 404.
+  - HTTP status table for every `ErrorCode`.
 - **1.1** (2026-10-09): applies the PO decisions and the reviewer findings.
   - **PO decisions:**
     - Hybrid combo: the mechanical combo counts perfect words (tiers 5/15/30/50); the VFX colour tiers count a per-key streak (10/25/50/100), exposed as `keyStreak`, `keyStreakTier` and the `KeyStreakTierChanged` event.
@@ -1232,6 +1237,33 @@ export declare function mergeSaves(base: SaveBlob | null, local: SaveBlob, serve
 - `POST /runs/submit` requires `Idempotency-Key: <runId>`.
 - Every non-2xx response uses the error envelope. A 409 save conflict also includes `server`.
 
+**HTTP status per error code** (`workers/api/src/lib/errors.ts` `STATUS_OF`). `error.code` is the contract; the status is for HTTP-level handling.
+
+| `error.code` | HTTP | Client reaction |
+|---|---|---|
+| `bad_request` | 400 | Bug or schema drift. Do not retry unchanged. |
+| `unauthorized` | 401 | Missing or invalid access token, or `/auth/anon` device authentication failed. Refresh once, then re-login. |
+| `token_expired` | 401 | `POST /auth/refresh`, then retry. |
+| `refresh_invalid` | 401 | Unknown or expired refresh token. Re-login via `/auth/anon` with the stored `deviceId` + `deviceSecret`. |
+| `refresh_reused` | 401 | Token family revoked (possible theft). Same recovery as `refresh_invalid`. |
+| `forbidden` | 403 | Not allowed. |
+| `not_found` | 404 | No save yet (`GET /save`), or `PUT /save` with `If-Match` ≠ 0 and no save. |
+| `run_not_found` | 404 | Unknown run, or not the caller's. Start a new run. |
+| `save_conflict` | 409 | Merge with `server`, then PUT again. |
+| `run_already_submitted` | 409 | The run is finished and this log differs from the stored one. Do not retry. |
+| `version_mismatch` | 409 | Client sim/content version is stale (terminal for the run). Prompt a reload. |
+| `run_expired` | 410 | Ticket expired (terminal). Start a new run. |
+| `bad_signature` | 403 | Ticket signature invalid (non-terminal). |
+| `payload_too_large` | 413 | Save blob > 256 KiB decoded, or run log field over its size limit. |
+| `log_invalid` | 422 | Terminal for the run. |
+| `resim_mismatch` | 422 | Terminal for the run (the claim differs from the re-simulation). |
+| `timing_impossible` | 422 | Terminal for the run. |
+| `precondition_required` | 428 | Send `If-Match`. |
+| `rate_limited` | 429 | Back off and retry later. |
+| `internal` | 500 | Retry with backoff. |
+
+A submit that fails with a terminal code is replayed verbatim (same status and body) when the same log is resubmitted with the same `runId`.
+
 ```ts shared
 // packages/shared/src/errors.ts
 import { z } from "zod";
@@ -1248,7 +1280,12 @@ const B64 = z.base64();
 const Hex8 = z.string().regex(/^[0-9a-f]{8}$/);
 
 // POST /auth/anon            (rate 5/min/IP, Turnstile optional in slice)
-export const AuthAnonRequest = z.object({ deviceId: z.uuid(), turnstileToken: z.string().optional() });
+// deviceSecret: random 256-bit value (base64url, 43 chars), generated once at first launch and kept in IndexedDB.
+// The server stores only sha256(deviceSecret). Unknown deviceId -> account + device + token family are created.
+// Known deviceId -> tokens ONLY if the secret matches (constant-time compare); wrong, malformed or missing secret -> 401
+// `unauthorized` (never 400/409, so there is no device-existence oracle). Normal sessions use /auth/refresh, not /auth/anon.
+export const DeviceSecret = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+export const AuthAnonRequest = z.object({ deviceId: z.uuid(), deviceSecret: DeviceSecret, turnstileToken: z.string().optional() });
 export const AuthTokens = z.object({ accessToken: z.string(), accessExpiresAt: z.number().int(), refreshToken: z.string() });
 export const AuthAnonResponse = AuthTokens.extend({ userId: z.string() });
 // POST /auth/refresh          401 refresh_invalid | refresh_reused
@@ -1258,6 +1295,8 @@ export const AuthRefreshResponse = AuthTokens;
 // GET /save  -> 200 SaveRecord + `ETag: "<revision>"` | 404 not_found
 // PUT /save  -> header `If-Match: "<revision>"` ("0" when no save exists yet; missing -> 428 precondition_required)
 //            -> 200 SavePutResponse | 409 SaveConflictResponse | 413 payload_too_large   (rate 2/min)
+//            If-Match != "0" while NO save exists -> 404 not_found (there is no server copy to merge against; the client
+//            should re-PUT with If-Match "0"). A 409 always carries `server`.
 export const SaveRecord = z.object({ revision: z.number().int().min(1), updatedAt: z.number().int(), blob: B64, summary: SaveSummary });
 export const SavePutRequest = z.object({ blob: B64, summary: SaveSummary });
 export const SavePutResponse = z.object({ revision: z.number().int(), updatedAt: z.number().int() });

@@ -58,11 +58,10 @@ saveRoutes.put("/", async (c) => {
     return c.json({ revision: r.revision, updatedAt: r.updatedAt }, 200, {
       ETag: `"${r.revision}"`,
     });
+  // If-Match != 0 but no save exists: nothing to merge against, so 404 (a schema-valid 409 needs `server`).
+  if (!r.server) throw new ApiError("not_found", "no save exists; create it with If-Match: 0");
   // 409 carries the server copy so the client can three-way merge (interfaces §9.1).
-  throw new ApiError(
-    "save_conflict",
-    "save revision conflict",
-    undefined,
-    r.server ? { server: record(r.server) } : undefined,
-  );
+  throw new ApiError("save_conflict", "save revision conflict", undefined, {
+    server: record(r.server),
+  });
 });
