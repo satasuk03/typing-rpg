@@ -19,13 +19,10 @@ failed="sim determinism"; step "sim determinism test"
 pnpm -s exec vitest run --reporter=verbose --project @hd2d/sim packages/sim/tests/determinism.test.ts
 
 failed="sim purity"; step "sim purity grep"
-# Backstop for Biome's noRestricted* rules: forbidden tokens in packages/sim/src and tests.
-pattern='Math\.random|\bDate\b|performance\.|\bsetTimeout\b|\bsetInterval\b|\bwindow\b|\bdocument\b|from ["'"'"']three|require\(["'"'"']three'
-if grep -rnE "$pattern" packages/sim/src packages/sim/tests --include='*.ts' \
-  | grep -v 'determinism.test.ts:.*no wall-clock' ; then
-  echo "sim purity violations found (see above)"
-  exit 1
-fi
+# Backstop for Biome's restricted-global rules. Comments are stripped before matching (scripts/sim-purity.mjs).
+# src: also bans approximated Math.*, **, localeCompare, Intl and structuredClone. tests: wall-clock/DOM/three bans only.
+node scripts/sim-purity.mjs --strict packages/sim/src
+node scripts/sim-purity.mjs packages/sim/tests
 echo "sim purity ok"
 
 trap - ERR
