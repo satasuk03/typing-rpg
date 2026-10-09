@@ -55,7 +55,13 @@
                 {
                   "__identifier": "mood",
                   "__type": "Json",
-                  "__value": { "exposure": 1.08, "sunCol": [1.6, 0.8, 0.38] }
+                  "__value": {
+                    "exposure": 1.08,
+                    "sunCol": [1.6, 0.8, 0.38],
+                    "fog": [0.01, 13, 0.25],
+                    "sat": 1.24,
+                    "contrast": 1.14
+                  }
                 },
                 { "__identifier": "blend", "__type": "Int", "__value": 14 }
               ]
