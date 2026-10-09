@@ -3,13 +3,11 @@
 import type { ContentBundle } from "@hd2d/content";
 import { SimError } from "./errors.ts";
 import type { SimEvent } from "./events.ts";
-import type { Milli } from "./fixed.ts";
 import type { SimInput } from "./input.ts";
 import type {
   LevelOptions,
   LevelResult,
   LevelState,
-  Loadout,
   ResolvedLevel,
   ResolvedTrial,
   TrialResult,
@@ -36,10 +34,6 @@ export function resolveTrial(_bundle: ContentBundle, _trialId: string): Resolved
 
 // T1.2: the typing-only level runtime lives in level.ts (createLevel, applyInput, step, getView, getResult).
 export { applyInput, createLevel, getResult, getView, step } from "./level.ts";
-
-export function computeHeroStats(_loadout: Loadout): { atk: Milli; maxHp: Milli } {
-  return notImplemented("computeHeroStats", "T1.3");
-}
 
 /** passage = passages[below(deriveRng(seed, "trial"), passages.length)]. Tick 0 = the first key. */
 export function createTrial(_def: ResolvedTrial, _seed: number): TrialState {

@@ -1,34 +1,63 @@
 {
-  "description": "Scripted typing sessions (tests/typingHarness.ts scriptedSession) on the fixture level, replayed through replay(): final-state hash and event-stream hash per seed. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
+  "description": "Scripted typing sessions (tests/typingHarness.ts scriptedSession) on the fixture level (goldens, combat on since T1.3) and reference-bot combat replays (combatGoldens: boss/sword, dagger+shields, glass hero with Second Wind), replayed through replay(): final-state hash and event-stream hash. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
   "simVersion": 1,
   "goldens": {
     "1": {
-      "state": "e2cdaff0",
-      "events": "2cd43287",
-      "inputs": 167,
-      "endTick": 2217,
+      "state": "ba23fd93",
+      "events": "a2552017",
+      "inputs": 371,
+      "endTick": 3229,
       "outcome": "cleared"
     },
     "42": {
-      "state": "3a56be91",
-      "events": "03adf521",
-      "inputs": 168,
-      "endTick": 2362,
+      "state": "1b08a748",
+      "events": "c0c59cf1",
+      "inputs": 411,
+      "endTick": 3499,
       "outcome": "cleared"
     },
     "2024": {
-      "state": "376dd6f2",
-      "events": "50a2bac0",
-      "inputs": 172,
-      "endTick": 2481,
+      "state": "328419dd",
+      "events": "e4c69e55",
+      "inputs": 423,
+      "endTick": 3672,
       "outcome": "cleared"
     },
     "3735928559": {
-      "state": "dac10ca2",
-      "events": "4ee7deae",
-      "inputs": 134,
-      "endTick": 2188,
+      "state": "6c324786",
+      "events": "e53ab887",
+      "inputs": 381,
+      "endTick": 3270,
       "outcome": "cleared"
+    }
+  },
+  "combatGoldens": {
+    "boss-sword": {
+      "state": "edaecb3e",
+      "events": "9c4c4ec1",
+      "inputs": 185,
+      "endTick": 4776,
+      "outcome": "cleared",
+      "autoAttacks": 21,
+      "secondWindUsed": false
+    },
+    "dagger-shields": {
+      "state": "b5c811f0",
+      "events": "260f50d7",
+      "inputs": 58,
+      "endTick": 1563,
+      "outcome": "cleared",
+      "autoAttacks": 9,
+      "secondWindUsed": false
+    },
+    "glass-hero": {
+      "state": "c6f2b26b",
+      "events": "d139d81f",
+      "inputs": 61,
+      "endTick": 1779,
+      "outcome": "failed",
+      "autoAttacks": 3,
+      "secondWindUsed": true
     }
   }
 }

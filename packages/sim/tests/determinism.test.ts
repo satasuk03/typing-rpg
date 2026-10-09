@@ -11,7 +11,13 @@ import {
 import golden from "./fixtures/golden-replay.json" with { type: "json" };
 import typingFixture from "./fixtures/golden-typing.json" with { type: "json" };
 import { GOLDEN_SEEDS, goldenHashes, toyReplayHash } from "./toy.ts";
-import { TYPING_GOLDEN_SEEDS, typingGolden, typingGoldens } from "./typingGolden.ts";
+import {
+  COMBAT_GOLDEN_SCENARIOS,
+  combatGoldens,
+  TYPING_GOLDEN_SEEDS,
+  typingGolden,
+  typingGoldens,
+} from "./typingGolden.ts";
 import { mkDef, mkLoadout, mkOptions, scriptedSession } from "./typingHarness.ts";
 
 const RUNS = 1_000;
@@ -38,6 +44,15 @@ describe("typing-only level determinism (T1.2)", () => {
     expect(Object.keys(typingFixture.goldens).sort()).toEqual(
       TYPING_GOLDEN_SEEDS.map(String).sort(),
     );
+  });
+
+  test("combat replays (reference bot) match the committed golden hashes: boss, shields/dagger, Second Wind", () => {
+    expect(combatGoldens()).toEqual(typingFixture.combatGoldens);
+    expect(Object.keys(typingFixture.combatGoldens).sort()).toEqual(
+      [...COMBAT_GOLDEN_SCENARIOS].sort(),
+    );
+    expect(typingFixture.combatGoldens["glass-hero"]?.secondWindUsed).toBe(true);
+    expect(typingFixture.combatGoldens["boss-sword"]?.outcome).toBe("cleared");
   });
 
   test("the sessions actually clear the level (the golden covers walk, encounters, guards and the boss finisher)", () => {
