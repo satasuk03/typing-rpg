@@ -20,6 +20,7 @@ import {
  *  - tier 0 @ 1080p DPR 1: assert p95 < 16.7 ms (DoD)
  *  - tier 1 / 2: reported
  *  - tier 2 with CDP 4x CPU throttling: assert p95 < 22.2 ms (>= 45 fps) (DoD)
+ * Run with PERF_DPR=2 for the Retina case (the throttled assertion applies at both DPRs).
  * DPR comes from PERF_DPR (see the config). Numbers land in tests/perf/out/frame-budget-dpr<N>.json (gitignored).
  */
 const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -85,7 +86,8 @@ for (const c of CASES) {
     expect(sample.length, "not enough combat frames sampled").toBeGreaterThan(300);
     if (!UNCAPPED && c.tier === 0 && c.throttle === 1 && DPR === 1)
       expect(s.p95).toBeLessThan(BUDGET_T0);
-    if (!UNCAPPED && c.tier === 2 && c.throttle === 4 && DPR === 1) {
+    // DPR 1 and DPR 2 (Retina, 3840x2160 backing store) must both hold the throttled tier 2 budget.
+    if (!UNCAPPED && c.tier === 2 && c.throttle === 4) {
       expect(s.p95).toBeLessThan(BUDGET_T2_THROTTLED);
     }
     expect(errors.list, errors.list.join("\n")).toEqual([]);

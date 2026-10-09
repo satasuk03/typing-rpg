@@ -22,7 +22,7 @@ Uncapped (vsync off, true cost), DPR 1: avg / p95 / max ms, calls
 | l10 | 2 | 4x | 5.1 | 8.0 | 30.3 | 3.04 | 65 |
 
 DPR 2 (extra data, internal width still capped at 1920): vsync-locked tier 0/1/2 p95 16.8; tier 2 with 4x throttle is NOT within budget
-(L05 avg 21.9 p95 33.4; L10 avg 26.0 p95 83.3); uncapped tier 0 avg 3.9-4.9 ms. Likely the 3840x2160 HUD 2D canvas on a throttled CPU (not profiled; HUD is not in this task's paths).
+(L05 avg 21.9 p95 33.4; L10 avg 26.0 p95 83.3); uncapped tier 0 avg 3.9-4.9 ms. Fixed, see "DPR 2 fix" below.
 Raw JSON: tests/perf/out/ (gitignored).
 
 ## Soak (30 min, ch1-l05 looped with restart, tier 0)
@@ -46,4 +46,26 @@ Spec: `tests/perf/full-run.spec.ts`. RESULT PENDING at commit time (run was stil
 
 ## Open issues outside my paths
 - `pnpm lint` has 10 errors in render/vfx and RenderWorld (noUnusedPrivateClassMembers, noNonNullAssertion); scripts/check.sh stops at lint. Not from this task.
-- DPR 2 throttled HUD cost (above); audio oscillator warning.
+- (resolved, see below) DPR 2 throttled HUD cost; audio oscillator warning.
+
+## DPR 2 fix (tier 2, 4x CPU throttle) and audio clamp
+Profile (frame-budget probe now records `hud` = hud.render ms and `gl` = world.render ms per frame, shown in the PERF row):
+at DPR 2 tier 2 throttled, JS cost was small (cpu avg 6.1 ms: hud 2.7, gl 2.4) yet p95 was 50 ms. The WebGL side already respects the tier
+(`QUALITY_TIERS[2].maxDpr = 1`, scale 0.64, width capped at 1920), so the extra cost is the HUD 2D canvas: it ignored the tier and always used
+min(2, DPR), a 3840x2160 backing store that is rasterized and composited every frame. It is GPU/compositor bound, not JS bound, so caching panels
+or removing shadowBlur would not have moved it.
+Fix: `HUD_MAX_DPR = [2, 1.5, 1]` per tier in `hud/hud.ts`; `Hud.setQuality` re-applies the backing-store size and `PlaySession.attach` passes the world's tier
+(one line in `level/session.ts`). Tier 0 is unchanged (DPR 2, crisp); tier 2 matches the WebGL cap (a HUD at 1.5 was tried first: L05 p95 33.4, L10 p95 66.6, still failing).
+Results, tier 2 with 4x throttle, vsync-locked, Metal, real GPU, machine under load from other agents (load average about 18):
+| case | before p95 / avg | after p95 / avg |
+|---|---|---|
+| L05 DPR 2 | 33.4 / 21.9 (50.0 / 23.6 in the instrumented rerun) | 16.8 / 16.7 |
+| L10 DPR 2 | 83.3 / 26.0 | 16.8 / 17.3 |
+| L05 DPR 1 | 16.7 | 16.8 / 16.8 (unchanged) |
+| L10 DPR 1 | 16.8 | 16.8 / 17.0 (one loaded run hit p95 33.3 at the 95th-percentile boundary; the rerun passed) |
+The frame-budget spec now asserts the throttled tier 2 budget (p95 < 22.2 + 0.5) at both DPR 1 and DPR 2: run `PERF_DPR=2 pnpm exec playwright test -c tests/perf/playwright.config.ts frame-budget`.
+Tier 0/1 at DPR 2 are not asserted and keep the full or 1.5x HUD resolution.
+
+Audio: the `29669.4 Hz` warning came from high bell partials and tier-up arpeggio notes (`bell` ratios up to 8.93 on notes near MIDI 100+). `Synth.osc`, the noise
+filter ramp and the lowpass corner now clamp through `clampHz` to [20, 20000] Hz at the source. `tests/audio/frequency-range.test.ts` sweeps every Sfx id x streak 0..200 x tier 1..4 x boss/heavy
+against a recording fake AudioContext and fails if any oscillator or filter frequency leaves the range (verified to fail with the clamp removed).
