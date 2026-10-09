@@ -5,7 +5,13 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/cli.ts",
+    "validate": "tsx src/cli.ts validate",
+    "build-version": "tsx src/cli.ts build-version",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hd2d/content": "workspace:*",
+    "@hd2d/sim": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

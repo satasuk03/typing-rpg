@@ -93,6 +93,13 @@ importers:
         version: 4.23.15
 
   tools/content:
+    dependencies:
+      '@hd2d/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@hd2d/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
     devDependencies:
       tsx:
         specifier: ^4.23.15

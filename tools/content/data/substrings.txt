@@ -1,0 +1,18 @@
+# Embedded-substring blocklist: any letter-run token CONTAINING one of these is an error unless
+# the token is in allowlist.txt. Keep entries specific; add false positives to the allowlist.
+ass
+fuck
+shit
+cunt
+dick
+cock
+nigg
+fagg
+whore
+slut
+porn
+rape
+sex
+hell
+piss
+damn
