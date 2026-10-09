@@ -38,7 +38,7 @@ declare global {
 const SCENARIOS: MockScenario[] = ["forest", "cave", "boss", "stress"];
 
 /** Fake projector: placeholder world positions per scenario (CSS px). */
-function makeProjector(scenario: MockScenario, w: number, h: number) {
+export function makeProjector(scenario: MockScenario, w: number, h: number) {
   return (a: HudAnchor): { x: number; y: number } | null => {
     if (a.kind === "hero")
       return { x: w * 0.2, y: h * (a.part === "head" ? 0.5 : a.part === "feet" ? 0.74 : 0.62) };
@@ -50,7 +50,7 @@ function makeProjector(scenario: MockScenario, w: number, h: number) {
   };
 }
 
-function drawBackdrop(cv: HTMLCanvasElement, scenario: MockScenario): void {
+export function drawBackdrop(cv: HTMLCanvasElement, scenario: MockScenario): void {
   const c = cv.getContext("2d");
   if (!c) return;
   const w = cv.width;
@@ -95,7 +95,7 @@ function drawBackdrop(cv: HTMLCanvasElement, scenario: MockScenario): void {
   }
 }
 
-interface WorldBackdrop {
+export interface WorldBackdrop {
   /** Project an enemy/hero anchor through the REAL camera of a level built from layout data. */
   projector: HudProjector;
   frame(dt: number): void;
@@ -106,7 +106,7 @@ interface WorldBackdrop {
  * and projects the HUD anchors through its camera, using the encounter's slot anchors. Enemy sprites
  * are the same placeholders levelScene uses. Proves the projector contract on the real renderer.
  */
-async function makeWorldBackdrop(
+export async function makeWorldBackdrop(
   glCanvas: HTMLCanvasElement,
   scenario: MockScenario,
   q: URLSearchParams,

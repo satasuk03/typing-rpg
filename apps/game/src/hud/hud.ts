@@ -139,6 +139,10 @@ export class Hud {
   private settings: HudSettings = { ...DEFAULT_HUD_SETTINGS };
   private projector: HudProjector | null = null;
   private listeners: ((n: HudNotice) => void)[] = [];
+  private updateHooks: ((dt: number, view: LevelView) => void)[] = [];
+  /** True while `TypingHudFx` owns the per-key reactions (pop, bounce, typo, tier flash). */
+  private typingFxAttached = false;
+  private quality: 0 | 1 | 2 = 0;
 
   private time = 0;
   private view: LevelView | null = null;
@@ -159,6 +163,7 @@ export class Hud {
   private frameMs: number[] = [];
   private popRects: Rect[] = [];
   private bannerRects: Rect[] = [];
+  private nextIndexByPlate = new Map<number, number>();
 
   constructor(private canvas: HTMLCanvasElement) {
     const c = canvas.getContext("2d");
@@ -192,6 +197,48 @@ export class Hud {
   }
   getSettings(): Readonly<HudSettings> {
     return this.settings;
+  }
+  /** Design-to-CSS scale (1 at 1280 wide). */
+  getScale(): number {
+    return this.s;
+  }
+  getCssW(): number {
+    return this.cssW;
+  }
+  getCssH(): number {
+    return this.cssH;
+  }
+  /** Quality tier 0..2 (typing VFX and the tier border read it). */
+  setQuality(q: 0 | 1 | 2): void {
+    this.quality = q;
+  }
+  getQuality(): 0 | 1 | 2 {
+    return this.quality;
+  }
+  /**
+   * Mark the typing VFX as the owner of the per-key reactions: `pushEvent` then skips its own
+   * pop / bounce / typo / tier-flash handling (the fallback stays when nothing is attached).
+   */
+  setTypingFxAttached(on: boolean): void {
+    this.typingFxAttached = on;
+  }
+  isTypingFxAttached(): boolean {
+    return this.typingFxAttached;
+  }
+  /** Called once per `update` (after the HUD's own state advanced). Returns an unsubscribe. */
+  onUpdate(cb: (dt: number, view: LevelView) => void): () => void {
+    this.updateHooks.push(cb);
+    return () => {
+      this.updateHooks = this.updateHooks.filter((l) => l !== cb);
+    };
+  }
+  /** Key-streak tier flash (the TypingHudFx fires it on the tier-up downbeat). */
+  triggerTierFlash(): void {
+    this.tierFlash = 1;
+  }
+  /** Screen-edge typo vignette with an explicit peak alpha (spec caps: 0.25 / 0.35 guard / 0.12 stray). */
+  flashTypoVignette(alpha: number): void {
+    this.typoFlash = Math.max(this.typoFlash, alpha);
   }
   /** Renderer-owned: maps enemy/hero anchors to CSS-px screen positions. */
   setProjector(p: HudProjector | null): void {
@@ -236,6 +283,41 @@ export class Hud {
   getLetterRects(plateId: number): Rect[] {
     const e = this.entries.get(plateId);
     return e ? e.letters.map((r) => this.toCss(r)) : [];
+  }
+  /** Allocation-free `getLetterRect` (CSS px). Returns false when the letter is unknown. */
+  getLetterRectInto(plateId: number, index: number, out: Rect): boolean {
+    const r = this.entries.get(plateId)?.letters[index];
+    if (!r) return false;
+    out.x = r.x * this.s;
+    out.y = r.y * this.s;
+    out.w = r.w * this.s;
+    out.h = r.h * this.s;
+    return true;
+  }
+  /** Allocation-free `getPlateRect` (CSS px); also answers for 1.2 s after the plate was removed. */
+  getPlateRectInto(plateId: number, out: Rect): boolean {
+    const e = this.entries.get(plateId);
+    if (e) {
+      out.x = e.box.x * this.s;
+      out.y = e.box.y * this.s;
+      out.w = e.box.w * this.s;
+      out.h = e.box.h * this.s;
+      return true;
+    }
+    const l = this.lastRects.get(plateId);
+    if (!l) return false;
+    out.x = l.rect.x;
+    out.y = l.rect.y;
+    out.w = l.rect.w;
+    out.h = l.rect.h;
+    return true;
+  }
+  /** Allocation-free ATB fill tip (CSS px). */
+  getAtbTipInto(out: { x: number; y: number }): void {
+    const r = heroAtbRect();
+    const frac = this.view?.hero.atbFrac ?? 0;
+    out.x = (r.x + r.w * clamp(frac, 0, 1)) * this.s;
+    out.y = (r.y + r.h / 2) * this.s;
   }
   /** Screen anchor of the hero ATB gauge: fill tip (for streaks that "arrive" at the bar) + the bar rect. */
   getAtbAnchor(): { x: number; y: number; rect: Rect; frac: number } {
@@ -303,8 +385,10 @@ export class Hud {
         this.banners.show("down", "SECOND WIND", "TYPE THE WORD TO RISE", 2.2);
         break;
       case "CharCorrect": {
-        this.plateFx.popLetter(e.plateId, e.index, { scale: 0.45, dur: 0.2, flash: 1 });
-        this.plateFx.bounce(e.plateId, 3);
+        if (!this.typingFxAttached) {
+          this.plateFx.pop(e.plateId, e.index);
+          this.plateFx.press(e.plateId, 3 * this.settings.effectsIntensity);
+        }
         this.comboPulse = 1;
         this.emit({
           type: "letterTyped",
@@ -319,17 +403,14 @@ export class Hud {
         break;
       }
       case "Typo": {
-        if (e.plateId !== null) {
-          this.plateFx.popLetter(e.plateId, e.index, {
-            scale: 0.15,
-            dur: 0.3,
-            flash: 0,
-            glitch: 1,
-          });
-          this.plateFx.shake(e.plateId, 4, 0.25);
-          this.plateFx.crack(e.plateId, e.index);
+        if (!this.typingFxAttached) {
+          if (e.plateId !== null) {
+            this.plateFx.glitch(e.plateId, e.index, false);
+            this.plateFx.shake(e.plateId, 3, 0.18);
+            this.plateFx.crack(e.plateId, e.index);
+          }
+          this.typoFlash = Math.max(this.typoFlash, e.plateId === null ? 0.12 : 0.25);
         }
-        this.typoFlash = 1;
         this.emit({
           type: "typo",
           plateId: e.plateId,
@@ -430,7 +511,7 @@ export class Hud {
         this.emit({ type: "tierChanged", which: "combo", to: e.to });
         break;
       case "KeyStreakTierChanged":
-        this.tierFlash = 1;
+        if (!this.typingFxAttached) this.tierFlash = 1;
         this.emit({ type: "tierChanged", which: "keyStreak", to: e.to });
         break;
       default:
@@ -462,13 +543,14 @@ export class Hud {
     this.banners.update(dt);
     this.fx.update(dt);
     this.plateFx.update(dt);
+    for (const h of this.updateHooks) h(dt, view);
     for (const g of this.ghosts) g.age += dt;
     this.ghosts = this.ghosts.filter((g) => g.age < g.dur);
     this.atbPulse = Math.max(0, this.atbPulse - dt * 4);
     this.atbIgnite = Math.max(0, this.atbIgnite - dt * 1.5);
     this.comboPulse = Math.max(0, this.comboPulse - dt * 5);
     this.tierFlash = Math.max(0, this.tierFlash - dt * 2.5);
-    this.typoFlash = Math.max(0, this.typoFlash - dt * 3.5);
+    this.typoFlash = Math.max(0, this.typoFlash - dt * 0.9);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 3);
     // HP trails: white bar lags behind the real value
     const hp = view.hero.hpFrac;
@@ -578,6 +660,8 @@ export class Hud {
     );
 
     // sync entries
+    this.nextIndexByPlate.clear();
+    for (const p of view.plates) this.nextIndexByPlate.set(p.id, p.typedIndex);
     const alive = new Set<number>();
     for (const p of view.plates) {
       const g = geoms.get(p.id);
@@ -603,7 +687,7 @@ export class Hud {
 
     // ---- screen-edge vignettes (typo / hurt); off in reduced-flash mode
     if (!set.reducedFlash && set.effectsIntensity > 0) {
-      const a = Math.max(this.typoFlash * 0.45, this.hurtFlash * 0.6) * set.effectsIntensity;
+      const a = Math.max(this.typoFlash, this.hurtFlash * 0.6) * set.effectsIntensity;
       if (a > 0.01) {
         const g = c.createLinearGradient(0, 0, 0, H);
         g.addColorStop(0, `rgba(255,30,30,${a})`);
@@ -715,6 +799,7 @@ export class Hud {
         settings: set,
         alpha: 1,
         letterRects: en.letters,
+        quality: this.quality,
       });
     }
 
@@ -724,8 +809,17 @@ export class Hud {
       c.save();
       const clip = new Path2D();
       clip.rect(0, 0, this.cssW, this.cssH);
-      for (const en of this.entries.values())
-        for (const r of en.letters) if (r) clip.rect(r.x * s, r.y * s, r.w * s, r.h * s);
+      // R3: the next letter's rect is inflated by 4 design px so sparks never graze its stroke
+      const nextOf = this.nextIndexByPlate;
+      for (const [id, en] of this.entries) {
+        const ni = nextOf.get(id) ?? -1;
+        for (let i = 0; i < en.letters.length; i++) {
+          const r = en.letters[i];
+          if (!r) continue;
+          const m = i === ni ? 4 : 0;
+          clip.rect((r.x - m) * s, (r.y - m) * s, (r.w + 2 * m) * s, (r.h + 2 * m) * s);
+        }
+      }
       c.clip(clip, "evenodd");
       this.fx.draw("above", c, fxBase);
       c.restore();

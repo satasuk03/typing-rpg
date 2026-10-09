@@ -30,7 +30,11 @@ async function open(page: import("@playwright/test").Page, c: Case, extra = ""):
   // offline-first: no third-party requests (fonts are self-hosted)
   page.on("request", (r) => {
     const u = r.url();
-    if (!u.startsWith("http://localhost:5173") && !u.startsWith("data:") && !u.startsWith("blob:"))
+    if (
+      !u.startsWith(`http://localhost:${process.env.PW_PORT ?? 5173}`) &&
+      !u.startsWith("data:") &&
+      !u.startsWith("blob:")
+    )
       errors.push(`external request: ${u}`);
   });
   await page.goto(

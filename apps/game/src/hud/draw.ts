@@ -289,3 +289,34 @@ export function damageIcon(
   }
   c.restore();
 }
+
+/**
+ * Draws only the glow (shadow) of a glyph: the glyph itself is drawn far off-screen and its shadow is
+ * offset back onto (x, y). Lets the plate renderer clip a neighbour's glow out of the next letter's
+ * cell while the glyph keeps its full pop size. Mirrors `txt` positioning (centre / middle).
+ */
+export function glowOnly(
+  c: Ctx,
+  s: string,
+  x: number,
+  y: number,
+  size: number,
+  glow: string,
+  blur: number,
+  f: string,
+): void {
+  const m = c.getTransform();
+  const sc = Math.hypot(m.a, m.b) || 1;
+  const FAR = 6000;
+  setFont(c, size, f, "");
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.save();
+  c.shadowColor = glow;
+  c.shadowBlur = blur;
+  c.shadowOffsetX = FAR;
+  c.shadowOffsetY = 0;
+  c.fillStyle = "#000";
+  c.fillText(s, x - FAR / sc, y);
+  c.restore();
+}

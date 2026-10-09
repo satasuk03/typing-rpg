@@ -11,3 +11,7 @@ playwright-report/
 __pycache__/
 *.tsbuildinfo
 .claude/worktrees/
+
+# T2.6 VFX captures (only tests/vfx/__shots__ is committed)
+apps/game/tests/vfx/__captures__/
+apps/game/tests/vfx/_zoom.spec.ts

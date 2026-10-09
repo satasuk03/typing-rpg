@@ -23,7 +23,25 @@ export interface MockOpts {
   seed?: number;
   /** Typo probability per key (default 0.06 at <= 50 wpm, 0.04 above). */
   typoRate?: number;
+  /** Pace (WPM) the BurstWpm bands are relative to: >= 1.3x swift, >= 1.6x blazing (default 40). */
+  pace?: number;
+  /**
+   * Key-streak script for the typing VFX dev scene. A number pins the tier (streak seeded at the
+   * threshold + 2, no random typos, streak capped inside the tier). "cycle" runs five 2 s segments
+   * that cross every tier threshold on camera (see `CYCLE_SEEDS`), with a scripted typo at 9.5 s.
+   */
+  tier?: number | "cycle";
+  /** Combo mode reported in the view (default gentle). */
+  mode?: "gentle" | "strict" | "zen";
+  /** Scripted typos at these times (seconds); each fires on the first key at or after it. */
+  typoAt?: number[];
+  /** Disable random typos (scripted ones still fire). */
+  noTypos?: boolean;
 }
+
+/** Streak at the start of each 2 s cycle segment (crosses 10 / 25 / 50 / 100 about 0.4 s in). */
+export const CYCLE_SEEDS = [0, 7, 22, 47, 97] as const;
+const CYCLE_CAPS = [9, 24, 49, 99, Number.POSITIVE_INFINITY] as const;
 
 interface MEnemy {
   id: number;
@@ -134,6 +152,10 @@ export class MockDriver {
   private typingFrom = 0;
   private cps: number;
   private typoRate: number;
+  private burstTicks: number[] = [];
+  private lastBurstTick = -100000;
+  private typoQueue: number[] = [];
+  private cycleSeg = -1;
   private skillCharge = [0.55, 0.3];
   private skillReady = [false, false];
   private barrier = 0;
@@ -152,6 +174,11 @@ export class MockDriver {
     this.rng = rngFactory(opts.seed ?? 7);
     this.cps = (Math.max(10, opts.wpm) * 5) / 60;
     this.typoRate = opts.typoRate ?? (opts.wpm <= 50 ? 0.06 : 0.04);
+    if (opts.noTypos || opts.tier !== undefined) this.typoRate = 0;
+    this.typoQueue = (opts.typoAt ?? []).map((sec) => Math.round(sec * 60)).sort((a, b) => a - b);
+    if (opts.tier === "cycle") this.typoQueue.push(570);
+    if (typeof opts.tier === "number" && opts.tier >= 1)
+      this.keyStreak = (KS_T[opts.tier - 1] ?? 0) + 2;
     this.spawnWave();
     this.view = this.buildView();
   }
@@ -165,6 +192,11 @@ export class MockDriver {
     this.run();
     this.view = this.buildView();
     return this.events;
+  }
+
+  /** Force a typo on the next key press (dev scene stills). */
+  queueTypoNow(): void {
+    this.typoQueue.unshift(0);
   }
 
   /** Initial events (LevelStarted etc.), call once before the first step. */
@@ -501,6 +533,11 @@ export class MockDriver {
         }
         this.enemyCycle(e);
       }
+      // tier=cycle: pre-seed the streak at each 2 s segment start (no tier change by construction)
+      if (this.opts.tier === "cycle" && t % 120 === 0 && t / 120 < 5 && t / 120 !== this.cycleSeg) {
+        this.cycleSeg = t / 120;
+        this.keyStreak = CYCLE_SEEDS[this.cycleSeg] ?? this.keyStreak;
+      }
       // typing
       if (t >= this.nextKeyTick && t >= this.typingFrom) {
         this.pressKey();
@@ -683,7 +720,10 @@ export class MockDriver {
     this.keyTicks.push(t);
     const idx = plate.typed;
     const expected = plate.text[idx] ?? "";
-    if (this.rng() < this.typoRate) {
+    const roll = this.rng();
+    const scripted = this.typoQueue.length > 0 && t >= (this.typoQueue[0] ?? Infinity);
+    if (scripted) this.typoQueue.shift();
+    if (scripted || roll < this.typoRate) {
       const wrong = String.fromCharCode(97 + Math.floor(this.rng() * 26));
       const before = this.keyStreak;
       const comboBefore = this.combo;
@@ -713,7 +753,7 @@ export class MockDriver {
     }
     this.correct++;
     const oldTier = ksTier(this.keyStreak);
-    this.keyStreak++;
+    this.keyStreak = Math.min(this.keyStreak + 1, this.streakCap());
     const newTier = ksTier(this.keyStreak);
     plate.typed++;
     const isLast = plate.typed >= plate.text.length;
@@ -742,6 +782,7 @@ export class MockDriver {
         to: newTier,
         keyStreak: this.keyStreak,
       });
+    this.burstCheck(t);
     if (plate.text[plate.typed] === " " && !isLast) {
       // sentence word boundary: auto-advance over the space
       const words = plate.text.slice(0, plate.typed).split(" ").length;
@@ -758,6 +799,30 @@ export class MockDriver {
     if (isLast) this.completePlate(plate);
   }
   private focus: number | null = null;
+
+  /** Highest streak the script allows right now (pinned tier / cycle segment). */
+  private streakCap(): number {
+    const tier = this.opts.tier;
+    if (tier === undefined) return Number.POSITIVE_INFINITY;
+    if (tier === "cycle")
+      return CYCLE_CAPS[Math.min(4, Math.floor(this.tick / 120))] ?? Number.POSITIVE_INFINITY;
+    return tier >= 4 ? Number.POSITIVE_INFINITY : (KS_T[tier] ?? 100) - 1;
+  }
+
+  /** Rolling 16-char WPM against `pace`: >= 1.6x blazing, >= 1.3x swift, 5 s cooldown (like the sim). */
+  private burstCheck(t: number): void {
+    this.burstTicks.push(t);
+    if (this.burstTicks.length > 16) this.burstTicks.shift();
+    if (this.burstTicks.length < 16 || t - this.lastBurstTick < 300) return;
+    const span = t - (this.burstTicks[0] ?? t);
+    if (span <= 0) return;
+    const wpm = 16 / 5 / (span / 3600);
+    const pace = this.opts.pace ?? 40;
+    const band = wpm >= pace * 1.6 ? "blazing" : wpm >= pace * 1.3 ? "swift" : null;
+    if (!band) return;
+    this.lastBurstTick = t;
+    this.emit({ type: "BurstWpm", tick: t, wpm, band });
+  }
 
   private completePlate(p: MPlate): void {
     const t = this.tick;
@@ -1100,7 +1165,7 @@ export class MockDriver {
       combo: this.combo,
       comboTier: cbTier(this.combo),
       comboMult: 1 + Math.floor(this.combo / 5) * 0.1,
-      comboMode: "gentle",
+      comboMode: this.opts.mode ?? "gentle",
       keyStreak: this.keyStreak,
       keyStreakTier: ksTier(this.keyStreak),
       skills,
