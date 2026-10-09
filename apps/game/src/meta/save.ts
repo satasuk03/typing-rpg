@@ -233,6 +233,11 @@ export class SaveStore {
     this.commit(ops.patchSettings(this.cur, patch, this.now()));
   }
 
+  /** First-run calibration result (WPM): the initial pace, clamped. */
+  setCalibration(wpm: number): void {
+    this.commit(ops.setCalibration(this.cur, wpm, this.now()));
+  }
+
   /** New game: replaces the local profile with a fresh one. (A later cloud merge is monotonic: see gaps in the T3.2 report.) */
   reset(): void {
     this.commit(ops.newSave(this.now(), this.seed(), this.bundle));

@@ -3,9 +3,11 @@
  * case mode, difficulty, auto-unlock, quality tier (per device) and the Journal translation language.
  */
 import { createAudioSettingsPanel } from "../../audio";
+import { HOW_TO_PLAY_HTML } from "../../hud/howToPlay";
 import type { QualityTier } from "../../render";
 import type { App, Screen, ScreenArg } from "../app";
 import { actions, el, header } from "../dom";
+import { FIRST_LEVEL } from "./calibrate";
 
 export const QUALITY_KEY = "hd2d.quality";
 
@@ -113,6 +115,12 @@ export function settingsScreen(app: App, _arg: ScreenArg): Screen {
         ${sw("autoUnlock", "Auto-unlock target", "Three wrong keys in a row drop the lock", st.autoUnlock)}
         <div class="set-row"><div class="set-l"><b>Journal translation language</b><span class="hd-dim">A tag like es or pt-BR, shown in the Word Journal</span></div>
           <input id="lang" class="hd-input sm" type="text" maxlength="12" autocomplete="off" spellcheck="false" value="${st.translationLang ?? ""}" data-key="lang" aria-label="Translation language"></div>
+      </section>
+      <section class="hd-panel flat set-help"><h2 class="hd-h">Help</h2>
+        <div class="set-row"><div class="set-l"><b>How to play</b><span class="hd-dim">Controls and combat in one page</span></div>
+          <button class="hd-btn sm" data-act="help" data-key="help">Open</button></div>
+        <div class="set-row"><div class="set-l"><b>Replay tutorial</b><span class="hd-dim">Play Level 1 again with the guided tips</span></div>
+          <button class="hd-btn sm" data-act="replay-tutorial" data-key="replay-tutorial">Play</button></div>
       </section>`;
     const host = body.querySelector("#audio-host") as HTMLElement;
     if (app.audio) {
@@ -156,6 +164,19 @@ export function settingsScreen(app: App, _arg: ScreenArg): Screen {
   });
 
   actions(root, {
+    help: () => {
+      const box = el("hd-panel app-confirm");
+      box.style.width = "700px";
+      box.setAttribute("role", "dialog");
+      box.setAttribute("aria-label", "How to play");
+      box.innerHTML = `${HOW_TO_PLAY_HTML}<div class="btns" style="margin-top:14px"><button class="hd-btn primary" data-act="close" data-autofocus>Close (Esc)</button></div>`;
+      const close = app.openModal(box);
+      actions(box, { close: () => close() });
+    },
+    "replay-tutorial": () => {
+      app.sfx("uiConfirm");
+      void app.play(FIRST_LEVEL);
+    },
     seg: (t) => {
       const k = t.dataset.k as string;
       const v = t.dataset.v as string;

@@ -165,6 +165,8 @@ export class Hud {
   private frameMs: number[] = [];
   private popRects: Rect[] = [];
   private bannerRects: Rect[] = [];
+  /** DOM overlays (tutorial cards) the plates must stay clear of, in CSS px. */
+  private reserved: Rect[] = [];
   private nextIndexByPlate = new Map<number, number>();
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -191,6 +193,11 @@ export class Hud {
     this.W = 1280;
     this.H = cssH / this.s;
     this.layoutState = newLayoutState();
+  }
+
+  /** Reserve screen rects (CSS px) for DOM overlays: the plate layout solver treats them like panels and banners. */
+  setReserved(rects: readonly Rect[]): void {
+    this.reserved = rects.map((r) => ({ ...r }));
   }
 
   setSettings(s: Partial<HudSettings>): void {
@@ -664,6 +671,9 @@ export class Hud {
       if (!e.alive || e.isBoss || introHold) continue;
       const f = this.anchorDesign(e, "feet");
       avoid.push(enemyBarsRect(f.x, f.y));
+    }
+    for (const r of this.reserved) {
+      avoid.push({ x: r.x / this.s, y: r.y / this.s, w: r.w / this.s, h: r.h / this.s });
     }
     this.bannerRects.length = 0;
     for (const b of this.banners.banners) {

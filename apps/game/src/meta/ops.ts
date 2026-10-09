@@ -18,6 +18,7 @@ import {
   type ChestContents,
   cacheGoldPrice,
   computeHeroStats,
+  computePace,
   deriveRng,
   evaluateStars,
   type GearRoll,
@@ -608,6 +609,21 @@ export function patchSettings(
   s.updatedAtMs = nowMs;
   return s;
 }
+
+/**
+ * First-run calibration (T3.3): stores the measured WPM, clamped to PACE_MIN..PACE_MAX (computePace does the clamp).
+ * It is the initial pace; once a level has been played the median of the recent levels takes over.
+ */
+export function setCalibration(save: Save, wpm: number, nowMs: number): Save {
+  const s = clone(save);
+  s.pace = { ...s.pace, calibrationWpm: computePace([], Math.round(wpm)) };
+  s.updatedAtMs = nowMs;
+  return s;
+}
+
+/** A brand-new profile that has not played or calibrated yet: the first-run flow applies. */
+export const isFirstRun = (save: Save): boolean =>
+  !hasProgress(save) && save.pace.calibrationWpm === null;
 
 // ------------------------------------------------------------------------------------------------ queries
 
