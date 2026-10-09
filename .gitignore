@@ -9,3 +9,5 @@ playwright-report/
 .env
 .dev.vars
 __pycache__/
+*.tsbuildinfo
+.claude/worktrees/

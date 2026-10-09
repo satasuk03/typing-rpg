@@ -1,0 +1,39 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": { "includes": ["**", "!pnpm-lock.yaml"] },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "linter": { "enabled": true },
+  "javascript": { "formatter": { "quoteStyle": "double" } },
+  "overrides": [
+    {
+      "includes": ["packages/sim/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "Date": "sim must be deterministic: no wall-clock time",
+                  "performance": "sim must be deterministic: no wall-clock time",
+                  "setTimeout": "sim must be deterministic: use ticks",
+                  "setInterval": "sim must be deterministic: use ticks",
+                  "window": "sim must not touch the DOM",
+                  "document": "sim must not touch the DOM"
+                }
+              }
+            },
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": { "three": "sim must not depend on three.js" },
+                "patterns": [{ "group": ["three/*"], "message": "sim must not depend on three.js" }]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
