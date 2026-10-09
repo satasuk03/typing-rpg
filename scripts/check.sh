@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quality gate: typecheck -> lint -> unit tests -> sim determinism -> sim purity grep.
+# Quality gate: typecheck -> lint -> unit tests -> sim determinism -> sim purity grep -> Node/Chromium parity.
 # No e2e (run `pnpm test:e2e` separately).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -24,6 +24,9 @@ failed="sim purity"; step "sim purity grep"
 node scripts/sim-purity.mjs --strict packages/sim/src
 node scripts/sim-purity.mjs packages/sim/tests
 echo "sim purity ok"
+
+failed="sim parity"; step "sim Node vs Chromium parity"
+pnpm -s --filter @hd2d/sim test:parity
 
 trap - ERR
 echo
