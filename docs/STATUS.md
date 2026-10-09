@@ -16,7 +16,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T2.4 HUD (mock events) | UI (sonnet) | **done** (merged 284b5e2, after 1 rework) | readability sweeps (4 scenarios × 40/90 WPM, every 0.1 s): no plate overlap, ≥14 px, contrast ≥4.5, no pop/banner over a live letter; self-hosted OFL fonts, no external requests; works over the real renderer (`?scene=hud-test&backdrop=world`); 0.37 ms/frame |
 | T2.6 Typing VFX: design spec | Art/VFX director (opus) | **done** (ac7396d) | `docs/vfx/typing-vfx-spec.md`: numbers for every effect, readability pixel test, budgets, binding table, 3 chunks |
 | T2.6 chunk A: keystroke (HUD) | VFX (sonnet) | **done** (merged 4dc5dff) | letter pop, sparks, ATB streaks, 5 tier palettes + tier-up synced to audio, typo variants, SWIFT/BLAZING; next-letter pixel test green at tier 4 / max intensity (IoU ≥0.998, contrast ≥4.7); bench 0.26–0.28 ms/key on a quiet machine; stills `apps/game/tests/vfx/__shots__/`. Orchestrator verdict: legible but **too modest**; the t4 halo is flat and the guard typo is weak, so both go into chunk B |
-| T2.6 chunk B: word + hero (world) | VFX (sonnet) | in progress | — |
+| T2.6 chunk B: word + hero (world) | VFX (sonnet) | **done** (merged cd3430c) | hero aura + blade glow, letter shatter into the weapon + strike beam, ATB ignite with 0.1 s render slow-mo, world tier-up, PresentationQueue (chip before death; test), new t4 halo, guard-typo cue fixed; readability green with world FX; heap −20 KB. Per-key 0.43–0.47 ms: budget raised to 0.45 (orchestrator: ≈0.05 ms/frame at 90 WPM). Orchestrator verdict: cave perfect-shatter is a real "wow"; **hero gets washed out** in ATB ignite / tier-up, ATB ignite tints the world magenta, forest muted, so all three go to chunk C |
+| T2.6 chunk C + runner wiring + B fixes | VFX (sonnet) | in progress | — |
 | T1.2 Typing engine | Sim (sonnet) | **done** (merged 9c34986) | 82 rule-named typing tests; property test 120 levels / 697k ticks / 7k guard swaps: no shared first letters, events in tick order; golden typing replays + Chromium parity |
 | T1.3 Combat | Sim (sonnet) | **done** (merged 9050770); target re-checked in T1.4 | BALANCE ported, keys diffed against a Python dump; formulas cross-checked (hero stats ch1–30, pace table, prices, gold, ATB 62.5/72.5); 46 combat tests; Chromium parity incl. combat replays. Ref bot 35 WPM/94% × 24 seeds: 12.7 auto-attacks/enc without skills (rate 0.331/s vs Python 0.326/s; HP assumes a 16.4% skill share, and removing it gives 10.7). Real L5/L9 155 s / 162 s (in the 2:45 window) |
 | T1.5 Enemies, gimmicks, Ruin Golem | Sim (sonnet) | **done** (merged 60b0e77) | 27 boss phase tests, 12 gimmick tests, property test with gimmicks + boss (763k ticks, no letter collisions); `resolveLevel` implemented; latent Break-after-finisher bug fixed. Boss bot: 40 WPM 100% clear in 4.16 min ✓; 75 WPM 100% in 2.7 min (target 3.4); **20 WPM 63% clear in 9.4 min (target ≥50%, 5.4 min): rubble pacing not scaled by pace** |
@@ -54,6 +55,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 
 - Chip on a guard plate fires at completion (WordCompleted → GuardWordTyped → PlateRemoved → Hit{chip}); block/parry resolve at impact. Chips are untyped: never weak, never touch shields, but get the BREAK multiplier.
 - 2:45 ±15% applies to 3-encounter levels; L1–L2 (2 encounters) target ≈1:45, matching the Python.
+
+- Typing VFX per-key budget: 0.45 ms amortised (was 0.30); per-frame HUD/world totals are well under budget.
 
 ## PO decisions log
 - 2026-10-09: Combo = hybrid. Mechanics use perfect-word combo (5/15/30/50); VFX colour tiers use per-key streak (10/25/50/100).
