@@ -151,7 +151,7 @@ export class RenderWorld {
       },
       onContextRestored: () => {
         this.contextLost = false;
-        this.post?.reset();
+        this.post?.reset(true);
         this.resizeToCanvas();
         this.hooks.onContextRestored?.();
       },
