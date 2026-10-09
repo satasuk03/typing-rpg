@@ -4,28 +4,28 @@
   "goldens": {
     "1": {
       "state": "a9cd02a2",
-      "events": "0d2b1dde",
+      "events": "d6abaeee",
       "inputs": 906,
       "endTick": 5957,
       "outcome": "cleared"
     },
     "42": {
-      "state": "1b043685",
-      "events": "4c072cf3",
+      "state": "181ca37f",
+      "events": "abc98a98",
       "inputs": 820,
       "endTick": 5645,
       "outcome": "cleared"
     },
     "2024": {
       "state": "c22ae2b0",
-      "events": "b98f75ca",
+      "events": "5e348930",
       "inputs": 924,
       "endTick": 6136,
       "outcome": "cleared"
     },
     "3735928559": {
       "state": "7220318a",
-      "events": "60320037",
+      "events": "947d49b4",
       "inputs": 818,
       "endTick": 5445,
       "outcome": "cleared"
@@ -34,7 +34,7 @@
   "combatGoldens": {
     "boss-sword": {
       "state": "3682ecbf",
-      "events": "c5262dc5",
+      "events": "fc8d4719",
       "inputs": 338,
       "endTick": 7675,
       "outcome": "cleared",
@@ -93,8 +93,8 @@
       "skillsCast": 3
     },
     "golem-40wpm": {
-      "state": "f08dd6fc",
-      "events": "6ff3d163",
+      "state": "15f63b1e",
+      "events": "36a1969f",
       "inputs": 629,
       "endTick": 15334,
       "outcome": "cleared",
@@ -104,7 +104,7 @@
     },
     "golem-20wpm-sw": {
       "state": "d54cd7bb",
-      "events": "8c25c2ea",
+      "events": "9d93bdf5",
       "inputs": 767,
       "endTick": 32000,
       "outcome": "cleared",

@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { K } from "../src/balance.ts";
 import { paceFactorBp, scheduleAttack } from "../src/guard.ts";
 import { applyInput, createLevel, deriveRng, mulBp, type SimEvent } from "../src/index.ts";
-import { comboMultBp } from "../src/typing.ts";
+import { comboMultBp, keyStreakAfterTypo, keyStreakTierOf } from "../src/typing.ts";
 import { firstLetter, pickPlateWord } from "../src/words.ts";
 import {
   Driver,
@@ -481,7 +481,7 @@ describe("interfaces §3.3 key streak (VFX only)", () => {
     expect(d.view().keyStreak).toBe(10);
   });
 
-  test("any typo resets the key streak, stray ones included, in every combo mode", () => {
+  test("any typo drops the key streak one tier (below T2: to 0), stray ones included, in every combo mode", () => {
     for (const comboMode of ["gentle", "strict", "zen"] as const) {
       const d = zenDriver(["slime"], ["apple"], { comboMode }, 20);
       d.type("app");
@@ -497,7 +497,7 @@ describe("interfaces §3.3 key streak (VFX only)", () => {
     }
   });
 
-  test("KeyStreakTierChanged fires at 10/25/50/100 correct keys and on the reset", () => {
+  test("KeyStreakTierChanged fires at 10/25/50/100 correct keys and on the one-tier drop", () => {
     const d = zenDriver(["slime"], ["apple"], {}, 40);
     const seen: [number, number, number][] = [];
     for (let i = 0; i < 20; i++) {
@@ -513,7 +513,11 @@ describe("interfaces §3.3 key streak (VFX only)", () => {
     ]);
     d.key("a");
     const ev = d.key("x");
-    expect(d.ofType("KeyStreakTierChanged", ev)[0]).toMatchObject({ from: 4, to: 0, keyStreak: 0 });
+    expect(d.ofType("KeyStreakTierChanged", ev)[0]).toMatchObject({
+      from: 4,
+      to: 3,
+      keyStreak: 50,
+    });
   });
 
   test("CharCorrect carries the post-key combo, tiers and streak", () => {
@@ -540,6 +544,121 @@ describe("interfaces §3.3 key streak (VFX only)", () => {
     expect(a.view().keyStreakTier).toBe(1);
     expect(b.view().keyStreak).toBe(5);
     expect(b.view().keyStreakTier).toBe(0);
+  });
+});
+
+describe("PO 2026-10-09: a typo drops the key streak ONE tier", () => {
+  const climb = (d: ReturnType<typeof zenDriver>, n: number): void => {
+    for (let i = 0; i < n / 5; i++) perfectWord(d);
+  };
+  const stray = (d: ReturnType<typeof zenDriver>) => d.key("z");
+
+  test("T4 streak 120 -> 50, T3 60 -> 25, T2 30 -> 10, T1 12/10 -> 0, 5 -> 0", () => {
+    const cases: [number, number][] = [
+      [120, 50],
+      [60, 25],
+      [30, 10],
+      [15, 0],
+      [5, 0],
+    ];
+    for (const [from, to] of cases) {
+      const d = zenDriver(["slime"], ["apple"], {}, 40);
+      climb(d, from);
+      expect(d.view().keyStreak).toBe(from);
+      stray(d);
+      expect(d.view().keyStreak).toBe(to);
+      expect(d.view().keyStreakTier).toBe(keyStreakTierOf(to));
+    }
+  });
+
+  test("a typo at exactly a threshold drops from that tier (100 -> 50, 50 -> 25, 25 -> 10, 10 -> 0)", () => {
+    for (const [from, to] of [
+      [100, 50],
+      [50, 25],
+      [25, 10],
+      [10, 0],
+    ] as const) {
+      const d = zenDriver(["slime"], ["apple"], {}, 40);
+      climb(d, from);
+      const ev = stray(d);
+      expect(d.view().keyStreak).toBe(to);
+      expect(d.ofType("Typo", ev)[0]).toMatchObject({ keyStreakBefore: from });
+    }
+  });
+
+  test("several typos in a row walk down T4 -> T3 -> T2 -> T1 -> 0 and emit a tier change each time", () => {
+    const d = zenDriver(["slime"], ["apple"], {}, 40);
+    climb(d, 120);
+    const seen: [number, number, number][] = [];
+    for (let i = 0; i < 5; i++) {
+      for (const e of d.ofType("KeyStreakTierChanged", stray(d)))
+        seen.push([e.from, e.to, e.keyStreak]);
+    }
+    expect(seen).toEqual([
+      [4, 3, 50],
+      [3, 2, 25],
+      [2, 1, 10],
+      [1, 0, 0],
+    ]);
+    expect(d.view().keyStreak).toBe(0);
+  });
+
+  test("keyStreakAfterTypo: 120 -> 50, 60 -> 25, 30 -> 10, 12 -> 0, 5 -> 0, threshold values drop a tier", () => {
+    expect([120, 100, 60, 50, 30, 25, 12, 10, 5, 0].map(keyStreakAfterTypo)).toEqual([
+      50, 50, 25, 25, 10, 10, 0, 0, 0, 0,
+    ]);
+  });
+
+  test("T1 -> 0 emits a tier change; a further typo at 0 emits none", () => {
+    const d = zenDriver(["slime"], ["apple"], {}, 40);
+    climb(d, 15);
+    expect(d.ofType("KeyStreakTierChanged", stray(d))[0]).toMatchObject({ from: 1, to: 0 });
+    expect(d.ofType("KeyStreakTierChanged", stray(d))).toEqual([]); // already 0
+  });
+
+  test("tier-up events fire again when climbing back (50 -> 100 re-fires the T4 tier-up)", () => {
+    const d = zenDriver(["slime"], ["apple"], {}, 40);
+    climb(d, 100);
+    stray(d); // 50, T3
+    expect(d.view().keyStreakTier).toBe(3);
+    const seen: [number, number, number][] = [];
+    for (let i = 0; i < 10; i++) {
+      for (const e of d.ofType("KeyStreakTierChanged", perfectWord(d))) {
+        seen.push([e.from, e.to, e.keyStreak]);
+      }
+    }
+    expect(seen).toEqual([[3, 4, 100]]);
+  });
+
+  test("a typo mid-word drops one tier too, and Escape (the only correction key) leaves the streak alone", () => {
+    const d = zenDriver(["slime"], ["apple"], {}, 40);
+    climb(d, 30);
+    d.type("ap");
+    d.key("x");
+    expect(d.view().keyStreak).toBe(10);
+    d.key("Escape");
+    expect(d.view().keyStreak).toBe(10);
+  });
+
+  test("maxKeyStreak keeps the peak across a drop", () => {
+    const d = zenDriver(["slime"], ["apple"], {}, 40);
+    climb(d, 60);
+    stray(d);
+    expect(d.state.run.stats.maxKeyStreak).toBe(60);
+  });
+
+  test("the streak is VFX only: with gentle combo, combo/ATB/HP match whether or not the streak was high", () => {
+    const run = (preTypos: boolean): [number, number] => {
+      const d = zenDriver(["slime"], ["apple"], {}, 40);
+      climb(d, 60);
+      if (preTypos) stray(d);
+      stray(d);
+      return [d.view().combo, d.view().keyStreak];
+    };
+    // combo is driven by perfect words only; the extra typo changes the streak (25 vs 10) but a second typo's combo
+    // effect is latched, so combo is identical
+    expect(run(false)[0]).toBe(run(true)[0]);
+    expect(run(false)[1]).not.toBe(run(true)[1]);
   });
 });
 

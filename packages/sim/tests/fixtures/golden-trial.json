@@ -3,7 +3,7 @@
   "simVersion": 1,
   "goldens": {
     "1": {
-      "hash": "0129c833",
+      "hash": "6025bdb8",
       "log": "7e416d93",
       "correctChars": 954,
       "typos": 65,
@@ -21,7 +21,7 @@
       "inputs": 1076
     },
     "2024": {
-      "hash": "611530b9",
+      "hash": "20e520c1",
       "log": "2a7d0b38",
       "correctChars": 971,
       "typos": 75,
