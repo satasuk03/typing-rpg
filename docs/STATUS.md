@@ -56,3 +56,4 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 - 2026-10-09: Gear Cache weapon type favours the equipped archetype at 40%, with 20% for each other type. Fixed and published.
 - 2026-10-09: Typing Trial requires typed spaces (standard WPM).
 - 2026-10-09: Keep weakness/shield/BREAK; retune encounter HP in T6.1.
+- 2026-10-09: Ch1 sentence plates fold case (capitals display, the lowercase key counts; punctuation still required). Exact case comes in a later chapter. Trial stays case-sensitive.
