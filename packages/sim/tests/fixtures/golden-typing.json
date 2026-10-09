@@ -1,0 +1,34 @@
+{
+  "description": "Scripted typing sessions (tests/typingHarness.ts scriptedSession) on the fixture level, replayed through replay(): final-state hash and event-stream hash per seed. Shared by the Node determinism test and the Chromium parity test. Regenerate only with a SIM_VERSION change.",
+  "simVersion": 1,
+  "goldens": {
+    "1": {
+      "state": "e2cdaff0",
+      "events": "2cd43287",
+      "inputs": 167,
+      "endTick": 2217,
+      "outcome": "cleared"
+    },
+    "42": {
+      "state": "3a56be91",
+      "events": "03adf521",
+      "inputs": 168,
+      "endTick": 2362,
+      "outcome": "cleared"
+    },
+    "2024": {
+      "state": "376dd6f2",
+      "events": "50a2bac0",
+      "inputs": 172,
+      "endTick": 2481,
+      "outcome": "cleared"
+    },
+    "3735928559": {
+      "state": "dac10ca2",
+      "events": "4ee7deae",
+      "inputs": 134,
+      "endTick": 2188,
+      "outcome": "cleared"
+    }
+  }
+}

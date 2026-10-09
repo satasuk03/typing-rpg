@@ -125,6 +125,6 @@ describe("public replay entry points", () => {
         [],
       ),
     ).toThrow(/not implemented/);
-    expect(() => replay({} as never, {} as never, 1, {} as never, [])).toThrow(/not implemented/);
+    expect(() => replay({} as never, {} as never, 1, {} as never, [])).toThrow(); // level sim exists since T1.2
   });
 });

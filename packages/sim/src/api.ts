@@ -34,34 +34,8 @@ export function resolveTrial(_bundle: ContentBundle, _trialId: string): Resolved
   return notImplemented("resolveTrial", "T5.1");
 }
 
-export function createLevel(
-  _def: ResolvedLevel,
-  _loadout: Loadout,
-  _seed: number,
-  _options: LevelOptions,
-): LevelState {
-  return notImplemented("createLevel", "T1.2");
-}
-
-/** Precondition: input.tick === state.tick. Applied before that tick's step processing. No-op (returns []) on a terminal state. */
-export function applyInput(_state: LevelState, _input: SimInput): SimEvent[] {
-  return notImplemented("applyInput", "T1.2");
-}
-
-/** Advance n >= 0 ticks. A terminal state ('cleared' | 'failed') does not advance and returns []. */
-export function step(_state: LevelState, _n?: number): SimEvent[] {
-  return notImplemented("step", "T1.2");
-}
-
-/** Fresh object; floats allowed (never hashed). */
-export function getView(_state: Readonly<LevelState>): LevelView {
-  return notImplemented("getView", "T1.2");
-}
-
-/** Non-null once terminal. */
-export function getResult(_state: Readonly<LevelState>): LevelResult | null {
-  return notImplemented("getResult", "T1.6");
-}
+// T1.2: the typing-only level runtime lives in level.ts (createLevel, applyInput, step, getView, getResult).
+export { applyInput, createLevel, getResult, getView, step } from "./level.ts";
 
 export function computeHeroStats(_loadout: Loadout): { atk: Milli; maxHp: Milli } {
   return notImplemented("computeHeroStats", "T1.3");

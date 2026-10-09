@@ -3,6 +3,7 @@
 import type { DamageType, GearSlot, Rarity, StarChallenge, WeaponArchetype } from "@hd2d/content";
 import type { ChestTier, HitOrigin, PlateKind, SimEvent } from "./events.ts";
 import type { Bp, Milli } from "./fixed.ts";
+import type { EncounterState, RunState } from "./state.ts";
 import type { Tick } from "./time.ts";
 import type { SIM_VERSION } from "./version.ts";
 
@@ -191,13 +192,8 @@ export interface TrialState {
   tick: Tick;
   seed: number /* ...sim-internal */;
 }
-/** Sim-internal shapes (plain data); not part of the contract beyond "plain JSON". */
-export interface RunState {
-  readonly _run?: never;
-}
-export interface EncounterState {
-  readonly _enc?: never;
-}
+/** Sim-internal shapes (plain data); real definitions live in state.ts (T1.2). Re-exported under the contract names. */
+export type { EncounterState, RunState } from "./state.ts";
 
 // ---- §8 shared meta types ----
 export interface CachePity {

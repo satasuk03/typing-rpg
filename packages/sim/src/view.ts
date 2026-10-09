@@ -114,6 +114,7 @@ export interface LevelView {
   secondWind: { plateId: PlateId; ticksLeft: number; totalTicks: number } | null;
   stats: {
     netWpm: number;
+    /** Basis points (0..10000), same as accuracyBp: floor(correct*BP/(correct+typos)); BP if no keys yet. */
     accuracy: number;
     burstWpm: number;
     elapsedTicks: number;
@@ -131,6 +132,7 @@ export interface TrialView {
   keyStreakTier: KeyStreakTier;
   lastTypoTick: Tick | null;
   netWpm: number;
+  /** Basis points (0..10000), same as accuracyBp: floor(correct*BP/(correct+typos)); BP if no keys yet. */
   accuracy: number;
   done: boolean;
 }
