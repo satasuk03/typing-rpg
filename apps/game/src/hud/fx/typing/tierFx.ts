@@ -5,6 +5,7 @@
  */
 import { easeOutCubic, POOL_CAP, STREAK_STYLE, TIER_UP } from "../../../level/typingFxParams";
 import type { PlateTint } from "../../fx";
+import { bossPlateRect, HERO_PANEL, STATS_PANEL_W } from "../../panels";
 import { perimPoint } from "../../plates";
 import { drawHalo, type GlowSprites } from "./glowSprites";
 import { blendTints, FILL, hueBucket, I_BUCKET, TINT_KINDS, tintFor } from "./palette";
@@ -32,6 +33,9 @@ const RLW1 = 7;
 const RALPHA = 8;
 
 const PT = { x: 0, y: 0 };
+/** Ring radius cap, design px (polish #18: the 260 px ring crossed the boss bar and stats panel). */
+export const RING_R_MAX = 120;
+const DESIGN_W = 1280;
 /** Embers 1.5x the spec rate (tuning log). */
 const EMBER_BOOST = 1.5;
 /** Halo reach (CSS px at scale 1) and alpha gain over the spec's backGlowAlpha (soft falloff needs more). */
@@ -53,6 +57,30 @@ export class StreakTierFx {
   /** Plate the embers / back-glow hug, and its rect (CSS px). */
   readonly rect: RectLike = { x: 0, y: 0, w: 0, h: 0 };
   hasRect = false;
+  /** Panel rects (CSS px) the rings are clipped out of. */
+  private readonly panels: RectLike[] = [
+    { x: 0, y: 0, w: 0, h: 0 },
+    { x: 0, y: 0, w: 0, h: 0 },
+    { x: 0, y: 0, w: 0, h: 0 },
+  ];
+  private nPanels = 2;
+
+  /** Refresh the clip-out rects for scale `S` (hero panel, stats panel, boss plate when present). */
+  setPanels(S: number, boss: boolean): void {
+    const set = (i: number, x: number, y: number, w: number, h: number): void => {
+      const r = this.panels[i] as RectLike;
+      r.x = x * S;
+      r.y = y * S;
+      r.w = w * S;
+      r.h = h * S;
+    };
+    const H = HERO_PANEL;
+    set(0, H.x, H.y, H.w, H.h);
+    set(1, DESIGN_W - 22 - STATS_PANEL_W, 18, STATS_PANEL_W, 104);
+    const b = bossPlateRect(DESIGN_W);
+    set(2, b.x, b.y, b.w, b.h + 22);
+    this.nPanels = boss ? 3 : 2;
+  }
   /** The plate the halo hugs still exists (the halo vanishes with a completed plate; embers linger). */
   plateAlive = true;
 
@@ -246,6 +274,15 @@ export class StreakTierFx {
     // rings
     const rg = this.rings;
     if (rg.count > 0) {
+      // rings never cross a panel: clip the panel rects out (even-odd)
+      c.save();
+      c.beginPath();
+      c.rect(-4, -4, 16384, 16384);
+      for (let i = 0; i < this.nPanels; i++) {
+        const p = this.panels[i] as RectLike;
+        c.rect(p.x, p.y, p.w, p.h);
+      }
+      c.clip("evenodd");
       const cx = rg.f[RCX] as Float32Array;
       const cy = rg.f[RCY] as Float32Array;
       const r0 = rg.f[RR0] as Float32Array;
@@ -274,6 +311,7 @@ export class StreakTierFx {
         c.lineWidth = lw;
         c.stroke();
       }
+      c.restore();
     }
     // embers: one batched dark halo, then the coloured pixels (alpha in 1/8 steps)
     const em = this.embers;
@@ -351,7 +389,7 @@ export class StreakTierFx {
     (rg.f[RCX] as Float32Array)[ri] = cx;
     (rg.f[RCY] as Float32Array)[ri] = cy;
     (rg.f[RR0] as Float32Array)[ri] = 0.5 * r.w;
-    (rg.f[RR1] as Float32Array)[ri] = 1.6 * r.w;
+    (rg.f[RR1] as Float32Array)[ri] = Math.min(1.6 * r.w, RING_R_MAX * S);
     (rg.f[RAGE] as Float32Array)[ri] = -downbeat;
     (rg.f[RLIFE] as Float32Array)[ri] = TIER_UP.ringMs / 1000;
     (rg.f[RLW0] as Float32Array)[ri] = 5;

@@ -36,6 +36,8 @@ export const K_RING = 6;
 export const K_EMBER = 7;
 export const L_BEHIND = 0;
 export const L_ABOVE = 1;
+/** Arrival flares / sparks / ATB embers: drawn behind, clipped to the ATB bar rect (never spill on the HP bar). */
+export const L_ATB = 2;
 
 export interface SparkEnv {
   /** Design-to-CSS scale. */

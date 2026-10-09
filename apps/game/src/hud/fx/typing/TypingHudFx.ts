@@ -17,6 +17,7 @@ import {
 } from "../../../level/typingFxParams";
 import type { HudEffect } from "../../fx";
 import type { Hud } from "../../hud";
+import { HERO_PANEL } from "../../panels";
 import { buildGlowSprites, buildHaloSprites, type GlowSprites } from "./glowSprites";
 import { GuardGlyphs } from "./guardGlyphs";
 import {
@@ -40,6 +41,7 @@ import {
   K_SQ2,
   K_SQ3,
   L_ABOVE,
+  L_ATB,
   L_BEHIND,
   type RectLike,
   type SparkEnv,
@@ -78,6 +80,8 @@ export interface TypingFxStats {
 const R: RectLike = { x: 0, y: 0, w: 0, h: 0 };
 const TIP = { x: 0, y: 0 };
 const WTIP = { x: 0, y: 0 };
+/** Lock-on / finisher ring radius cap (design px; polish #18). */
+const RING_MAX = 120;
 const ATBR = { x: 0, y: 0, w: 0, h: 0 };
 const SAMPLES = 4096;
 
@@ -85,6 +89,7 @@ export class TypingHudFx {
   private readonly sparks = new SparkField();
   private readonly streaks = new AtbStreaks();
   private readonly tierFx = new StreakTierFx();
+  private bossPlateOn = false;
   private readonly speed = new SpeedFx();
   readonly shatter = new PlateShatter();
   readonly guard = new GuardGlyphs();
@@ -431,8 +436,8 @@ export class TypingHudFx {
         rings.addRing(
           cx,
           cy,
-          Math.min(0.3 * PR.w, 60 * S),
-          Math.min(1.9 * PR.w, 280 * S),
+          Math.min(0.3 * PR.w, 40 * S),
+          Math.min(1.9 * PR.w, RING_MAX * S),
           i * 0.05,
           0.38,
           6,
@@ -450,8 +455,8 @@ export class TypingHudFx {
       rings.addRing(
         cx,
         cy,
-        Math.min(0.3 * PR.w, 50 * S),
-        Math.min(1.25 * PR.w, 200 * S),
+        Math.min(0.3 * PR.w, 36 * S),
+        Math.min(1.25 * PR.w, 100 * S),
         0,
         0.38,
         6,
@@ -659,7 +664,7 @@ export class TypingHudFx {
     const env = this.env;
     this.hud.pulseAtb(fat ? 1 : Math.min(0.85, 0.35 + 0.1 * tier));
     const col = accentIndex(tier, env.time, 0, env.reducedMotion);
-    this.sparks.add(x, y, 0, 0, 0, 0.12, 16, K_FLARE, col, L_BEHIND);
+    this.sparks.add(x, y, 0, 0, 0, 0.12, 16, K_FLARE, col, L_ATB);
     const S = env.S;
     const n = Math.round(4 * env.k);
     for (let i = 0; i < n; i++) {
@@ -675,7 +680,7 @@ export class TypingHudFx {
         2,
         K_SQ2,
         sparkIndex(tier, 0),
-        L_BEHIND,
+        L_ATB,
       );
     }
   }
@@ -713,6 +718,7 @@ export class TypingHudFx {
       }
     }
     this.tierFx.plateAlive = alive;
+    this.bossPlateOn = !!view.boss;
     this.tierFx.hasRect =
       id >= 0 && plateKind !== "guard" && hud.getPlateRectInto(id, this.tierFx.rect);
 
@@ -772,9 +778,20 @@ export class TypingHudFx {
       set.reducedMotion,
     );
     if (this.benching) tp = this.lap("edges", tp);
+    this.tierFx.setPanels(S, this.bossPlateOn);
     this.tierFx.draw(c, S, time, this.sprites, this.halos, !set.reducedFlash, set.reducedMotion);
     if (this.benching) tp = this.lap("tier", tp);
     this.sparks.draw(c, L_BEHIND, S, this.sprites);
+    if (this.sparks.count > 0) {
+      // arrival sparks / flare: clipped to the ATB bar rect so nothing lands on the HP bar or its text
+      hud.getAtbRectInto(ATBR);
+      c.save();
+      c.beginPath();
+      c.rect(ATBR.x - 6 * S, ATBR.y - 5 * S, ATBR.w + 12 * S, ATBR.h + 9 * S);
+      c.clip();
+      this.sparks.draw(c, L_ATB, S, this.sprites);
+      c.restore();
+    }
     if (this.benching) tp = this.lap("sparksBehind", tp);
     c.globalCompositeOperation = "source-over";
     this.shatter.drawBehind(c, S, set.reducedFlash, set.effectsIntensity);
@@ -820,7 +837,16 @@ export class TypingHudFx {
     this.shatter.drawAbove(c, S, this.sprites, set.effectsIntensity);
     c.globalCompositeOperation = "source-over";
     if (this.benching) tp = this.lap("shatter", tp);
-    if (this.streaks.count > 0)
+    if (this.streaks.count > 0) {
+      // never over the HP bar / name / HP text: clip the hero panel above the ATB bar out of the streak layer
+      hud.getAtbRectInto(ATBR);
+      const hp = HERO_PANEL;
+      const cut = (hp.y + 0) * S;
+      c.save();
+      c.beginPath();
+      c.rect(-4, -4, 16384, 16384);
+      c.rect(hp.x * S, cut, hp.w * S, ATBR.y - 7 * S - cut);
+      c.clip("evenodd");
       this.streaks.draw(
         c,
         { S, time, k: set.effectsIntensity, q: this.quality, reducedMotion: set.reducedMotion },
@@ -828,6 +854,8 @@ export class TypingHudFx {
         TIP.y,
         this.sprites,
       );
+      c.restore();
+    }
     if (this.benching) this.lap("streaks", tp);
     c.globalAlpha = 1;
     if (this.benching) this.drawMs += performance.now() - t0;

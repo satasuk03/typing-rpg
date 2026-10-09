@@ -47,14 +47,21 @@ export function cacheScreen(app: App, _arg: ScreenArg): Screen {
       .join("");
   };
 
+  const chestHtml = (open: boolean): string => {
+    const url = app.chestUrl(open);
+    return url
+      ? `<img class="chest-img" alt="Gear Cache" src="${url}">`
+      : iconHtml("cache", { rarity: "R", size: "lg", alt: "Gear Cache" });
+  };
+
   const draw = (): void => {
     const s = app.store.save;
     const n = s.inventory.unopenedCaches;
     body.innerHTML = `
       <section class="cache-stage" id="cstage" data-phase="${phase}">
-        <div class="rays"></div><div class="beam" id="beam"></div>
+        <div class="rays"></div><div class="chest-glow"></div><div class="beam" id="beam"></div>
         <canvas class="burst" id="burst" width="560" height="380"></canvas>
-        <div class="chest" id="chest">${iconHtml("cache", { rarity: "R", size: "lg", alt: "Gear Cache" })}<div class="chest-count">x <b id="count">${n}</b></div></div>
+        <div class="chest" id="chest">${chestHtml(phase !== "idle")}</div><span id="count" hidden>${n}</span>
         <div class="flash" id="flash"></div>
         <div class="reveal" id="reveal" hidden></div>
         <div class="cache-msg hd-sub" id="cmsg">${n > 0 ? "Open a Gear Cache to receive a piece of gear." : "No caches. Earn them from chests or buy one for gold."}</div>
@@ -207,6 +214,7 @@ export function cacheScreen(app: App, _arg: ScreenArg): Screen {
     timers.push(
       window.setTimeout(() => {
         stage.dataset.phase = "burst";
+        (body.querySelector("#chest") as HTMLElement).innerHTML = chestHtml(true);
         app.sfx("chestOpen");
         if (!reduced) burst(rarity);
         timers.push(
@@ -229,6 +237,8 @@ export function cacheScreen(app: App, _arg: ScreenArg): Screen {
       phase = "idle";
       const stage = body.querySelector<HTMLElement>("#cstage");
       if (stage) stage.dataset.phase = "idle";
+      const ch = body.querySelector("#chest");
+      if (ch) ch.innerHTML = chestHtml(false);
       (body.querySelector("#reveal") as HTMLElement).hidden = true;
       open();
     },
@@ -236,6 +246,8 @@ export function cacheScreen(app: App, _arg: ScreenArg): Screen {
       phase = "idle";
       const stage = body.querySelector<HTMLElement>("#cstage");
       if (stage) stage.dataset.phase = "idle";
+      const ch = body.querySelector("#chest");
+      if (ch) ch.innerHTML = chestHtml(false);
       (body.querySelector("#reveal") as HTMLElement).hidden = true;
       (body.querySelector("#cmsg") as HTMLElement).textContent =
         app.store.save.inventory.unopenedCaches > 0

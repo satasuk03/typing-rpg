@@ -14,6 +14,9 @@ const DUR = 3;
 const HV = 4; // fan-out hash -1..1
 const FAT = 5;
 const TIER = 0;
+const ARRIVED = 1;
+/** After arrival the tail retracts into the bar over this long (spec: <= 80 ms). */
+export const TAIL_FADE_SEC = 0.06;
 
 const PX = new Float32Array(16);
 const PY = new Float32Array(16);
@@ -27,7 +30,7 @@ export interface StreakEnv {
 }
 
 export class AtbStreaks {
-  readonly pool = new HudPool(POOL_CAP.streaks, 6, 1, AGE);
+  readonly pool = new HudPool(POOL_CAP.streaks, 6, 2, AGE);
   /** Fired when a streak arrives at the bar: (tier, tipX, tipY, fat). */
   onArrive: (tier: number, x: number, y: number, fat: boolean) => void = () => {};
 
@@ -51,7 +54,8 @@ export class AtbStreaks {
       const age = p.f[AGE] as Float32Array;
       let best = 0;
       for (let i = 1; i < p.count; i++) if ((age[i] as number) > (age[best] as number)) best = i;
-      this.onArrive(p.b[TIER]?.[best] ?? 0, tipX, tipY, (p.f[FAT]?.[best] ?? 1) > 1.5);
+      if (!(p.b[ARRIVED]?.[best] ?? 0))
+        this.onArrive(p.b[TIER]?.[best] ?? 0, tipX, tipY, (p.f[FAT]?.[best] ?? 1) > 1.5);
       p.remove(best);
     }
     const i = p.spawn();
@@ -62,6 +66,7 @@ export class AtbStreaks {
     (p.f[HV] as Float32Array)[i] = hash01(seed, tier) * 2 - 1;
     (p.f[FAT] as Float32Array)[i] = fat ? 2 : 1;
     (p.b[TIER] as Uint8Array)[i] = tier;
+    (p.b[ARRIVED] as Uint8Array)[i] = 0;
   }
 
   clear(): void {
@@ -76,10 +81,15 @@ export class AtbStreaks {
     for (let i = p.count - 1; i >= 0; i--) {
       const a = (age[i] as number) + dt;
       age[i] = a;
-      if (a >= (dur[i] as number)) {
+      if (a >= (dur[i] as number) + TAIL_FADE_SEC) {
+        p.remove(i);
+        continue;
+      }
+      const arrived = p.b[ARRIVED] as Uint8Array;
+      if (a >= (dur[i] as number) && !arrived[i]) {
+        arrived[i] = 1;
         const tier = (p.b[TIER] as Uint8Array)[i] as number;
         const fat = ((p.f[FAT] as Float32Array)[i] as number) > 1.5;
-        p.remove(i);
         this.onArrive(tier, tipX, tipY, fat);
       }
     }
@@ -94,7 +104,7 @@ export class AtbStreaks {
     sprites: GlowSprites,
   ): void {
     const p = this.pool;
-    const { S, k } = env;
+    const { S } = env;
     const samples = QUALITY_TRAIL_SAMPLES[env.q] as number;
     const x0s = p.f[P0X] as Float32Array;
     const y0s = p.f[P0Y] as Float32Array;
@@ -125,9 +135,15 @@ export class AtbStreaks {
       const cy = (y0 + tipY) / 2 + ny * bend;
       const t = Math.min(1, (ages[i] as number) / (durs[i] as number));
       const u = t ** 1.6;
-      let trailPx = (STREAK_STYLE.trailPx[tier] as number) * S * fat;
+      // after arrival the head stays on the bar and the tail retracts + fades (<= 80 ms)
+      const fade = Math.max(
+        0,
+        Math.min(1, ((ages[i] as number) - (durs[i] as number)) / TAIL_FADE_SEC),
+      );
+      const k = env.k * (1 - fade);
+      let trailPx = (STREAK_STYLE.trailPx[tier] as number) * S * fat * (1 - fade);
       if (env.reducedMotion) trailPx *= 0.5;
-      const trailU = trailPx / (len * 1.15);
+      const trailU = Math.max(0.0005, trailPx / (len * 1.15));
       const ua = Math.max(0, u - trailU);
       for (let s = 0; s < samples; s++) {
         const w = ua + ((u - ua) * s) / (samples - 1);
