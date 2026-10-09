@@ -215,7 +215,7 @@ export const BALANCE = {
   INITIAL_ENEMY_ATB_MAX: 0.3,
   PARRY_COUNTER: 0.5,
   PARRY_ATB: 10,
-  IRON_WILL_BLOCK_MULT: 0.1,
+  IRON_WILL_BLOCK_MULT: 0.15, // T6.1 PO "add risk": 0.1 -> 0.15 (a block takes 15% instead of BLOCK_MULT 20%)
   RIPOSTE_COUNTER: 1.5,
   WEAK_MULT: 1.3,
   BREAK_DMG_MULT: 1.8,
@@ -261,14 +261,15 @@ export const BALANCE = {
     },
     frostLock: { charge: 9, freeze_s: 4, damage_type: "ice", cast: "whenTelegraph" },
     mendingLight: { charge: 12, heal: 0.25, cast: "whenHpBelow", hp_below: 0.6 },
-    aegis: { charge: 10, barrier_hits: 2, cast: "whenTelegraph" },
+    // T6.1 PO "add risk" (docs/balance-ch1.md §8): charge 10 -> 12, barrier_hits 2 -> 1 (absorbs per word 0.2 -> 0.083)
+    aegis: { charge: 12, barrier_hits: 1, cast: "whenTelegraph" },
   },
   PASSIVES: {
     cleanCut: { crit_bonus: 0.1 },
     bulwarkStreak: { every_combo: 10, barrier_hits: 1 },
     steadyHands: { forgiven_per_encounter: 1 },
     riposte: { counter: 1.5 },
-    ironWill: { block_mult: 0.1 },
+    ironWill: { block_mult: 0.15 },
     openingGambit: { start_atb: 50 },
     lastStand: { hp_below: 0.3, atb_mult: 1.4 },
     comeback: { restore_frac: 0.5 },

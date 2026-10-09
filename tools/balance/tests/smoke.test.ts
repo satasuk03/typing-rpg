@@ -83,15 +83,16 @@ describe("verdicts", () => {
     expect(v({ normalActiveMin: 2.6 })["normal active min (L1-L9 mean)"]).toBe("PASS(±15%)");
     expect(v({ normalActiveMin: 2.5 })["normal active min (L1-L9 mean)"]).toBe("FAIL");
     expect(v({ normalClear: 0.79 })["first-try clear normal (mean)"]).toBe("FAIL");
-    expect(v({ bossActiveMin: 6.2 })["boss active min"]).toBe("PASS(±15%)");
+    expect(v({ bossActiveMin: 9.2 })["boss active min"]).toBe("PASS(±15%)");
   });
-  test("a documented structural miss is FAIL*, not FAIL", () => {
-    expect(KNOWN_MISSES).toContain("beginner:boss active min");
-    expect(v({ bossActiveMin: 9 })["boss active min"]).toBe("FAIL*");
+  test("Chapter 1 boss targets are economy_sim's Chapter 1 model (PO 2026-10-09); no known misses remain", () => {
+    expect(KNOWN_MISSES).toEqual([]);
+    expect(v({ bossActiveMin: 8.1 })["boss active min"]).toBe("PASS");
+    expect(v({ bossActiveMin: 9.4 })["boss active min"]).toBe("FAIL");
     expect(
-      verdicts([{ ...base, persona: "average", bossActiveMin: 9 }]).find(
+      verdicts([{ ...base, persona: "fast", bossActiveMin: 2.9 }]).find(
         (c) => c.metric === "boss active min",
       )?.verdict,
-    ).toBe("FAIL");
+    ).toBe("PASS(±15%)");
   });
 });

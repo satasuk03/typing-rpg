@@ -17,7 +17,7 @@ const opt = (name: string): string | undefined => {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : undefined;
 };
-const seeds = Number(opt("--seeds") ?? 60);
+const seeds = Number(opt("--seeds") ?? 200);
 const workers = Number(opt("--workers") ?? availableParallelism());
 const noise = !args.includes("--no-noise");
 const personas = (opt("--persona")?.split(",") ?? PERSONAS.map((p) => p.id)) as PersonaId[];

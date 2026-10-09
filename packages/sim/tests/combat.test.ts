@@ -440,7 +440,7 @@ describe("enemy attacks (doc 01 §1.6-1.7)", () => {
     expect(d.state.run.barrier).toBe(0);
   });
 
-  test("Iron Will blocks to x0.1 and Riposte counters at 150%", () => {
+  test("Iron Will blocks to x0.15 (T6.1) and Riposte counters at 150%", () => {
     const lo = { ...mkLoadout(), passives: ["ironWill", "riposte", null] as never };
     const d = drive(lvl(["plain"]), {}, lo);
     const e = enemy(d);
@@ -458,7 +458,7 @@ describe("enemy attacks (doc 01 §1.6-1.7)", () => {
     d2.step();
     d2.type(g2.text.slice(1));
     impact(d2, e2);
-    expect(d2.state.run.heroHpM).toBe(100_000 - 500);
+    expect(d2.state.run.heroHpM).toBe(100_000 - 750); // 5 x IRON_WILL_BLOCK_MULT 0.15 (T6.1)
   });
 
   test("tutorial: enemies hold their attacks until 3 words are typed", () => {

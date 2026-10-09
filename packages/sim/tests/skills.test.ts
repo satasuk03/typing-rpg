@@ -100,7 +100,7 @@ describe("skill charge (doc 01 §2.3, C17)", () => {
     expect(d.state.run.skillChargeM).toEqual([1500, 1500]);
     expect(d.view().skills).toEqual([
       { slot: 0, id: "fireball", chargeFrac: 0.15, ready: false, mode: "smart" },
-      { slot: 1, id: "aegis", chargeFrac: 0.15, ready: false, mode: "smart" },
+      { slot: 1, id: "aegis", chargeFrac: 0.125, ready: false, mode: "smart" }, // 1.5 / 12 (T6.1)
     ]);
     sloppyWord(d);
     expect(d.state.run.skillChargeM).toEqual([2500, 2500]);
@@ -198,7 +198,7 @@ describe("active skills", () => {
     expect(enemy(d).dots).toEqual([]);
   });
 
-  test("Aegis: casts as a guard word appears and grants 2 barrier hits that absorb the next 2 attacks", () => {
+  test("Aegis: casts as a guard word appears and grants AEGIS_BARRIER_HITS (1 since T6.1) barrier hit that absorbs the next attack", () => {
     const d = drive(lvl(["plain"]), kit(["aegis", null]));
     const e = enemy(d);
     arm(d, e, 300);
@@ -208,19 +208,16 @@ describe("active skills", () => {
     d.until("GuardWordShown");
     expect(d.ofType("SkillCast")).toHaveLength(1); // same tick as the windup
     d.step(SKILL_IMPACT);
+    expect(K.AEGIS_BARRIER_HITS).toBe(1);
     expect(d.ofType("StatusApplied").find((s) => s.status === "barrier")).toMatchObject({
       targetId: 0,
-      stacks: 2,
+      stacks: 1,
       skillId: "aegis",
     });
-    expect(d.view().hero.barrierCharges).toBe(2);
+    expect(d.view().hero.barrierCharges).toBe(1);
     d.until("EnemyAttack");
     expect(d.ofType("EnemyAttack")[0]).toMatchObject({ outcome: "barrier", damage: 0 });
     expect(d.state.run.heroHpM).toBe(100_000);
-    expect(d.state.run.barrier).toBe(1);
-    arm(d, e, 200);
-    d.until("EnemyAttack");
-    expect(d.ofType("EnemyAttack")[1]).toMatchObject({ outcome: "barrier" });
     expect(d.state.run.barrier).toBe(0);
     expect(d.ofType("StatusEnded").some((s) => s.status === "barrier" && s.targetId === 0)).toBe(
       true,
@@ -412,7 +409,7 @@ describe("passives", () => {
     expect(enc(d).atbM).toBe(28_000);
   });
 
-  test("Iron Will: a block takes 0.1 x the hit (0.5 of 5) and fires PassiveTriggered", () => {
+  test("Iron Will: a block takes 0.15 x the hit (0.75 of 5, T6.1) and fires PassiveTriggered", () => {
     const d = drive(lvl(["plain"]), kit([null, null], [null, null, "ironWill"]));
     const e = enemy(d);
     arm(d, e, 300);
@@ -422,9 +419,9 @@ describe("passives", () => {
     d.step();
     d.type(g.text.slice(1));
     d.until("EnemyAttack");
-    // the event shows a display integer (0.5 rounds up to 1); the HP below is exact
+    // the event shows a display integer (0.75 rounds up to 1); the HP below is exact
     expect(d.ofType("EnemyAttack")[0]).toMatchObject({ outcome: "blocked", damage: 1 });
-    expect(d.state.run.heroHpM).toBe(100_000 - 500);
+    expect(d.state.run.heroHpM).toBe(100_000 - 750);
     expect(passives(d)).toEqual([
       { type: "PassiveTriggered", tick: expect.any(Number), passiveId: "ironWill", targetId: e.id },
     ]);
