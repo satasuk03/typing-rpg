@@ -35,6 +35,12 @@ function boot(): void {
     return;
   }
 
+  // Dev-only route: ?scene=typing-vfx (src/dev/typingVfxScene.ts): T2.6 typing VFX over the real world.
+  if (new URLSearchParams(location.search).get("scene") === "typing-vfx") {
+    void import("./dev/typingVfxScene").then((m) => m.start(glCanvas));
+    return;
+  }
+
   // Dev-only route: ?scene=level&id=ch1-l03&pose=walk|battle:1|boss renders a level from its layout data.
   if (new URLSearchParams(location.search).get("scene") === "level") {
     void import("./dev/levelScene").then((m) => m.start(glCanvas));

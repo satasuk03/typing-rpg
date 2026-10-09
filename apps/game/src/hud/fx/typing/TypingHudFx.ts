@@ -1,0 +1,426 @@
+/**
+ * TypingHudFx: the HUD half of T2.6 "every keystroke is a spell" (Chunk A).
+ * Owns the per-key reactions (letter pop, bounce, sparks, ATB streak), the streak tiers (tints,
+ * embers, back-glow, tier-up), the typo reaction and the speed feedback. It draws through two
+ * persistent HudEffects (one per layer) and the plate renderer (via `hud.plateFx`).
+ *
+ * Wiring: `const fx = new TypingHudFx(hud); fx.attach();` then forward every SimEvent to
+ * `fx.onEvent(e)` (the same stream that goes to `hud.pushEvents`). Per-frame updates run through
+ * `hud.onUpdate`, so the caller needs nothing else.
+ */
+import type { LevelView, SimEvent } from "@hd2d/sim";
+import { elementIndex, QUALITY_Q, STREAK_STYLE } from "../../../level/typingFxParams";
+import type { HudEffect } from "../../fx";
+import type { Hud } from "../../hud";
+import { buildGlowSprites, type GlowSprites } from "./glowSprites";
+import { accentIndex, I_ELEMENT, sparkIndex } from "./palette";
+import { mulberry32 } from "./pool";
+import {
+  emitLetterSparks,
+  K_FLARE,
+  K_SQ2,
+  L_ABOVE,
+  L_BEHIND,
+  type RectLike,
+  type SparkEnv,
+  SparkField,
+} from "./sparks";
+import { SpeedFx } from "./speedFx";
+import { AtbStreaks } from "./streaks";
+import { StreakTierFx } from "./tierFx";
+import { applyTypo } from "./typoFx";
+
+export interface TypingFxOptions {
+  seed?: number;
+  quality?: 0 | 1 | 2;
+}
+
+export interface TypingFxStats {
+  sparks: number;
+  streaks: number;
+  embers: number;
+  rings: number;
+  tier: number;
+  heat: number;
+  keys: number;
+  handlerMs: number;
+  updateMs: number;
+  drawMs: number;
+  handlerP95Ms: number;
+  /** Share of timed handler calls that read >= 0.1 ms (one timer tick; ~5% is pure quantisation). */
+  handlerOverTick: number;
+  /** Draw time split by part (ms, bench only): edges, tier (glow/rings/embers), sparksBehind, sparksAbove, streaks, plate. */
+  parts: Record<string, number>;
+}
+
+const R: RectLike = { x: 0, y: 0, w: 0, h: 0 };
+const TIP = { x: 0, y: 0 };
+const SAMPLES = 4096;
+
+export class TypingHudFx {
+  private readonly sparks = new SparkField();
+  private readonly streaks = new AtbStreaks();
+  private readonly tierFx = new StreakTierFx();
+  private readonly speed = new SpeedFx();
+  private sprites: GlowSprites = [];
+  private readonly env: SparkEnv;
+  private view: LevelView | null = null;
+  private enabled = true;
+  private attached = false;
+  private clock = 0;
+  private lastTyped = -1;
+  private lastTypedAt = -99;
+  private quality: 0 | 1 | 2;
+  private cleanups: (() => void)[] = [];
+  private seed: number;
+  // bench instrumentation
+  private benching = false;
+  private keys = 0;
+  private handlerMs = 0;
+  private updateMs = 0;
+  private drawMs = 0;
+  private readonly samples = new Float32Array(SAMPLES);
+  private nSamples = 0;
+  private parts: Record<string, number> = {};
+  private lap(name: string, t0: number): number {
+    const t = performance.now();
+    this.parts[name] = (this.parts[name] ?? 0) + (t - t0);
+    return t;
+  }
+
+  constructor(
+    private readonly hud: Hud,
+    opts: TypingFxOptions = {},
+  ) {
+    this.seed = opts.seed ?? 1;
+    this.quality = opts.quality ?? 0;
+    this.env = {
+      S: 1,
+      time: 0,
+      k: 1,
+      q: QUALITY_Q[this.quality] as number,
+      reducedMotion: false,
+      rng: mulberry32(this.seed),
+    };
+    this.streaks.onArrive = (tier, x, y, fat) => this.arrive(tier, x, y, fat);
+  }
+
+  // ---------------------------------------------------------------- lifecycle
+
+  /** Register the two draw layers and the update hook; the HUD stops doing its own pop/bounce/typo. */
+  attach(): () => void {
+    if (this.attached) return () => {};
+    this.attached = true;
+    this.sprites = buildGlowSprites();
+    const behind: HudEffect = {
+      layer: "behind",
+      life: Number.POSITIVE_INFINITY,
+      draw: (c, f) => this.drawBehind(c, f.time),
+    };
+    const above: HudEffect = {
+      layer: "above",
+      life: Number.POSITIVE_INFINITY,
+      draw: (c, f) => this.drawAbove(c, f.time),
+    };
+    this.hud.fx.add(behind);
+    this.hud.fx.add(above);
+    const off = this.hud.onUpdate((dt, view) => this.update(dt, view));
+    this.hud.setTypingFxAttached(true);
+    this.hud.setQuality(this.quality);
+    const detach = (): void => {
+      this.hud.fx.remove(behind);
+      this.hud.fx.remove(above);
+      off();
+      this.hud.setTypingFxAttached(false);
+      this.attached = false;
+    };
+    this.cleanups.push(detach);
+    return detach;
+  }
+  dispose(): void {
+    for (const c of this.cleanups.splice(0)) c();
+  }
+
+  /** A/B switch for the readability capture: off = no typing VFX and no tints, same sim state. */
+  setEnabled(on: boolean): void {
+    this.enabled = on;
+    this.hud.plateFx.muted = !on;
+  }
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+  setQuality(q: 0 | 1 | 2): void {
+    this.quality = q;
+    this.env.q = QUALITY_Q[q] as number;
+    this.hud.setQuality(q);
+  }
+  reseed(seed: number): void {
+    this.seed = seed;
+    this.env.rng = mulberry32(seed);
+  }
+  private clearAll(): void {
+    this.sparks.clear();
+    this.streaks.clear();
+    this.tierFx.clear();
+    this.speed.clear();
+  }
+
+  // ---------------------------------------------------------------- events
+
+  /** @hot for CharCorrect: no allocation, no string building. */
+  onEvent(e: SimEvent): void {
+    if (!this.enabled) return;
+    switch (e.type) {
+      case "CharCorrect": {
+        if (this.benching) {
+          const t0 = performance.now();
+          this.charCorrect(e);
+          const dt = performance.now() - t0;
+          this.handlerMs += dt;
+          this.keys++;
+          this.samples[this.nSamples++ % SAMPLES] = dt;
+        } else this.charCorrect(e);
+        break;
+      }
+      case "TargetAcquired":
+        this.hud.plateFx.sweep(e.plateId);
+        break;
+      case "Typo":
+        applyTypo(this.hud, e, this.view?.comboMode === "zen");
+        this.speed.onTypo();
+        break;
+      case "KeyStreakTierChanged":
+        this.tierChanged(e.from, e.to);
+        break;
+      case "BurstWpm":
+        this.speed.onBurst(e.band, e.wpm);
+        break;
+      case "LevelStarted":
+      case "LevelCleared":
+      case "LevelFailed":
+        this.clearAll();
+        break;
+      default:
+        break;
+    }
+  }
+
+  private charCorrect(e: Extract<SimEvent, { type: "CharCorrect" }>): void {
+    const hud = this.hud;
+    const env = this.env;
+    const k = env.k;
+    const v = this.view;
+    const tier = e.keyStreakTier;
+    let sentence = false;
+    if (v)
+      for (let i = 0; i < v.plates.length; i++) {
+        const p = v.plates[i];
+        if (p && p.id === e.plateId) {
+          sentence = p.text.indexOf(" ") >= 0;
+          break;
+        }
+      }
+    const guard = e.kind === "guard";
+    hud.plateFx.pop(e.plateId, e.index);
+    if (k > 0)
+      hud.plateFx.press(
+        e.plateId,
+        (STREAK_STYLE.bounceAmp[tier] as number) * k * (sentence ? 0.5 : 1),
+      );
+    this.lastTyped = e.plateId;
+    this.lastTypedAt = this.clock;
+    this.speed.onKey();
+    if (!hud.getLetterRectInto(e.plateId, e.index, R)) return;
+    const element = elementIndex(v?.hero.weaponDamageType);
+    emitLetterSparks(this.sparks, env, R, tier, element, e.isLast, guard ? I_ELEMENT + 5 : -1);
+    if (!e.isLast && k >= 0.15 && !guard) {
+      hud.getAtbTipInto(TIP);
+      this.streaks.launch(R.x + R.w / 2, R.y, tier, e.plateId * 31 + e.index, false, TIP.x, TIP.y);
+    }
+  }
+
+  private tierChanged(from: number, to: number): void {
+    const hud = this.hud;
+    if (to > from) {
+      const id =
+        this.view?.targetPlateId ?? (this.clock - this.lastTypedAt < 1.5 ? this.lastTyped : -1);
+      let have = id >= 0 && hud.getPlateRectInto(id, R);
+      if (!have) {
+        // no plate (the last letter completed it): anchor to the key-streak bar in COMBO_AREA
+        const S = this.env.S;
+        R.x = (1280 - 220) * S;
+        R.y = 222 * S;
+        R.w = 190 * S;
+        R.h = 14 * S;
+        have = true;
+      }
+      this.tierFx.setTier(to);
+      this.tierFx.tierUp(to, R, this.sparks, this.env, hud.getSettings().reducedFlash);
+      if (id >= 0 && !hud.getSettings().reducedFlash && hud.getSettings().effectsIntensity > 0)
+        hud.plateFx.flashBorder(id, 60, 200);
+    } else this.tierFx.setTier(to);
+  }
+
+  /** A streak reached the ATB bar: pulse, tip flare and tip sparks (§2.3). */
+  private arrive(tier: number, x: number, y: number, fat: boolean): void {
+    const env = this.env;
+    this.hud.pulseAtb(fat ? 1 : Math.min(0.85, 0.35 + 0.1 * tier));
+    const col = accentIndex(tier, env.time, 0, env.reducedMotion);
+    this.sparks.add(x, y, 0, 0, 0, 0.12, 16, K_FLARE, col, L_BEHIND);
+    const S = env.S;
+    const n = Math.round(4 * env.k);
+    for (let i = 0; i < n; i++) {
+      const a = env.rng() * Math.PI * 2;
+      const sp = (80 + env.rng() * 80) * S;
+      this.sparks.add(
+        x,
+        y,
+        Math.cos(a) * sp,
+        Math.sin(a) * sp,
+        0,
+        0.15,
+        2,
+        K_SQ2,
+        sparkIndex(tier, 0),
+        L_BEHIND,
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------- frame
+
+  private update(dt: number, view: LevelView): void {
+    if (!this.enabled) {
+      this.view = view;
+      return;
+    }
+    const t0 = this.benching ? performance.now() : 0;
+    const hud = this.hud;
+    const set = hud.getSettings();
+    const env = this.env;
+    this.view = view;
+    this.clock += dt;
+    env.time = this.clock;
+    env.S = hud.getScale();
+    env.k = set.effectsIntensity;
+    env.reducedMotion = set.reducedMotion;
+    if (view.keyStreakTier !== this.tierFx.tier && !this.tierFx.fading)
+      this.tierFx.snapTier(view.keyStreakTier);
+
+    // plate the embers / back-glow hug: the target, or the last typed plate for 1.5 s after
+    let id = view.targetPlateId ?? -1;
+    if (id < 0 && this.clock - this.lastTypedAt < 1.5) id = this.lastTyped;
+    let plateKind = "";
+    for (let i = 0; i < view.plates.length; i++) {
+      const p = view.plates[i];
+      if (p && p.id === id) plateKind = p.kind;
+    }
+    this.tierFx.hasRect =
+      id >= 0 && plateKind !== "guard" && hud.getPlateRectInto(id, this.tierFx.rect);
+
+    // tints for every visible plate of an allowed kind
+    for (let i = 0; i < view.plates.length; i++) {
+      const p = view.plates[i];
+      if (p) hud.plateFx.setTint(p.id, this.tierFx.tintFor(p.kind));
+    }
+
+    hud.getAtbTipInto(TIP);
+    this.sparks.update(dt, env.S);
+    this.streaks.update(dt, TIP.x, TIP.y);
+    this.tierFx.update(dt, env, set.reducedMotion, () => hud.triggerTierFlash());
+    this.speed.update(dt);
+    if (this.benching) this.updateMs += performance.now() - t0;
+  }
+
+  private drawBehind(c: CanvasRenderingContext2D, time: number): void {
+    if (!this.enabled) return;
+    const t0 = this.benching ? performance.now() : 0;
+    const hud = this.hud;
+    const set = hud.getSettings();
+    const S = hud.getScale();
+    let tp = this.benching ? performance.now() : 0;
+    c.globalCompositeOperation = "source-over";
+    this.speed.drawEdges(
+      c,
+      hud.getCssW(),
+      hud.getCssH(),
+      S,
+      time,
+      set.effectsIntensity,
+      this.env.q,
+      set.reducedFlash,
+      set.reducedMotion,
+    );
+    if (this.benching) tp = this.lap("edges", tp);
+    this.tierFx.draw(c, S, time, this.sprites, !set.reducedFlash, set.reducedMotion);
+    if (this.benching) tp = this.lap("tier", tp);
+    this.sparks.draw(c, L_BEHIND, S, this.sprites);
+    if (this.benching) tp = this.lap("sparksBehind", tp);
+    c.globalCompositeOperation = "source-over";
+    c.globalAlpha = 1;
+    if (this.speed.plateLive) {
+      c.save();
+      c.scale(S, S);
+      this.speed.drawPlate(c, 1280, time, set.reducedFlash, set.reducedMotion, hud.getCssW(), S);
+      c.restore();
+    }
+    if (this.benching) this.drawMs += performance.now() - t0;
+  }
+
+  private drawAbove(c: CanvasRenderingContext2D, time: number): void {
+    if (!this.enabled) return;
+    const t0 = this.benching ? performance.now() : 0;
+    const hud = this.hud;
+    const set = hud.getSettings();
+    const S = hud.getScale();
+    let tp = this.benching ? performance.now() : 0;
+    c.globalCompositeOperation = "source-over";
+    this.sparks.draw(c, L_ABOVE, S, this.sprites);
+    if (this.benching) tp = this.lap("sparksAbove", tp);
+    if (this.streaks.count > 0)
+      this.streaks.draw(
+        c,
+        { S, time, k: set.effectsIntensity, q: this.quality, reducedMotion: set.reducedMotion },
+        TIP.x,
+        TIP.y,
+        this.sprites,
+      );
+    if (this.benching) this.lap("streaks", tp);
+    c.globalAlpha = 1;
+    if (this.benching) this.drawMs += performance.now() - t0;
+  }
+
+  // ---------------------------------------------------------------- diagnostics
+
+  startBench(): void {
+    this.benching = true;
+    this.keys = 0;
+    this.handlerMs = 0;
+    this.updateMs = 0;
+    this.drawMs = 0;
+    this.nSamples = 0;
+    this.parts = {};
+  }
+  stopBench(): void {
+    this.benching = false;
+  }
+  stats(): TypingFxStats {
+    const n = Math.min(this.nSamples, SAMPLES);
+    const s = Array.from(this.samples.subarray(0, n)).sort((a, b) => a - b);
+    return {
+      sparks: this.sparks.count,
+      streaks: this.streaks.count,
+      embers: this.tierFx.embers.count,
+      rings: this.tierFx.rings.count,
+      tier: this.tierFx.tier,
+      heat: this.speed.heat,
+      keys: this.keys,
+      handlerMs: this.handlerMs,
+      updateMs: this.updateMs,
+      drawMs: this.drawMs,
+      handlerP95Ms: n ? (s[Math.floor(n * 0.95)] as number) : 0,
+      parts: { ...this.parts },
+      handlerOverTick: n ? s.filter((v) => v >= 0.0999).length / n : 0,
+    };
+  }
+}

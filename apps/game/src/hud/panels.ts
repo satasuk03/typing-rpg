@@ -152,7 +152,8 @@ export function drawStatsPanel(p: PanelCtx, v: LevelView): void {
   });
 }
 
-export const COMBO_AREA = (W: number): Rect => ({ x: W - 252, y: 128, w: 232, h: 170 });
+/** Key-streak area; h 226 also reserves the SWIFT / BLAZING plate (BURST_RECT at y 300..352). */
+export const COMBO_AREA = (W: number): Rect => ({ x: W - 252, y: 128, w: 232, h: 226 });
 
 /** Word combo (mechanical) + key streak (VFX tier colours) - hybrid PO decision. */
 export function drawComboDisplay(p: PanelCtx, v: LevelView): void {
