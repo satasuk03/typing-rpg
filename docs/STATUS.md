@@ -14,7 +14,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T5.1 D1 schema + migrations | Backend (sonnet) | **done** (merged 43eaca3) | 5 STRICT migrations apply clean + idempotent; 15 api tests on real local D1 via `getPlatformProxy` (save If-Match + keep-5, one-open-trial index, idempotent transition, LB around-me + flagged shadow rank, gem ledger append-only, refresh family revocation). Decisions for T5.2: blobs stored as base64 TEXT; flagged owner shadow rank; tie-break achieved_at then user_id |
 | T1.1a Contracts published | Sim (sonnet) | **merged early** (2f68711) | events.ts, view.ts, types.ts, content + shared schemas on main; CHECK PASS |
 | T2.4 HUD (mock events) | UI (sonnet) | **done** (merged 284b5e2, after 1 rework) | readability sweeps (4 scenarios × 40/90 WPM, every 0.1 s): no plate overlap, ≥14 px, contrast ≥4.5, no pop/banner over a live letter; self-hosted OFL fonts, no external requests; works over the real renderer (`?scene=hud-test&backdrop=world`); 0.37 ms/frame |
-| T2.6 Typing VFX: design spec | Art/VFX director (opus) | in progress → `docs/vfx/typing-vfx-spec.md` | — |
+| T2.6 Typing VFX: design spec | Art/VFX director (opus) | **done** (ac7396d) | `docs/vfx/typing-vfx-spec.md`: numbers for every effect, readability pixel test, budgets, binding table, 3 chunks |
+| T2.6 chunk A: keystroke (HUD) | VFX (sonnet) | in progress | — |
 | T1.2 Typing engine | Sim (sonnet) | **done** (merged 9c34986) | 82 rule-named typing tests; property test 120 levels / 697k ticks / 7k guard swaps: no shared first letters, events in tick order; golden typing replays + Chromium parity |
 | T1.3 Combat | Sim (sonnet) | in progress | — |
 | T4.1 Word data + validator | Content (sonnet) | **done** (merged 9d96839) | 1089 entries (T1 491, T2 331, biome 76/71/67, guard 43, boss text), 31 trial passages (1605–1730 chars, tight difficulty spread); validator in check.sh, CONTENT_VERSION 70d9cd08; orchestrator sampled definitions + passages. Blocklist needs human review before release |
@@ -37,6 +38,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 - The game makes no runtime third-party requests (fonts self-hosted).
 
 - Chip hits apply on any plate, guard plates included (doc 01 §1.3). Event order: GuardBlocked/Parried, then Hit{chip}.
+
+- T2.6 implementer may edit `hud/{plates,fx,hud}.ts` and `render/ambient/particles.ts` (spec §14). T2.3 hooks are no-op callbacks until T2.3 lands.
 
 ## PO decisions log
 - 2026-10-09: Combo = hybrid. Mechanics use perfect-word combo (5/15/30/50); VFX colour tiers use per-key streak (10/25/50/100).
