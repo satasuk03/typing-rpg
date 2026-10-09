@@ -37,7 +37,7 @@ const SPEC: ParticleSpec = newSpec();
 const AZURE: Rgb = [0.45, 0.75, 1.0];
 const GOLD: Rgb = [1.0, 0.9, 0.55];
 /** The held / bursting parry barrier: amber, not gold-white (the rim saturated to white under the bloom). */
-const PARRY_BARRIER: Rgb = [0.8, 0.58, 0.2];
+const PARRY_BARRIER: Rgb = [0.72, 0.5, 0.16];
 const RED: Rgb = [1.6, 0.3, 0.2];
 /** Parry flash (T6.3 #14): core #7fe8ff, rim #3ab8ff, 140 ms, radius 0.9 u, 8 hex shards. */
 export const PARRY_FLASH = {
@@ -53,7 +53,7 @@ export const PARRY_FLASH = {
 const PARRY_CORE: Rgb = hexLinear(PARRY_FLASH.coreHex).map((v) => v * PARRY_FLASH.coreGain) as Rgb;
 const PARRY_RIM: Rgb = hexLinear(PARRY_FLASH.rimHex).map((v) => v * PARRY_FLASH.rimGain) as Rgb;
 // solid (normal-blend) shards: core #7fe8ff with the shader's dark blue rim, sitting on the focus plane
-const PARRY_SHARD: Rgb = hexLinear(PARRY_FLASH.coreHex);
+const PARRY_SHARD: Rgb = [0.2, 0.8, 1.1];
 const PARRY_DISC_SEC = PARRY_FLASH.ms / 1000;
 const PARRY_RADIUS = PARRY_FLASH.radius;
 const PARRY_SHARDS = PARRY_FLASH.shards;
@@ -64,6 +64,10 @@ const OFF_X = 1.65;
 const OFF_Y = 1.2;
 const OFF_Z = 0.35;
 const SIZE = 2.2;
+/** P2-5: while Aegis is up the barrier becomes a small contact-side hex plane (no "two concentric spheres" read). */
+export const AEGIS_SIZE = 1.4;
+export const AEGIS_OFF_X = 0.6;
+export const AEGIS_ALPHA = 0.7;
 
 /** A held barrier with no impact event fades itself after this long (an attack that never arrives, a missed binding). */
 export const HELD_MAX_SEC = 2.5;
@@ -98,6 +102,9 @@ export class GuardBarrier {
   private fadeDur = 0.25;
   private hx = 0;
   private hz = 0;
+  /** 0..1 smoothed "Aegis is up" (charges > 0): shrinks the barrier to the contact-side plane. */
+  private aeg = 0;
+  private aegWant = 0;
 
   constructor(
     private readonly world: RenderWorld,
@@ -122,6 +129,16 @@ export class GuardBarrier {
   /** 0..1 the barrier's displayed intensity (tests, bench). */
   get intensity(): number {
     return this.shown;
+  }
+
+  /** Aegis charges from the view (every frame): > 0 switches the barrier to the contact-side plane. */
+  setAegis(charges: number): void {
+    this.aegWant = charges > 0 ? 1 : 0;
+  }
+
+  /** Barrier centre x offset from the hero, size and alpha factor for the current Aegis blend. */
+  private get offX(): number {
+    return OFF_X + AEGIS_OFF_X * this.aeg;
   }
 
   /** The hero's position (every frame, from the world fx). */
@@ -161,7 +178,7 @@ export class GuardBarrier {
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + 0.3;
       resetSpec(SPEC);
-      SPEC.x = this.hx + OFF_X;
+      SPEC.x = this.hx + this.offX;
       SPEC.y = OFF_Y;
       SPEC.z = this.hz + OFF_Z;
       const sp = 1.5 + (i % 4) * 0.5;
@@ -178,7 +195,7 @@ export class GuardBarrier {
       this.pool.emit(SPEC);
     }
     this.lights.flash(
-      this.hx + OFF_X,
+      this.hx + this.offX,
       OFF_Y,
       this.hz - 0.4,
       0.45,
@@ -201,26 +218,27 @@ export class GuardBarrier {
     this.rimT = 0;
     this.burstT = 0;
     this.fadeT = 0;
-    this.fadeDur = 0.3;
+    this.fadeDur = 0.2;
     if (k <= 0) return;
     this.td.hitStop(70 * Math.max(0.5, k));
     this.discT = 0;
-    const cx = this.hx + OFF_X + CONTACT_DX;
+    const cx = this.hx + this.offX + CONTACT_DX;
     // 8 hex shards fly off the contact point (a fixed fan, flipping as they go)
     for (let i = 0; i < PARRY_SHARDS; i++) {
       const a = (i / PARRY_SHARDS) * Math.PI * 2 + 0.4;
       resetSpec(SPEC);
-      SPEC.x = cx;
-      SPEC.y = OFF_Y;
+      // spawn on a small ring so the 8 hexes do not start as one overlapping honeycomb
+      SPEC.x = cx + Math.cos(a) * 0.3;
+      SPEC.y = OFF_Y + Math.sin(a) * 0.3;
       SPEC.z = this.hz + OFF_Z + 0.15;
-      const sp = 3.4 + (i % 3) * 0.9;
+      const sp = 4.6 + (i % 3) * 1.1;
       SPEC.vx = Math.cos(a) * sp + 1.2;
       SPEC.vy = Math.sin(a) * sp * 0.8;
-      SPEC.drag = 2.2;
+      SPEC.drag = 2;
       SPEC.grav = 3;
-      SPEC.size = 0.34;
-      SPEC.size1 = 0.2;
-      SPEC.life = 0.7;
+      SPEC.size = 0.52;
+      SPEC.size1 = 0.36;
+      SPEC.life = 0.8;
       SPEC.spin = 9 + i;
       SPEC.r = PARRY_SHARD[0];
       SPEC.g = PARRY_SHARD[1];
@@ -258,7 +276,7 @@ export class GuardBarrier {
       0.35,
       0.8,
       1.0,
-      1.1,
+      0.6,
       Math.min(LIGHT_MAX_RADIUS, 3),
       0.25,
     );
@@ -308,6 +326,7 @@ export class GuardBarrier {
       return;
     }
     this.t += dt;
+    this.aeg += (this.aegWant - this.aeg) * Math.min(1, dt * 10);
     if (this.mode === M_HELD) {
       this.heldT += dt;
       if (this.heldT > HELD_MAX_SEC) this.fade(300);
@@ -361,7 +380,7 @@ export class GuardBarrier {
             this.snapT = -2;
             // held light until impact
             this.lights.flash(
-              this.hx + OFF_X,
+              this.hx + this.offX,
               OFF_Y,
               this.hz - 0.4,
               col[0] * 0.5,
@@ -384,7 +403,7 @@ export class GuardBarrier {
           const u = this.rimT / 0.12;
           if (u < 1) {
             uP = this.mode === M_PARRY ? 0.3 : 0.55;
-            I = this.mode === M_PARRY ? 0.8 : 1.0;
+            I = this.mode === M_PARRY ? 0.45 : 1.0;
           }
         }
         this.fadeT += dt;
@@ -409,9 +428,10 @@ export class GuardBarrier {
         b = b + (RED[2] - b) * m;
       }
     }
-    I *= 0.55;
+    I *= 0.55 * (1 - (1 - AEGIS_ALPHA) * this.aeg);
+    size *= 1 - (1 - AEGIS_SIZE / SIZE) * this.aeg;
     this.spin += dt * (rm ? 0 : spinRate);
-    const hx = this.hx + OFF_X;
+    const hx = this.hx + this.offX;
     this.quad
       .color(r, g, b)
       .at(hx, OFF_Y, this.hz + OFF_Z)
@@ -468,7 +488,7 @@ export class GuardBarrier {
           .at(hx + CONTACT_DX, OFF_Y, this.hz + OFF_Z + 0.2)
           .size(sc, sc)
           .progress(u)
-          .intensity((1 - u * u) * k * (set.reducedFlash ? 0.5 : 1));
+          .intensity(0.75 * (1 - u * u) * k * (set.reducedFlash ? 0.5 : 1));
       }
     } else this.disc.intensity(0);
   }

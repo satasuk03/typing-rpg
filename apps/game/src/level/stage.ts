@@ -14,6 +14,11 @@ import type { HudAnchor, HudProjector } from "../hud";
 import type { CameraPose, RenderWorld, SpriteActor, SpriteFrame } from "../render";
 import { HERO_LUM_CAP } from "../render/vfx/colors";
 
+/** W4: enemy sprites never exceed this max channel on the bright forest (fades out toward the cave): flash lights + hit flash no longer clip a pale slime white. */
+const FOE_FOREST_CAP = 0.85;
+/** W4: a big pale boss (the Golem) keeps its stone: max-channel ceiling under hit lights / flashes in any biome. */
+const BOSS_LUM_CAP = 0.85;
+
 /** Hero rim-light strength at caveK = 1 (T6.3 #4); the sprite shader scales it by the mood's caveK and tints it with `hi`. */
 const HERO_CAVE_RIM = 0.6;
 
@@ -255,6 +260,8 @@ export class LevelStage {
     const flyY = def?.flying === true ? FLY_Y : 0;
     const pos = this.slotPosition(this.curEnc > 0 ? this.curEnc : 1, slot);
     const actor = this.world.addActor(key, "idle", { scale, rim: 1.4, blobW: scale * 1.1 });
+    actor.setForestCap(FOE_FOREST_CAP);
+    if (isBoss) actor.setLumCap(BOSS_LUM_CAP);
     const idle = src.frames(key, "idle");
     const atk = src.frames(key, "atk");
     const e: EnemyActor = {

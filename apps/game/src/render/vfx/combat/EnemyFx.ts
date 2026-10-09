@@ -240,6 +240,7 @@ export class EnemyFx {
     const f = INFO.frame;
     const ps = f ? pixelSamples(f) : null;
     const want = kit.n(dissolveCount(isBoss, s));
+    const mh = 0.5 + 0.5 * Math.min(1, kit.glare);
     if (ps && f && ps.n > 0) {
       const x0 = INFO.x - f.ax * PX * s;
       const y0 = INFO.y + f.ay * PX * s;
@@ -268,6 +269,10 @@ export class EnemyFx {
                 (ps.data[o + 4] as number) * 1.6 + 0.4,
               ],
         );
+        // forest: HDR motes on a bright backdrop pile into a white blob; keep their colour
+        sp.r *= mh;
+        sp.g *= mh;
+        sp.b *= mh;
         sp.drag = 1.2;
         sp.grav = -0.6;
         sp.delay = v * 0.5 + kit.rnd() * 0.1; // the top lifts off first, like the sprite's own dissolve

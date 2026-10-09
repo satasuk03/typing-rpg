@@ -33,6 +33,8 @@ export class BladeGlow {
   private readonly beam: FxQuad;
   private readonly beamHalo: FxQuad;
   private readonly hitStar: FxQuad;
+  /** W4: impact flash scale (0.4 on a big pale boss: the word-strike core washed the Golem white every word). */
+  private impactK = 1;
   private readonly hitCore: FxQuad;
   x = 0;
   y = 1;
@@ -108,8 +110,9 @@ export class BladeGlow {
   }
 
   /** Beam from the blade to a world point (the enemy's body). */
-  strike(toX: number, toY: number, perfect: boolean, rgb: Rgb): void {
+  strike(toX: number, toY: number, perfect: boolean, rgb: Rgb, impactK = 1): void {
     this.strikeT = 0;
+    this.impactK = impactK;
     this.strikePerfect = perfect;
     this.sx = this.x;
     this.sy = this.y;
@@ -260,13 +263,13 @@ export class BladeGlow {
           .color(c[0], c[1], c[2])
           .at(this.ex, this.ey, this.z + 0.35)
           .size(si)
-          .intensity(2.0 * (1 - ui) * k * gl);
+          .intensity(2.0 * (1 - ui) * k * gl * this.impactK);
         this.hitStar.mesh.rotation.z = u * 0.7;
         this.hitCore
           .color(c[0], c[1], c[2])
           .at(this.ex, this.ey, this.z + 0.3)
           .size(si * 1.1)
-          .intensity(1.0 * (1 - ui) * k * gl);
+          .intensity(1.0 * (1 - ui) * k * gl * this.impactK);
       }
     } else {
       this.hitStar.intensity(0);

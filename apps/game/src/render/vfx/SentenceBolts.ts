@@ -71,6 +71,9 @@ interface Bolt {
   burst: FxQuad;
 }
 
+/** W4: the burst / core where a sentence bolt lands on the (pale, big) boss: dimmed so the Golem is not washed out. */
+const BOSS_IMPACT_K = 0.4;
+
 export class SentenceBolts {
   private readonly b: Bolt[] = [];
   /** Bolts in flight or bursting (diagnostics). */
@@ -199,6 +202,8 @@ export class SentenceBolts {
         const s = q.scale;
         // violet -> white over the flight: the hot core whitens as the bolt arrives
         const w = u * u;
+        // the last half of the flight dims toward the boss's body (BOSS_IMPACT_K at arrival)
+        const near = 1 - (1 - BOSS_IMPACT_K) * Math.min(1, Math.max(0, (u - 0.5) * 2));
         const cr = c[0] * 1.4 + (3.2 - c[0] * 1.4) * w;
         const cg = c[1] * 1.4 + (3.2 - c[1] * 1.4) * w;
         const cb = c[2] * 1.4 + (3.2 - c[2] * 1.4) * w;
@@ -206,12 +211,12 @@ export class SentenceBolts {
           .color(c[0] * 0.9, c[1] * 0.9, c[2] * 0.9)
           .at(x, y, z - 0.05)
           .size(BOLT_HALO * s)
-          .intensity(0.9 * k);
+          .intensity(0.9 * k * near);
         q.core
           .color(cr, cg, cb)
           .at(x, y, z)
           .size(BOLT_CORE * (0.8 + 0.4 * s) * 1.0)
-          .intensity(3.0 * k);
+          .intensity(3.0 * k * near);
         q.head
           .color(c[0] * 1.2, c[1] * 1.2, c[2] * 1.2)
           .at(x, y, z + 0.05)
@@ -263,14 +268,14 @@ export class SentenceBolts {
           .color(c[0], c[1], c[2])
           .at(q.tx, q.ty, q.tz + 0.35)
           .size(s * 1.1)
-          .intensity(1.1 * (1 - u) * k);
+          .intensity(BOSS_IMPACT_K * 1.1 * (1 - u) * k);
         q.head.intensity(0);
         q.halo.intensity(0);
         q.burst
           .color(c[0] * 1.3, c[1] * 1.3, c[2] * 1.3)
           .at(q.tx, q.ty, q.tz + 0.4)
           .size(s)
-          .intensity(2.0 * (1 - u) * k);
+          .intensity(BOSS_IMPACT_K * 2.0 * (1 - u) * k);
         q.burst.mesh.rotation.z = u * 0.8;
       }
     }

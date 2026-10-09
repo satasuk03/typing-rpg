@@ -258,17 +258,21 @@ export class Projectiles {
       } else {
         // bolt: a bright star core with a coloured halo and a streak trail
         const big = s.type === P_DOOM ? 1.5 : 0.8;
+        // W4: bright forest dims the bolt (soft); and a bolt arriving on a big pale target (the Golem) dims over the last
+        // 40% of its flight so the core star does not wash the body out before the hit plays
+        const near = s.tid >= 0 && p > 0.6 ? (p - 0.6) / 0.4 : 0;
+        const bk = near > 0 ? 1 - (1 - kit.bigTargetK(s.tid)) * near : 1;
         s.core
           .color(s.r, s.g, s.b)
           .at(s.x, s.y, s.z)
           .size(big * 1.2)
-          .intensity(1.1 * g);
+          .intensity(1.1 * g * kit.glareSoft * bk);
         s.core.mesh.rotation.z += dt * 10;
         s.glow
           .color(s.r * 0.6, s.g * 0.6, s.b * 0.6)
           .at(s.x, s.y, s.z - 0.1)
           .size(big * 2.2)
-          .intensity(0.8 * g);
+          .intensity(0.8 * g * kit.glare * bk);
         for (let j = 0; j < kit.n(2); j++) {
           const sp = kit.p(
             s.x,

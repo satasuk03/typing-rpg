@@ -41,8 +41,9 @@ export class FxQuad {
   }
   /** Intensity (`uI`); the quad is hidden at <= 0. */
   intensity(v: number): this {
-    (this.mat.uniforms.uI as { value: number }).value = v;
-    this.mesh.visible = v > 0.002;
+    const g = v * this.world.additiveGain;
+    (this.mat.uniforms.uI as { value: number }).value = g;
+    this.mesh.visible = g > 0.002;
     return this;
   }
   /** Progress uniform (`uP`) used by Ring / Guard. */

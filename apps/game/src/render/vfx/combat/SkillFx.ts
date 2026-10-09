@@ -259,7 +259,7 @@ export class SkillFx {
     q.ay = len;
     q.rot = Math.PI / 2 + Math.atan2(y1 - y0, len);
     q.life = 0.3;
-    q.i = 1.6 * (0.5 + 0.5 * kit.scale.k);
+    q.i = 1.6 * (0.5 + 0.5 * kit.scale.k) * kit.glareSoft * kit.glareSoft;
     q.r = edge[0] * 0.5;
     q.g = edge[1] * 0.5;
     q.b = edge[2] * 0.5;
@@ -330,7 +330,7 @@ export class SkillFx {
     kit.glow(x, y, z + 0.4, 1.5, 5, 0.45, kit.warm([1.6, 0.6, 0.12]), 1.0);
     kit.ring(x, 0.06, z, 0.5, 8, 0.55, [3, 1.4, 0.4], [1.5, 0.3, 0.05], 1.4, true);
     kit.sparks(x, y, z, kit.n(70), FIRE_HOT, 10, { life: 0.7, grav: 5, st: 0.07 });
-    for (let i = 0; i < kit.n(24); i++) {
+    for (let i = 0; i < kit.n(24 * kit.puffHdr); i++) {
       const sp = kit.p(
         x + (kit.rnd() - 0.5) * 0.8,
         y + (kit.rnd() - 0.5) * 0.8,
@@ -342,7 +342,7 @@ export class SkillFx {
         0.5 + kit.rnd() * 0.5,
         PK_GLOW,
         [1.5, 0.5, 0.12],
-        0.8,
+        0.8 * kit.puffHdr * kit.puffHdr,
       );
       sp.size1 = 1.4;
       sp.drag = 2;
@@ -638,7 +638,7 @@ export class SkillFx {
         .at(kit.hero.x + 0.3, 1.5, kit.hero.z + 0.3)
         .size(3 * scale * (1 + pulse));
       this.bubble.progress(this.bubbleFlare * 1.2);
-      this.bubble.intensity((0.4 + 0.12 * Math.min(3, charges)) * this.bubbleLevel * g);
+      this.bubble.intensity((0.3 + 0.08 * Math.min(3, charges)) * this.bubbleLevel * g);
     } else this.bubble.intensity(0);
 
     // ---- heal / revive column

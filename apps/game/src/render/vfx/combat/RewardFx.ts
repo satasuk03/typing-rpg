@@ -131,6 +131,11 @@ export class RewardFx {
         PK_PIXEL,
         st.prism ? hueRgb(kit.rnd() * 360, 2.4, RGB) : st.beamCore,
       );
+      // forest: the HDR sparkle pixels pile up into a white blob; keep their hue
+      const hs = 0.35 + 0.65 * Math.min(1, kit.glare);
+      sp.r *= hs;
+      sp.g *= hs;
+      sp.b *= hs;
       sp.grav = 6;
       sp.delay = kit.rnd() * 0.3;
       kit.emitA(sp);
@@ -180,6 +185,11 @@ export class RewardFx {
         PK_PIXEL,
         GOLD,
       );
+      // forest: HDR gold pixels read as white squares; keep them gold
+      const cg = 0.3 + 0.7 * Math.min(1, kit.glare);
+      sp.r *= cg;
+      sp.g *= cg;
+      sp.b *= cg;
       sp.grav = 15;
       sp.bounce = 0.45;
       sp.spin = spin * (10 + kit.rnd() * 14);
@@ -199,7 +209,7 @@ export class RewardFx {
           0.55,
           PK_GLOW,
           [2.0, 1.3, 0.4],
-          0.55,
+          0.55 * kit.puffHdr * kit.puffHdr,
         );
         gl.grav = 15;
         gl.bounce = 0.3;
@@ -274,20 +284,20 @@ export class RewardFx {
         .color2(st.beamCore[0], st.beamCore[1], st.beamCore[2])
         .at(this.x, 7.2, this.z - 0.1)
         .size(st.width * (1 + wob), 14.4)
-        .intensity(st.beam * k * g * kit.glare);
+        .intensity(st.beam * k * g * kit.glare * kit.glareSoft);
       this.halo
         .color(st.beamCol[0] * 0.6, st.beamCol[1] * 0.6, st.beamCol[2] * 0.6)
         .color2(st.beamCol[0] * 0.4, st.beamCol[1] * 0.4, st.beamCol[2] * 0.4)
         .at(this.x, 7.2, this.z - 0.2)
         .size(st.width * 2.7, 14.4)
-        .intensity(st.halo * k * g * kit.glare);
+        .intensity(st.halo * k * g * kit.glare * kit.glareSoft);
       if (st.rays && sc.k > 0) {
         this.rays
           .color(st.beamCol[0], st.beamCol[1], st.beamCol[2])
           .at(this.x, 2.2, this.z - 0.3)
           .size(9);
         this.rays.mesh.rotation.z = sc.reducedMotion ? 0 : t * 0.15;
-        this.rays.alpha(0.5 * k * g * kit.glare);
+        this.rays.alpha(0.5 * k * g * kit.glare * kit.glareSoft);
       }
       if (st.rune) {
         this.rune.color(2.4, 1.0, 3.2).at(this.x, 0.05, this.z).size(5.2);

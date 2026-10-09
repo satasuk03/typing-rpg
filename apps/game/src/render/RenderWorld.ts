@@ -86,6 +86,8 @@ interface GodRay {
  *   world.setBiome("cave"); ... each frame: world.update(dt, alpha); world.render();
  *   world.dispose();
  */
+const FOREST_ADD_GAIN = 0.6;
+
 export class RenderWorld {
   readonly scene = new Scene();
   /** Foreground layer: rendered separately and blurred hard (framing pieces near the lens). */
@@ -216,6 +218,14 @@ export class RenderWorld {
 
   get currentMood(): BiomeMood {
     return this.mood;
+  }
+
+  /**
+   * W4: gain on every additive fx quad / pooled additive particle: 0.6 on the bright forest (caveK 0), 1 in the cave. Stacked
+   * additive flares clip a 96 px window of a bright backdrop to white; this is the one knob that keeps them coloured.
+   */
+  get additiveGain(): number {
+    return FOREST_ADD_GAIN + (1 - FOREST_ADD_GAIN) * Math.min(1, Math.max(0, this.mood.caveK));
   }
 
   /** Set the HD-2D look on/off ("raw pixels" comparison mode). */

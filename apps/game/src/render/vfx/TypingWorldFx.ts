@@ -115,7 +115,8 @@ export class TypingWorldFx {
     private readonly cb: TypingFxCallbacks,
   ) {
     this.poolA = new PooledParticles(576, true, world.scene);
-    this.poolB = new PooledParticles(192, false, world.scene);
+    // normal-blend shards draw ABOVE the additive quads (barrier, discs) so parry / break hexes stay crisp solid shapes
+    this.poolB = new PooledParticles(192, false, world.scene, 12);
     this.lights = new LightSlots(world.lights);
     this.aura = new HeroAura(world, this.poolA, this.poolB, this.lights);
     this.blade = new BladeGlow(world, this.poolA);
@@ -502,12 +503,14 @@ export class TypingWorldFx {
       } else this.cb.actorFlash("hero", (1 - u) * HERO_FLASH_MAX, [1.7, 1.6, 1.5]);
     }
     this.barrier.setHero(this.aura.heroX, this.aura.heroZ);
+    this.barrier.setAegis(this.view?.hero.barrierCharges ?? 0);
     this.barrier.update(dt, this.time, this.settings);
     this.bolts.update(dt, this.time, this.settings);
     this.finisher.update(realDt, this.settings);
     this.aura.update(dt, this.time, this.settings, this.q, this.qTier);
     this.blade.update(dt, this.time, this.aura, this.settings);
     this.lights.update(dt);
+    this.poolA.gain = this.world.additiveGain;
     this.poolA.update(dt);
     this.poolB.update(dt);
     this.poolA.upload();
@@ -546,9 +549,11 @@ export class TypingWorldFx {
       Math.min(LIGHT_MAX_RADIUS, 3 * FLASH_RADIUS_GAIN),
       0.28,
     );
-    if (w.owner >= 0 && this.anchors.enemy(w.owner, EN))
-      this.blade.strike(EN.x, EN.y, w.perfect, col);
-    else if (w.owner < 0) this.blade.strike(this.blade.x + 4, this.blade.y, w.perfect, col);
+    if (w.owner >= 0 && this.anchors.enemy(w.owner, EN)) {
+      let boss = false;
+      if (this.view) for (const e of this.view.enemies) if (e.id === w.owner) boss = e.isBoss;
+      this.blade.strike(EN.x, EN.y, w.perfect, col, boss ? 0.4 : 1);
+    } else if (w.owner < 0) this.blade.strike(this.blade.x + 4, this.blade.y, w.perfect, col);
   }
 
   /** Counters for tests and the dev overlay. */
