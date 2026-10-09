@@ -805,7 +805,11 @@ export class TypingHudFx {
     this.tierFx.setPanels(S, this.bossPlateOn);
     this.tierFx.draw(c, S, time, this.sprites, this.halos, !set.reducedFlash, set.reducedMotion);
     if (this.benching) tp = this.lap("tier", tp);
+    // behind-layer sparks (and their dark halos) and shatter shards also keep out of panel text / labels / next letter
+    c.save();
+    this.keepOutBegin(c, true);
     this.sparks.draw(c, L_BEHIND, S, this.sprites);
+    c.restore();
     if (this.sparks.hasLayer(L_ATB)) {
       // arrival sparks / flare: clipped to the ATB bar rect so nothing lands on the HP bar or its text
       hud.getAtbRectInto(ATBR);
@@ -818,7 +822,10 @@ export class TypingHudFx {
     }
     if (this.benching) tp = this.lap("sparksBehind", tp);
     c.globalCompositeOperation = "source-over";
+    c.save();
+    this.keepOutBegin(c, true);
     this.shatter.drawBehind(c, S, set.reducedFlash, set.effectsIntensity);
+    c.restore();
     if (this.benching) tp = this.lap("shatterBehind", tp);
     if (this.atbFlash >= 0 && !set.reducedFlash) {
       const u = this.atbFlash / 0.12;
@@ -966,12 +973,26 @@ export class TypingHudFx {
     }
   }
 
+  /** Build (when any FX is live) and apply the keep-out clip; the caller wraps it in save/restore. */
+  private keepOutBegin(c: CanvasRenderingContext2D, panelsOnly = false): void {
+    if (
+      this.sparks.count > 0 ||
+      this.guard.count > 0 ||
+      this.streaks.count > 0 ||
+      this.shatter.fragments > 0
+    ) {
+      this.buildKeepOut();
+      this.clipKeepOut(c, 0, panelsOnly);
+    }
+  }
+
   /** Clip the context to everything except the keep-out set; `extra` widens the next letter (streak heads). */
-  private clipKeepOut(c: CanvasRenderingContext2D, extra: number): void {
+  private clipKeepOut(c: CanvasRenderingContext2D, extra: number, panelsOnly = false): void {
     c.beginPath();
     c.rect(-4, -4, 16384, 16384);
     for (let i = 0; i < this.koN; i++) {
       const r = this.ko[i] as RectLike;
+      if (panelsOnly && this.koKind[i] !== KO_PANEL) continue;
       if (i === this.koNext && extra > 0)
         c.rect(r.x - extra, r.y - extra, r.w + 2 * extra, r.h + 2 * extra);
       else c.rect(r.x, r.y, r.w, r.h);
@@ -984,6 +1005,31 @@ export class TypingHudFx {
    * inside the keep-out rects (deflated 1 px for clip anti-aliasing). Streak heads are held to the same
    * (4 px) next-letter rect, so this also covers the head sprites.
    */
+  private countKeepOut(
+    c: CanvasRenderingContext2D,
+    cv: HTMLCanvasElement,
+    dpr: number,
+    out: { panel: number; label: number; next: number },
+    panelsOnly: boolean,
+  ): void {
+    for (let i = 0; i < this.koN; i++) {
+      const kind = this.koKind[i] as number;
+      if (panelsOnly && kind !== KO_PANEL) continue;
+      const r = this.ko[i] as RectLike;
+      const x = Math.max(0, Math.round((r.x + 1) * dpr));
+      const y = Math.max(0, Math.round((r.y + 1) * dpr));
+      const w = Math.min(cv.width - x, Math.round((r.w - 2) * dpr));
+      const h = Math.min(cv.height - y, Math.round((r.h - 2) * dpr));
+      if (w <= 0 || h <= 0) continue;
+      const d = c.getImageData(x, y, w, h).data;
+      let n = 0;
+      for (let k = 3; k < d.length; k += 4) if ((d[k] as number) > 10) n++;
+      if (kind === KO_PANEL) out.panel += n;
+      else if (kind === KO_LABEL) out.label += n;
+      else out.next += n;
+    }
+  }
+
   debugKeepOutPixels(): { panel: number; label: number; next: number; rects: number } {
     const out = { panel: 0, label: 0, next: 0, rects: 0 };
     if (!this.attached) return out;
@@ -995,21 +1041,22 @@ export class TypingHudFx {
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.drawAbove(c, this.clock);
     out.rects = this.koN;
-    for (let i = 0; i < this.koN; i++) {
-      const r = this.ko[i] as RectLike;
-      const x = Math.max(0, Math.round((r.x + 1) * dpr));
-      const y = Math.max(0, Math.round((r.y + 1) * dpr));
-      const w = Math.min(cv.width - x, Math.round((r.w - 2) * dpr));
-      const h = Math.min(cv.height - y, Math.round((r.h - 2) * dpr));
-      if (w <= 0 || h <= 0) continue;
-      const d = c.getImageData(x, y, w, h).data;
-      let n = 0;
-      for (let k = 3; k < d.length; k += 4) if ((d[k] as number) > 10) n++;
-      const kind = this.koKind[i] as number;
-      if (kind === KO_PANEL) out.panel += n;
-      else if (kind === KO_LABEL) out.label += n;
-      else out.next += n;
-    }
+    this.countKeepOut(c, cv, dpr, out, false);
+    // behind-layer sparks and shatter shards (drawn under the plates, over the panels): panel rects only
+    const cv2 = document.createElement("canvas");
+    cv2.width = cv.width;
+    cv2.height = cv.height;
+    const c2 = cv2.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+    c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.keepOutBegin(c2, true);
+    this.sparks.draw(c2, L_BEHIND, this.hud.getScale(), this.sprites);
+    this.shatter.drawBehind(
+      c2,
+      this.hud.getScale(),
+      false,
+      this.hud.getSettings().effectsIntensity,
+    );
+    this.countKeepOut(c2, cv2, dpr, out, true);
     return out;
   }
 
