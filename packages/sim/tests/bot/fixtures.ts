@@ -23,6 +23,15 @@ import {
   type ResolvedSegment,
 } from "../../src/index.ts";
 import reference from "../fixtures/economy-reference.json" with { type: "json" };
+import { mkLoadout } from "../typingHarness.ts";
+
+/** The ch1 starter kit (content/data/skills.ts): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will. */
+export function starterLoadout(archetype: "sword" | "dagger" | "staff" | "hammer" = "sword") {
+  const l = mkLoadout(archetype);
+  l.actives = ["fireball", "aegis"];
+  l.passives = ["cleanCut", "steadyHands", "ironWill"];
+  return l;
+}
 
 const T = 60;
 const ticks = (s: number): number => Math.round(s * T);

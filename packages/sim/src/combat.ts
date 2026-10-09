@@ -17,18 +17,17 @@ import type { EntityId, HitKind, HitOrigin } from "./events.ts";
 import { type Milli, mulBp, toDisplay } from "./fixed.ts";
 import { failLevel, setPhase } from "./flow.ts";
 import { enemyDef, restartAttackCycle, scheduleAttack } from "./guard.ts";
+import { emitPassive, hasPassive } from "./passives.ts";
 import { below } from "./rng.ts";
 import type { EncounterState, EnemyState, RunState } from "./state.ts";
+import { applyDot, consumeBarrier } from "./statuses.ts";
 import type { ActiveSkillId, LevelState } from "./types.ts";
 import { addAtb, addPlate, dropTarget, removePlate } from "./typing.ts";
 
 /** The last phase gate: a boss never drops below this HP from damage; reaching it shows the Finisher. */
 export const FINAL_GATE_M = 1;
 
-// ---------------------------------------------------------------- seams for T1.4 (passives)
-
-const hasPassive = (run: RunState, id: string): boolean =>
-  (run.loadout.passives as readonly (string | null)[]).includes(id);
+// ---------------------------------------------------------------- passives that touch the guard maths (T1.4)
 
 /** BLOCK_MULT, or IRON_WILL_BLOCK_MULT with the Iron Will passive. */
 export const blockMultBp = (run: RunState): number =>
@@ -38,7 +37,11 @@ export const blockMultBp = (run: RunState): number =>
 export const counterMultBp = (run: RunState): number =>
   hasPassive(run, "riposte") ? K.RIPOSTE_COUNTER_BP : K.PARRY_COUNTER_BP;
 
-/** Passive damage modifiers in loadout slot order 0..2 (none implemented yet: T1.4 fills this in). */
+/**
+ * Passive damage modifiers in loadout slot order 0..2. None of the 8 slice passives is a damage multiplier (Clean Cut
+ * raises crit CHANCE, Riposte/Iron Will change the counter/block source mult), so this stays empty; the seam is kept for
+ * later passives (doc 01 Focus Fire, Punctuator).
+ */
 const passiveDamageModsBp = (_run: RunState): readonly number[] => [];
 
 // ---------------------------------------------------------------- damage chain
@@ -54,6 +57,10 @@ export interface DamageSpec {
   crit: boolean;
   hitIndex: number;
   hitCount: number;
+  /** Shield points removed regardless of weakness (Piercing Thrust cracks shields). Default: weak hits only (1, 2 on crit). */
+  shieldPoints?: number;
+  /** Hammer: this hit also knocks the target's attack timer back (flag on the Hit event; applied by the caller). */
+  atbKnockback?: boolean;
 }
 
 export interface ResolvedDamage {
@@ -102,6 +109,7 @@ export function dealDamage(
   const floor = gateFloorM(enemy);
   enemy.hpM -= dmgM;
   run.stats.damageByOriginM[spec.origin] += dmgM;
+  if (spec.skillId !== null) run.stats.damageBySkillM[spec.skillId] += dmgM;
   const killed = enemy.hpM === 0;
   emit({
     type: "Hit",
@@ -119,7 +127,7 @@ export function dealDamage(
     crit: spec.crit,
     weak,
     broken,
-    atbKnockback: false, // hammer knockback is a T1.4 signature
+    atbKnockback: spec.atbKnockback === true,
     hitIndex: spec.hitIndex,
     hitCount: spec.hitCount,
     killed,
@@ -128,9 +136,10 @@ export function dealDamage(
     killEnemy(state, enemy, spec.kind, emit);
     return true;
   }
-  if (weak && spec.damageType !== null && countsForShield(spec.kind)) {
-    revealWeakness(state, enemy, spec.damageType, emit);
-    shieldHit(state, enemy, spec.crit ? 2 : 1, emit);
+  if (spec.damageType !== null && countsForShield(spec.kind)) {
+    if (weak) revealWeakness(state, enemy, spec.damageType, emit);
+    const points = spec.shieldPoints ?? (weak ? (spec.crit ? 2 : 1) : 0);
+    if (points > 0) shieldHit(state, enemy, points, emit);
   }
   if (floor > 0 && enemy.hpM === floor && hpBefore > floor) onGateReached(state, enemy, emit);
   return false;
@@ -214,14 +223,14 @@ export function chipHit(state: LevelState, enemy: EnemyState, perfect: boolean, 
   );
 }
 
-/** Step 2 of the tick: resolve hero attacks whose impact tick has arrived (auto-attack hits per the weapon). */
+/** Step 2 of the tick: resolve hero auto-attacks whose impact tick has arrived (skills: skills.ts). */
 export function resolveHeroImpacts(state: LevelState, emit: Emit): void {
   const enc = state.enc as EncounterState;
   if (enc.pending.length === 0) return;
   const t = state.tick;
-  const due = enc.pending.filter((p) => p.tick <= t);
+  const due = enc.pending.filter((p) => p.kind === "auto" && p.tick <= t);
   if (due.length === 0) return;
-  enc.pending = enc.pending.filter((p) => p.tick > t);
+  enc.pending = enc.pending.filter((p) => p.kind !== "auto" || p.tick > t);
   const run = state.run;
   const w = K.WEAPONS[run.loadout.weapon.archetype];
   for (const p of due) {
@@ -231,23 +240,51 @@ export function resolveHeroImpacts(state: LevelState, emit: Emit): void {
     if (target === null) continue;
     const baseM = mulBp(run.heroAtkM, w.atkMultBp);
     for (let h = 0; h < w.hits && target.alive; h++) {
-      dealDamage(
+      const spec: DamageSpec = {
+        kind: "auto",
+        origin: "weapon",
+        skillId: null,
+        damageType: w.damageType,
+        baseM,
+        crit: p.crit,
+        hitIndex: h,
+        hitCount: w.hits,
+      };
+      // Hammer: the last hit knocks the target's attack timer back when it survives and has not shown its guard word yet
+      const knock =
+        h === w.hits - 1 &&
+        w.atbKnockbackBp > 0 &&
+        target.nextImpact !== null &&
+        !target.windupShown &&
+        target.brokenUntil === null &&
+        resolveDamage(state, target, spec).dmgM < target.hpM;
+      if (knock) spec.atbKnockback = true;
+      dealDamage(state, target, spec, emit);
+      if (knock && target.alive) knockbackAttack(state, target, w.atbKnockbackBp);
+    }
+    run.weaponAttacks++;
+    // Dagger: every Nth attack makes the target bleed (a weapon-origin DoT)
+    if (w.bleedEvery > 0 && run.weaponAttacks % w.bleedEvery === 0 && target.alive)
+      applyDot(
         state,
         target,
         {
-          kind: "auto",
+          status: "bleed",
           origin: "weapon",
           skillId: null,
-          damageType: w.damageType,
-          baseM,
-          crit: p.crit,
-          hitIndex: h,
-          hitCount: w.hits,
+          durationT: w.bleedT,
+          perTickM: Math.max(1, mulBp(run.heroAtkM, w.bleedPerTickBp)),
         },
         emit,
       );
-    }
   }
+}
+
+/** Hammer knockback: the enemy's attack progress goes back by `bp` of a full interval (re-staggered like any attack). */
+function knockbackAttack(state: LevelState, enemy: EnemyState, bp: number): void {
+  if (enemy.nextImpact === null) return;
+  scheduleAttack(state, enemy, enemy.nextImpact + mulBp(enemy.intervalTicks, bp));
+  enemy.cycleStart = (enemy.nextImpact as number) - enemy.intervalTicks;
 }
 
 // ---------------------------------------------------------------- hero HP
@@ -323,7 +360,7 @@ export function resolveImpact(state: LevelState, enemy: EnemyState, emit: Emit):
   } else if (absorbed) {
     outcome = "barrier";
     dmgM = 0;
-    run.barrier--;
+    consumeBarrier(state, emit);
   } else if (blocked) {
     outcome = "blocked";
     dmgM = mulBp(dmgM, blockMultBp(run));
@@ -331,6 +368,7 @@ export function resolveImpact(state: LevelState, enemy: EnemyState, emit: Emit):
   emit({ type: "EnemyAttack", tick: t, enemyId: enemy.id, outcome, damage: toDisplay(dmgM) });
   if (outcome === "parried") {
     run.stats.perfectParries++;
+    if (hasPassive(run, "riposte")) emitPassive(state, "riposte", enemy.id, emit);
     const w = K.WEAPONS[run.loadout.weapon.archetype];
     const counter: DamageSpec = {
       kind: "counter",
@@ -352,6 +390,7 @@ export function resolveImpact(state: LevelState, enemy: EnemyState, emit: Emit):
     addAtb(state, K.PARRY_ATB_M, emit);
   } else if (outcome === "blocked") {
     run.stats.blocks++;
+    if (hasPassive(run, "ironWill")) emitPassive(state, "ironWill", enemy.id, emit);
     emit({ type: "GuardBlocked", tick: t, enemyId: enemy.id, damage: toDisplay(dmgM) });
   } else if (outcome === "hit") {
     run.stats.hitsTaken++;
@@ -464,6 +503,11 @@ function resumeEncounter(state: LevelState, emit: Emit): void {
     if (!e.alive) continue;
     if (e.brokenUntil !== null) e.brokenUntil += delta;
     if (e.staggerUntil !== null) e.staggerUntil += delta;
+    if (e.frozenUntil !== null) e.frozenUntil += delta;
+    for (const d of e.dots) {
+      d.untilTick += delta;
+      d.nextTick += delta;
+    }
     if (!enc.finisherShown) assignWordPlate(state, e, emit);
     e.guardResult = null;
     e.windupShown = false;

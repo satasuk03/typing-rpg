@@ -6,6 +6,7 @@
 import type { DamageType, Rarity } from "@hd2d/content";
 import { type Bp, bp, type Milli, milli } from "./fixed.ts";
 import { TICK_HZ } from "./time.ts";
+import type { ActiveSkillId } from "./types.ts";
 
 export const BALANCE = {
   // ---- py: Story structure / Non-typing time (tools/balance level generator; the sim only reads WALK/REWARD/INTRO) ----
@@ -178,6 +179,8 @@ export const BALANCE = {
       hits: 2,
       damage_type: "pierce",
       bleed_every: 3,
+      bleed_s: 4, // T1.4 (TS-only): doc 01 gives no numbers; bleed ~4% of dagger DPS, weapon origin
+      bleed_atk_mult_per_s: 0.1,
     },
     staff: {
       char_charge: 6,
@@ -225,9 +228,14 @@ export const BALANCE = {
   DOOM_TIMER_BONUS_S: 2.0,
   DOOM_STAGGER_S: 4.0,
   DOOM_STAGGER_DMG_MULT: 1.5,
-  SKILL_CHARGE_PER_5_CHARS_FROM_TIER: 4, // C17
+  SKILL_CHARGE_PER_5_CHARS_FROM_TIER: 4, // C17 (word tier T4 = chapters 10-12: tier = ceil(chapter / 3))
+  BARRIER_CAP: 3, // T1.4 (TS-only): barrier charges (Aegis, Bulwark Streak) never stack past this
+  DOT_TICK_S: 1, // T1.4 (TS-only): burn / bleed damage lands once per second
   SKILLS: {
-    // doc 01 §3.1 with ~-40% damage (C3); T1.4 owns the behaviour
+    // doc 01 §3.1 with ~-40% damage (C3); T1.4 owns the behaviour. Fireball is -35% (2.0x -> 1.3x): at the strict -40% (1.2x)
+    // the bot's skill share (skill / sum of all origins, counters included) measured 14.6-14.9% on the ch1 fixture, l05, below
+    // the 15% floor; Python's own share (16.4%, counters not modelled) is reproduced either way. Burn rate (0.05 ATK/s) is
+    // not in doc 01; it barely moves the share (targets often die before the burn ends).
     slashWave: {
       charge: 8,
       atk_mult_all: 0.9,
@@ -244,7 +252,7 @@ export const BALANCE = {
     },
     fireball: {
       charge: 10,
-      atk_mult: 1.2,
+      atk_mult: 1.3,
       damage_type: "fire",
       burn_s: 6,
       burn_atk_mult_per_s: 0.05,
@@ -286,6 +294,8 @@ export interface WeaponStats {
   damageType: DamageType;
   /** Signature knobs kept for T1.4 (bleed every N-th attack, staff skill-charge multiplier, hammer ATB knockback). */
   bleedEvery: number;
+  bleedT: number;
+  bleedPerTickBp: Bp;
   skillChargeMultBp: Bp;
   atbKnockbackBp: Bp;
 }
@@ -298,6 +308,8 @@ type WeaponSrc = {
   hits: number;
   damage_type: DamageType;
   bleed_every?: number;
+  bleed_s?: number;
+  bleed_atk_mult_per_s?: number;
   skill_charge_mult?: number;
   atb_knockback?: number;
 };
@@ -309,6 +321,8 @@ const weapon = (w: WeaponSrc): WeaponStats => ({
   hits: w.hits,
   damageType: w.damage_type,
   bleedEvery: w.bleed_every ?? 0,
+  bleedT: ticks(w.bleed_s ?? 0),
+  bleedPerTickBp: bp((w.bleed_atk_mult_per_s ?? 0) * BALANCE.DOT_TICK_S),
   skillChargeMultBp: bp(w.skill_charge_mult ?? 1),
   atbKnockbackBp: bp(w.atb_knockback ?? 0),
 });
@@ -358,6 +372,39 @@ function deriveConstants(B: typeof BALANCE) {
     BURST_COOLDOWN_T: ticks(B.BURST_COOLDOWN_S),
     PARRY_ATB_M: milli(B.PARRY_ATB),
     WEAPONS: weapons,
+    // ---- skills (T1.4): charge in milli-words; damage skills are mulBp(heroAtk, atkMultBp) ----
+    PERFECT_SKILL_CHARGE_BP: bp(B.PERFECT_SKILL_CHARGE),
+    SKILL_PER5_FROM_CHAPTER: (B.SKILL_CHARGE_PER_5_CHARS_FROM_TIER - 1) * 3 + 1,
+    BARRIER_CAP: B.BARRIER_CAP,
+    DOT_TICK_T: ticks(B.DOT_TICK_S),
+    SKILL_CHARGE_M: {
+      slashWave: milli(B.SKILLS.slashWave.charge),
+      piercingThrust: milli(B.SKILLS.piercingThrust.charge),
+      fireball: milli(B.SKILLS.fireball.charge),
+      frostLock: milli(B.SKILLS.frostLock.charge),
+      mendingLight: milli(B.SKILLS.mendingLight.charge),
+      aegis: milli(B.SKILLS.aegis.charge),
+    } as Readonly<Record<ActiveSkillId, Milli>>,
+    SLASH_WAVE_ATK_BP: bp(B.SKILLS.slashWave.atk_mult_all),
+    SLASH_WAVE_MIN_ENEMIES: B.SKILLS.slashWave.min_enemies,
+    PIERCING_ATK_BP: bp(B.SKILLS.piercingThrust.atk_mult),
+    PIERCING_SHIELD_HITS: B.SKILLS.piercingThrust.shield_hits,
+    FIREBALL_ATK_BP: bp(B.SKILLS.fireball.atk_mult),
+    FIREBALL_BURN_T: ticks(B.SKILLS.fireball.burn_s),
+    FIREBALL_BURN_PER_TICK_BP: bp(B.SKILLS.fireball.burn_atk_mult_per_s * B.DOT_TICK_S),
+    FROST_FREEZE_T: ticks(B.SKILLS.frostLock.freeze_s),
+    MENDING_HEAL_BP: bp(B.SKILLS.mendingLight.heal),
+    MENDING_HP_BELOW_BP: bp(B.SKILLS.mendingLight.hp_below),
+    AEGIS_BARRIER_HITS: B.SKILLS.aegis.barrier_hits,
+    // ---- passives (T1.4) ----
+    CLEAN_CUT_CRIT_BP: bp(B.PASSIVES.cleanCut.crit_bonus),
+    BULWARK_EVERY_COMBO: B.PASSIVES.bulwarkStreak.every_combo,
+    BULWARK_BARRIER_HITS: B.PASSIVES.bulwarkStreak.barrier_hits,
+    STEADY_FORGIVEN: B.PASSIVES.steadyHands.forgiven_per_encounter,
+    OPENING_GAMBIT_ATB_M: milli(B.PASSIVES.openingGambit.start_atb),
+    LAST_STAND_HP_BELOW_BP: bp(B.PASSIVES.lastStand.hp_below),
+    LAST_STAND_ATB_MULT_BP: bp(B.PASSIVES.lastStand.atb_mult),
+    COMEBACK_RESTORE_BP: bp(B.PASSIVES.comeback.restore_frac),
     // ---- guard / enemy timers ----
     GUARD_T: ticks(B.GUARD_S),
     GUARD_MIN_T: ticks(B.GUARD_MIN_S),

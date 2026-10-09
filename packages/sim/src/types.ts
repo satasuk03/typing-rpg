@@ -282,6 +282,8 @@ export interface LevelResult {
     skillsCast: number;
     secondWindUsed: boolean;
     damageByOriginM: Record<HitOrigin, number>; // skill share = skill / Σ (T1.4 AC)
+    /** T1.4 (additive): actual HP removed by each active skill, burn included (per-skill tuning, T6.1). */
+    damageBySkillM?: Record<ActiveSkillId, number>;
   };
   words: WordResult[]; // every completed or typo'd word/guard plate, in order
 }

@@ -24,8 +24,11 @@ import { enemyDef, holdAttacks, initAttack, stepEnemyAttacks } from "./guard.ts"
 import { deepClone } from "./hash.ts";
 import type { SimInput } from "./input.ts";
 import { computeHeroStats } from "./meta/loadout.ts";
+import { emitPassive, hasPassive, tutorialCue } from "./passives.ts";
 import { below, deriveRng } from "./rng.ts";
+import { chargeSkills, checkSkillCasts, resolveSkillImpacts, tickDots } from "./skills.ts";
 import type { EncounterState, EnemyState, RunState } from "./state.ts";
+import { stepFreezes } from "./statuses.ts";
 import type { LevelOptions, LevelResult, LevelState, Loadout, ResolvedLevel } from "./types.ts";
 import {
   accuracyBp,
@@ -35,7 +38,15 @@ import {
   netWpmX100,
   type TypingHooks,
 } from "./typing.ts";
-import type { EnemyPose, EnemyView, HeroPose, LevelView, PlateView } from "./view.ts";
+import type {
+  EnemyPose,
+  EnemyView,
+  HeroPose,
+  LevelView,
+  PlateView,
+  SkillView,
+  StatusView,
+} from "./view.ts";
 
 const WEAPON_DAMAGE_TYPE: Readonly<
   Record<WeaponArchetype, "slash" | "pierce" | "arcane" | "blunt">
@@ -82,6 +93,15 @@ export function createLevel(
       hitsTaken: 0,
       autoAttacks: 0,
       damageByOriginM: { weapon: 0, chip: 0, skill: 0, counter: 0, minigame: 0, finisher: 0 },
+      damageBySkillM: {
+        slashWave: 0,
+        piercingThrust: 0,
+        fireball: 0,
+        frostLock: 0,
+        mendingLight: 0,
+        aegis: 0,
+      },
+      skillsCast: 0,
     },
     activeTicks: 0,
     words: [],
@@ -92,6 +112,13 @@ export function createLevel(
     heroMaxHpM: hero.maxHp,
     heroHpM: hero.maxHp,
     barrier: 0,
+    skillChargeM: [0, 0],
+    skillReady: [false, false],
+    weaponAttacks: 0,
+    lastWordPerfect: false,
+    comebackLost: 0,
+    lastStandOn: false,
+    cues: [],
     secondWindUsed: false,
     goldCollected: 0,
     guardsShown: 0,
@@ -156,11 +183,15 @@ function stepOne(state: LevelState, emit: Emit): void {
   } else {
     if (state.phase === "combat") run.activeTicks++;
     if (state.phase === "combat" && state.enc !== null) {
-      expireBreaks(state, emit); // step 1: timers (statuses: T1.4)
-      resolveHeroImpacts(state, emit); // step 2: scheduled hero impacts
+      expireBreaks(state, emit); // step 1: timers and statuses (freeze)
+      stepFreezes(state, emit);
+      resolveHeroImpacts(state, emit); // step 2: scheduled hero impacts: auto-attacks, then skills, then DoT ticks
+      resolveSkillImpacts(state, emit);
+      tickDots(state, emit);
       if (run.options.tutorial && run.stats.wordsCompleted < K.TUTORIAL_HOLD_ATTACKS_UNTIL_WORDS)
         holdAttacks(state); // tutorial: enemies hold their attacks until the hero has typed a few words
       stepEnemyAttacks(state, resolveImpact, emit); // step 3: enemy timers
+      if (state.phase === "combat") checkSkillCasts(state, emit); // step 6: auto-cast
     }
     // step 7: deaths, wave/encounter/segment transitions
     transitions(state, emit);
@@ -197,6 +228,7 @@ function transitions(state: LevelState, emit: Emit): void {
       case "encounterIntro":
       case "bossIntro":
         setPhase(state, "combat", null);
+        tutorialCue(state, "target", emit);
         break;
       case "rewards":
         enterSegment(state, state.segmentIndex + 1, emit);
@@ -266,7 +298,7 @@ function startEncounter(state: LevelState, emit: Emit): void {
     plates: [],
     targetPlateId: null,
     focusEnemyId: null,
-    atbM: 0, // hero ATB resets each encounter (D18); Opening Gambit is T1.4
+    atbM: hasPassive(run, "openingGambit") ? K.OPENING_GAMBIT_ATB_M : 0, // resets each encounter (D18); Opening Gambit starts at 50
     pending: [],
     critWords: 0,
     critPerfect: 0,
@@ -277,6 +309,7 @@ function startEncounter(state: LevelState, emit: Emit): void {
     gimmickRng: deriveRng(state.seed, "gimmick", index),
     recent: [],
     finisherShown: false,
+    steadyLeft: K.STEADY_FORGIVEN,
   };
   state.enc = enc;
   setPhase(state, isBoss ? "bossIntro" : "encounterIntro", typingFrom);
@@ -289,6 +322,7 @@ function startEncounter(state: LevelState, emit: Emit): void {
     waveCount: enc.waveCount,
     typingFromTick: typingFrom,
   });
+  if (hasPassive(run, "openingGambit")) emitPassive(state, "openingGambit", null, emit);
   spawnNextWave(state, emit);
   if (boss !== null) {
     const be = enc.enemies[0] as EnemyState;
@@ -357,6 +391,8 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
       windupShown: false,
       guardResult: null,
       wordsDone: 0,
+      dots: [],
+      frozenUntil: null,
     });
   });
   for (const e of spawned) enc.enemies.push(e);
@@ -399,6 +435,7 @@ const HOOKS: TypingHooks = {
       secondWindSucceeded(state, emit);
       return;
     }
+    chargeSkills(state, plate, emit); // every completed word/guard plate charges both skills
     const enemy = enemyById(enc, plate.ownerId);
     if (enemy === null) return;
     if (plate.kind === "guard") {
@@ -426,6 +463,34 @@ const HOOKS: TypingHooks = {
 };
 
 // ---------------------------------------------------------------- view & result
+
+const enemyStatuses = (e: Readonly<EnemyState>, t: number): StatusView[] => {
+  const out: StatusView[] = e.dots.map((d) => ({
+    id: d.status,
+    ticksLeft: Math.max(0, d.untilTick - t),
+    stacks: 1,
+  }));
+  if (e.frozenUntil !== null)
+    out.push({ id: "freeze", ticksLeft: Math.max(0, e.frozenUntil - t), stacks: 1 });
+  return out;
+};
+
+const skillViews = (state: Readonly<LevelState>): SkillView[] => {
+  const run = state.run;
+  const out: SkillView[] = [];
+  for (const slot of [0, 1] as const) {
+    const id = run.loadout.actives[slot];
+    if (id === null) continue;
+    out.push({
+      slot,
+      id,
+      chargeFrac: Math.min(1, run.skillChargeM[slot] / K.SKILL_CHARGE_M[id]),
+      ready: run.skillReady[slot],
+      mode: run.loadout.activeModes[slot],
+    });
+  }
+  return out;
+};
 
 export function getView(state: Readonly<LevelState>): LevelView {
   const run = state.run;
@@ -486,7 +551,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
         revealed: e.revealed.includes(type),
       })),
       brokenTicksLeft: e.brokenUntil === null ? 0 : Math.max(0, e.brokenUntil - t),
-      statuses: [],
+      statuses: enemyStatuses(e, t),
       isFocus: (enc as EncounterState).focusEnemyId === e.id,
       pose,
       poseSinceTick: e.spawnTick,
@@ -499,9 +564,11 @@ export function getView(state: Readonly<LevelState>): LevelView {
         ? "victory"
         : state.phase === "failed" || state.phase === "secondWind" || state.phase === "downed"
           ? "downed"
-          : enc !== null && enc.pending.length > 0
-            ? "attack"
-            : "idle";
+          : enc !== null && enc.pending.some((p) => p.kind === "skill")
+            ? "cast"
+            : enc !== null && enc.pending.length > 0
+              ? "attack"
+              : "idle";
   const span = state.phaseUntil === null ? 0 : state.phaseUntil - run.phaseStart;
   const bossEnemy = enc?.isBoss ? enc.enemies[0] : undefined;
   const bossDef = run.def.boss;
@@ -527,7 +594,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
       archetype: arch,
       weaponDamageType: WEAPON_DAMAGE_TYPE[arch],
       barrierCharges: run.barrier,
-      statuses: [],
+      statuses: run.barrier > 0 ? [{ id: "barrier", ticksLeft: null, stacks: run.barrier }] : [],
       secondWindAvailable: !run.secondWindUsed,
       pose: heroPose,
       poseSinceTick: run.phaseStart,
@@ -542,7 +609,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
     comboMode: run.options.comboMode,
     keyStreak: run.keyStreak,
     keyStreakTier: run.keyStreakTier,
-    skills: [],
+    skills: skillViews(state),
     passives: run.loadout.passives.filter((p): p is NonNullable<typeof p> => p !== null),
     boss:
       bossEnemy !== undefined && bossDef !== null
@@ -601,9 +668,10 @@ export function getResult(state: Readonly<LevelState>): LevelResult | null {
       blocks: run.stats.blocks,
       perfectParries: run.stats.perfectParries,
       autoAttacks: run.stats.autoAttacks,
-      skillsCast: 0,
+      skillsCast: run.stats.skillsCast,
       secondWindUsed: run.secondWindUsed,
       damageByOriginM: origins,
+      damageBySkillM: { ...run.stats.damageBySkillM },
     },
     words: run.words.map((w) => ({ ...w })),
   };

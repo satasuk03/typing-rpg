@@ -4,6 +4,7 @@ import type { Emit } from "./bus.ts";
 import type { HitKind, PlateId } from "./events.ts";
 import { cancelAttack, enemyDef } from "./guard.ts";
 import type { EncounterState, EnemyState, PlateState } from "./state.ts";
+import { clearEnemyStatuses } from "./statuses.ts";
 import type { LevelState, ResolvedLevel } from "./types.ts";
 import { addPlate, dropTarget, findPlate, removePlate, visibleFirstLetters } from "./typing.ts";
 import { pickPlateWord, RECENT_LIMIT } from "./words.ts";
@@ -66,6 +67,7 @@ export function killEnemy(state: LevelState, enemy: EnemyState, byKind: HitKind,
   enemy.staggerUntil = null;
   cancelAttack(enemy);
   enc.finisherShown = false;
+  clearEnemyStatuses(state, enemy, emit);
   emit({
     type: "EnemyDeath",
     tick: state.tick,

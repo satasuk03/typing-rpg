@@ -8,6 +8,7 @@ import { K } from "./balance.ts";
 import type { Emit } from "./bus.ts";
 import { SimError } from "./errors.ts";
 import { mulBp } from "./fixed.ts";
+import { tutorialCue } from "./passives.ts";
 import type { EncounterState, EnemyState, PlateState } from "./state.ts";
 import { PACE_FACTOR_BP } from "./tables.generated.ts";
 import type { LevelState, ResolvedEnemy } from "./types.ts";
@@ -151,6 +152,7 @@ export function startGuard(state: LevelState, enemy: EnemyState, emit: Emit): vo
   enemy.plateId = plate.id;
   enemy.windupShown = true;
   run.guardsShown++;
+  tutorialCue(state, "guard", emit);
   emit({
     type: "GuardWordShown",
     tick: t,
