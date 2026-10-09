@@ -13,7 +13,7 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T2.5 Audio | Audio (sonnet) | **done** (merged 04fbc98) | 51 unit tests; audio Playwright spec green; `play('key')` p95 0.1 ms (headless); bindings synced to interfaces v1.1 (drift test). **Needs PO listen pass:** `apps/game/src/audio/LISTEN_CHECKLIST.md` at `?scene=audio-test` |
 | T5.1 D1 schema + migrations | Backend (sonnet) | **done** (merged 43eaca3) | 5 STRICT migrations apply clean + idempotent; 15 api tests on real local D1 via `getPlatformProxy` (save If-Match + keep-5, one-open-trial index, idempotent transition, LB around-me + flagged shadow rank, gem ledger append-only, refresh family revocation). Decisions for T5.2: blobs stored as base64 TEXT; flagged owner shadow rank; tie-break achieved_at then user_id |
 | T1.1a Contracts published | Sim (sonnet) | **merged early** (2f68711) | events.ts, view.ts, types.ts, content + shared schemas on main; CHECK PASS |
-| T2.4 HUD (mock events) | UI (sonnet) | in progress | — |
+| T2.4 HUD (mock events) | UI (sonnet) | changes requested | 22 unit + readability specs green, 0.37 ms/frame avg; review: BREAK banner + pops cover a plate (forest-90wpm), pops hidden under plates, runtime Google Fonts → self-host, accuracy scale pinned to bp |
 | T1.2 Typing engine | Sim (sonnet) | in progress | — |
 | T4.1 Word data + validator | Content (sonnet) | in progress | — |
 
@@ -21,6 +21,10 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 - Stack pins: three 0.186.1, vite 8.3.4, typescript 7.0.2 (native tsc), vitest 5.0.3, playwright 1.64.0, biome 2.5.15, hono 4.13.13, wrangler 4.149.0, zod 4.
 - Biome excludes `poc/` and `docs/` (POC html is reference-only).
 - Agent worktrees branch from the first commit, not main HEAD — briefs must tell agents to `git merge main` first.
+
+## Orchestrator rulings
+- `LevelView.stats.accuracy` / `TrialView.accuracy` are basis points (0..10000).
+- The game makes no runtime third-party requests (fonts self-hosted).
 
 ## PO decisions log
 - 2026-10-09: Combo = hybrid. Mechanics use perfect-word combo (5/15/30/50); VFX colour tiers use per-key streak (10/25/50/100).
