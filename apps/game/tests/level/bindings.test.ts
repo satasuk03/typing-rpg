@@ -18,7 +18,8 @@ describe("event bindings (plan T2.3 AC)", () => {
   test("an entry presents the event somewhere or says why it is intentionally silent", () => {
     for (const t of ALL_EVENT_TYPES) {
       const b = BINDINGS[t];
-      const presented = b.render !== undefined || b.hud === "push" || b.audio === "bound";
+      const presented =
+        b.render !== undefined || b.fx !== undefined || b.hud === "push" || b.audio === "bound";
       if (!presented) expect(b.silent, `${t} is unbound and has no silent reason`).toBeTruthy();
     }
   });

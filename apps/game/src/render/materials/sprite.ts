@@ -183,7 +183,7 @@ export class SpriteResources {
           emap: { value: g?.etex ?? this.black },
           uTexSize: { value: new Vector2(o.frame?.w ?? 16, o.frame?.h ?? 16) },
           uTint: { value: new Vector3(...tint) },
-          uFlashCol: { value: new Vector3(1.6, 1.6, 1.6) },
+          uFlashCol: { value: new Vector3(1.25, 1.2, 1.1) },
           uEdgeCol: { value: new Vector3(4, 2.2, 0.8) },
           uFlash: { value: 0 },
           uDissolve: { value: 0 },

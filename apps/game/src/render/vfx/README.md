@@ -74,7 +74,8 @@ Rules:
 
 ## Budgets and scaling
 
-Pool A (additive) 384 / 288 / 192 by quality tier, pool B (normal blend: smoke, pixel motes) 128, 14 fx meshes,
+Pool A (additive) 576 / 432 / 288 by quality tier (384 / 288 / 192 for typing, the rest reserved for the T2.3 combat
+effects, which share the pool and its draw call), pool B (normal blend: smoke, pixel motes) 192, 14 fx meshes,
 3 dynamic lights (aura light off at quality 2). `effectsIntensity` 0 hides every world effect; `reducedFlash`
 turns the post flash off, halves light flashes and drops the CA; `reducedMotion` drops punches, shakes and the
 time-slow. The post flash is capped at 0.12 while typing (R6).
@@ -91,3 +92,25 @@ coverage test checks).
 `level/typingFx.ts` is the real wiring: `router.setPresentationGate(handle.onEvent)`, `onPresent: router.present`,
 `worldDt = fx.update(dt)` fed to `stage.update`. New callbacks: `cameraPose`, `sfx`, `heroPush`, `dash(..., source)`.
 New files: `GuardBarrier`, `SentenceBolts`, `FinisherCinematic`, `screenToWorld`, `typingBindings` (checked by the coverage test).
+
+## T2.3: the combat library (`combat/`)
+
+Arcs, hits, skills, statuses, enemy telegraphs, death dissolve, chests, coins and the boss moments. `level/combatFx.ts` is
+the wiring: `router.sinks.fx = combat` (the `fx` column of `level/eventBindings.ts`: every event is bound or carries a
+justified `fxNone`), the typing handle's `chipImpact` / `dissolve` callbacks, and `combat.update(stage.dt)` after
+`stage.update` (a hit-stop freezes the arcs too). It shares pool A / B and the capped post flash with the typing VFX and
+owns 3 lights of its own (typing keeps its 3; 16 slots in total).
+
+| file | job |
+|---|---|
+| `combat/CombatFx.ts` | the director and the `CombatFxSink` the bindings call; rim-flash decay; dev overrides |
+| `combat/kit.ts` | shared pools, quads, arcs, ghosts, lights, scale from settings, non-allocating emit helpers |
+| `combat/AttackFx.ts` | weapon arcs (sword, dagger, staff bolt, hammer slam), afterimages, crit / weak / chip / counter / DoT, shield, BREAK |
+| `combat/SkillFx.ts` | six skills, status markers (read from the view every frame), Aegis bubble, heal, passive, revive |
+| `combat/EnemyFx.ts` | windup sigil (sim-tick driven, kept at intensity 0), lunge impact, block / parry sparks, pixel dissolve |
+| `combat/RewardFx.ts`, `BossFx.ts` | chest + beam by tier, coin fountain; rune intro (35% of the intro ticks), Doom aura, phase change, rubble |
+| `combat/ArcPool.ts`, `QuadPool.ts`, `Ghosts.ts`, `Projectiles.ts` | the pooled primitives (built once; spawn writes numbers) |
+| `combat/params.ts` | every number and colour, pure (unit tested) |
+
+Dev: `?scene=play&level=ch1-l08&demo=1` then `window.__play.demo("crit" | "fireball" | "chest:Gold" | ...)` (see
+`dev/combatFxDemo.ts`); `&combat=0` turns the library off.
