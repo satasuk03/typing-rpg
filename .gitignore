@@ -15,3 +15,6 @@ __pycache__/
 # T2.6 VFX captures (only tests/vfx/__shots__ is committed)
 apps/game/tests/vfx/__captures__/
 apps/game/tests/vfx/_zoom.spec.ts
+
+# T6.2 browser-bot playtest screenshots
+apps/game/tests/level/__bot_shots__/

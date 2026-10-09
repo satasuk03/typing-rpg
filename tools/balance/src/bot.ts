@@ -14,6 +14,7 @@ import {
   getResult,
   getView,
   type HitOrigin,
+  hash,
   type LevelOptions,
   type LevelResult,
   type Loadout,
@@ -75,6 +76,11 @@ export interface RunRecord {
   bossPhaseS: number[] | null;
   netWpm: number;
   accuracy: number;
+  /** Final sim state hash (determinism check). */
+  stateHash: string;
+  /** Realistic gimmick model: plates that cost a decode delay / a recall delay. */
+  decoded: number;
+  unreadFaded: number;
 }
 
 export interface PlayArgs {
@@ -84,7 +90,31 @@ export interface PlayArgs {
   attempt: Attempt;
   options: LevelOptions;
   reactionTicks?: number;
+  /**
+   * Gimmick reading model. "free" (default): the bot decodes scrambled and faded words for free (the T6.1 numbers).
+   * "realistic" (T6.2): see GIMMICK_MODEL.
+   */
+  gimmicks?: GimmickMode;
 }
+
+export type GimmickMode = "free" | "realistic";
+
+/**
+ * Realistic gimmick reading (T6.2, a persona option; every number is a documented guess, not tuned):
+ *  - Scrambled word: before its first key the bot decodes it: (0.4 s + 0.12 s x letters) once per plate.
+ *  - Fading word that was already faded when the bot first looked at it (never read it): 0.75 s of recall delay once,
+ *    and the typo rate is x3 while typing it.
+ *  - Fading word read before it faded: once faded, keys are 1.3x slower and the typo rate is x2 (typing from memory).
+ */
+export const GIMMICK_MODEL = {
+  decodeBaseS: 0.4,
+  decodePerCharS: 0.12,
+  unreadRecallS: 0.75,
+  unreadErrMult: 3,
+  fadedErrMult: 2,
+  fadedIntervalMult: 1.3,
+  maxTypoRate: 0.6,
+} as const;
 
 export function playLevel(a: PlayArgs): RunRecord {
   const { def, attempt } = a;
@@ -93,6 +123,11 @@ export function playLevel(a: PlayArgs): RunRecord {
   const baseInterval = (720 * attempt.acc) / attempt.wpm;
   const state = createLevel(def, a.loadout, a.seed, a.options);
   const decided = new Map<number, boolean>();
+  const realistic = a.gimmicks === "realistic";
+  const decodedPlates = new Set<number>();
+  const gazed = new Map<number, boolean>(); // plate id -> was already faded when first looked at
+  let unreadFaded = 0;
+  const unreadPlates = new Set<number>();
   let nextKey = 0;
   const maxTicks = 72_000;
 
@@ -223,9 +258,37 @@ export function playLevel(a: PlayArgs): RunRecord {
       nextKey = state.tick + 3;
       return;
     }
+    let errMult = 1;
+    let ivMult = 1;
+    if (realistic) {
+      const G = GIMMICK_MODEL;
+      if (pick.display !== pick.text && pick.typedIndex === 0 && !decodedPlates.has(pick.id)) {
+        decodedPlates.add(pick.id);
+        nextKey =
+          state.tick + Math.round(60 * (G.decodeBaseS + G.decodePerCharS * pick.text.length));
+        return;
+      }
+      if (!gazed.has(pick.id)) gazed.set(pick.id, pick.faded);
+      if (pick.faded) {
+        if (gazed.get(pick.id) === true) {
+          if (pick.typedIndex === 0) {
+            gazed.set(pick.id, false); // recall delay paid once; the typo penalty stays via `unread`
+            unreadPlates.add(pick.id);
+            unreadFaded++;
+            nextKey = state.tick + Math.round(60 * G.unreadRecallS);
+            return;
+          }
+        }
+        errMult = unreadPlates.has(pick.id) ? G.unreadErrMult : G.fadedErrMult;
+        ivMult = G.fadedIntervalMult;
+      }
+    }
     const want = pick.text.charAt(pick.typedIndex);
-    const iv = interval();
-    if (below(rng, 10_000) >= Math.round(attempt.acc * 10_000)) {
+    const iv = Math.max(1, Math.round(interval() * ivMult));
+    const typoRate = realistic
+      ? Math.min(GIMMICK_MODEL.maxTypoRate, (1 - attempt.acc) * errMult)
+      : 1 - attempt.acc;
+    if (below(rng, 10_000) >= Math.round((1 - typoRate) * 10_000)) {
       const first = new Set(plates.map((x) => x.text.charAt(0).toLowerCase()));
       let wrong = "";
       if (target !== undefined) wrong = want === "e" ? "r" : "e";
@@ -297,5 +360,8 @@ export function playLevel(a: PlayArgs): RunRecord {
     bossPhaseS,
     netWpm: res.stats.netWpmX100 / 100,
     accuracy: res.stats.accuracyBp / 10_000,
+    stateHash: hash(state),
+    decoded: decodedPlates.size,
+    unreadFaded,
   };
 }

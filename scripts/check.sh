@@ -31,6 +31,9 @@ echo "sim purity ok"
 failed="sim parity"; step "sim Node vs Chromium parity"
 pnpm -s --filter @hd2d/sim test:parity
 
+failed="bot quick"; step "headless bot gate (3 personas x 10 levels x 5 seeds, ~3 s)"
+pnpm -s bot --quick
+
 trap - ERR
 echo
 echo "CHECK PASS"

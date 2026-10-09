@@ -7,6 +7,9 @@
     "start": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
+  "dependencies": {
+    "@hd2d/balance": "workspace:*"
+  },
   "devDependencies": {
     "tsx": "^4.23.15"
   }
