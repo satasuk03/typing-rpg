@@ -89,5 +89,5 @@ describe("sfx frequency range", () => {
     expect(freqs.length).toBeGreaterThan(1000);
     const bad = freqs.filter((f) => !(f >= FREQ_MIN && f <= FREQ_MAX));
     expect(bad.slice(0, 5)).toEqual([]);
-  });
+  }, 60_000); // full sweep: heavy by design, slow under parallel CI load
 });
