@@ -9,6 +9,10 @@ export interface FrameSample {
   tris: number;
   /** Main-thread JS time spent in rAF callbacks this frame (sim step, HUD, render submit), ms. */
   cpu: number;
+  /** Main-thread time inside hud.render (update + 2D draw) this frame, ms. */
+  hud: number;
+  /** Main-thread time inside world.render (three.js submit) this frame, ms. */
+  gl: number;
 }
 
 interface Probe {
@@ -84,6 +88,22 @@ export async function installProbe(page: Page): Promise<void> {
     // Time every rAF callback (the session re-arms through window.requestAnimationFrame each frame).
     const rawRaf = window.requestAnimationFrame.bind(window);
     let cpuAcc = 0;
+    let hudAcc = 0;
+    let glAcc = 0;
+    const hud = play.session.hud;
+    const world = play.session.world;
+    const hudRender = hud.render.bind(hud);
+    hud.render = (...a: Parameters<typeof hudRender>): void => {
+      const s0 = performance.now();
+      hudRender(...a);
+      hudAcc += performance.now() - s0;
+    };
+    const glRender = world.render.bind(world);
+    world.render = (...a: Parameters<typeof glRender>): void => {
+      const s0 = performance.now();
+      glRender(...a);
+      glAcc += performance.now() - s0;
+    };
     window.requestAnimationFrame = (cb: FrameRequestCallback): number =>
       rawRaf((t) => {
         const s0 = performance.now();
@@ -99,8 +119,12 @@ export async function installProbe(page: Page): Promise<void> {
           calls: i.render.calls,
           tris: i.render.triangles,
           cpu: cpuAcc,
+          hud: hudAcc,
+          gl: glAcc,
         });
         cpuAcc = 0;
+        hudAcc = 0;
+        glAcc = 0;
       }
       probe.last = t;
       i.reset();
@@ -125,6 +149,8 @@ export interface Summary {
   tris: number;
   cpuAvg: number;
   cpuP95: number;
+  hudAvg: number;
+  glAvg: number;
 }
 
 export function summarize(s: FrameSample[]): Summary {
@@ -132,7 +158,7 @@ export function summarize(s: FrameSample[]): Summary {
   const q = (p: number): number =>
     dts.length ? (dts[Math.min(dts.length - 1, Math.floor(p * dts.length))] ?? 0) : 0;
   const cpus = s.map((f) => f.cpu).sort((a, b) => a - b);
-  const mean = (k: "calls" | "tris" | "cpu"): number =>
+  const mean = (k: "calls" | "tris" | "cpu" | "hud" | "gl"): number =>
     s.length ? s.reduce((a, f) => a + f[k], 0) / s.length : 0;
   return {
     frames: dts.length,
@@ -144,6 +170,8 @@ export function summarize(s: FrameSample[]): Summary {
     calls: mean("calls"),
     tris: mean("tris"),
     cpuAvg: mean("cpu"),
+    hudAvg: mean("hud"),
+    glAvg: mean("gl"),
     cpuP95: cpus[Math.min(cpus.length - 1, Math.floor(0.95 * cpus.length))] ?? 0,
   };
 }
@@ -151,7 +179,7 @@ export function summarize(s: FrameSample[]): Summary {
 export const fmt = (n: number, d = 1): string => n.toFixed(d);
 
 export const row = (label: string, s: Summary): string =>
-  `${label} | frames ${s.frames} | avg ${fmt(s.avg)} p50 ${fmt(s.p50)} p95 ${fmt(s.p95)} p99 ${fmt(s.p99)} max ${fmt(s.max)} ms | cpu avg ${fmt(s.cpuAvg, 2)} p95 ${fmt(s.cpuP95, 2)} | calls ${fmt(s.calls, 0)} tris ${fmt(s.tris, 0)}`;
+  `${label} | frames ${s.frames} | avg ${fmt(s.avg)} p50 ${fmt(s.p50)} p95 ${fmt(s.p95)} p99 ${fmt(s.p99)} max ${fmt(s.max)} ms | cpu avg ${fmt(s.cpuAvg, 2)} (hud ${fmt(s.hudAvg, 2)} gl ${fmt(s.glAvg, 2)}) p95 ${fmt(s.cpuP95, 2)} | calls ${fmt(s.calls, 0)} tris ${fmt(s.tris, 0)}`;
 
 /**
  * Count live WebGL objects (framebuffers = render targets, textures, buffers, ...) by wrapping create/delete on the

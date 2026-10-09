@@ -207,6 +207,7 @@ export class PlaySession {
       this.hud.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
     };
     window.addEventListener("resize", resize);
+    this.hud.setQuality(this.world.qualityTier); // caps the HUD backing-store DPR per tier
     resize();
     this.keyboard.attach();
     this.setBiomeFromWorld(true);
