@@ -29,6 +29,12 @@ function boot(): void {
     return;
   }
 
+  // Dev-only route: ?scene=level&id=ch1-l03&pose=walk|battle:1|boss renders a level from its layout data.
+  if (new URLSearchParams(location.search).get("scene") === "level") {
+    void import("./dev/levelScene").then((m) => m.start(glCanvas));
+    return;
+  }
+
   const renderer = new WebGLRenderer({ canvas: glCanvas, antialias: false });
   renderer.setClearColor(0x080a12, 1);
   const scene = new Scene();
