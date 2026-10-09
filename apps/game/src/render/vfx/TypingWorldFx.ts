@@ -115,7 +115,8 @@ export class TypingWorldFx {
     private readonly cb: TypingFxCallbacks,
   ) {
     this.poolA = new PooledParticles(576, true, world.scene);
-    this.poolB = new PooledParticles(192, false, world.scene);
+    // normal-blend shards draw ABOVE the additive quads (barrier, discs) so parry / break hexes stay crisp solid shapes
+    this.poolB = new PooledParticles(192, false, world.scene, 12);
     this.lights = new LightSlots(world.lights);
     this.aura = new HeroAura(world, this.poolA, this.poolB, this.lights);
     this.blade = new BladeGlow(world, this.poolA);
@@ -502,6 +503,7 @@ export class TypingWorldFx {
       } else this.cb.actorFlash("hero", (1 - u) * HERO_FLASH_MAX, [1.7, 1.6, 1.5]);
     }
     this.barrier.setHero(this.aura.heroX, this.aura.heroZ);
+    this.barrier.setAegis(this.view?.hero.barrierCharges ?? 0);
     this.barrier.update(dt, this.time, this.settings);
     this.bolts.update(dt, this.time, this.settings);
     this.finisher.update(realDt, this.settings);

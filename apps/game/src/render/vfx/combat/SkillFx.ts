@@ -638,7 +638,7 @@ export class SkillFx {
         .at(kit.hero.x + 0.3, 1.5, kit.hero.z + 0.3)
         .size(3 * scale * (1 + pulse));
       this.bubble.progress(this.bubbleFlare * 1.2);
-      this.bubble.intensity((0.4 + 0.12 * Math.min(3, charges)) * this.bubbleLevel * g);
+      this.bubble.intensity((0.3 + 0.08 * Math.min(3, charges)) * this.bubbleLevel * g);
     } else this.bubble.intensity(0);
 
     // ---- heal / revive column
