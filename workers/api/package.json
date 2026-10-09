@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@hd2d/shared": "workspace:*",
-    "hono": "4.13.13"
+    "hono": "4.13.13",
+    "@hd2d/sim": "workspace:*",
+    "@hd2d/content": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260101.0",

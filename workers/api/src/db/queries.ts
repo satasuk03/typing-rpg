@@ -53,6 +53,41 @@ export function insertDeviceStmt(
     .bind(deviceId, userId, now);
 }
 
+export function getUserById(db: D1Database, userId: string): Promise<UserRow | null> {
+  return db
+    .prepare("SELECT * FROM users WHERE id = ?1 AND deleted_at IS NULL")
+    .bind(userId)
+    .first<UserRow>();
+}
+
+/** The caller's own row for a board-period regardless of status (incl. 'removed'), for PB / rank prediction. */
+export function getLeaderboardEntry(
+  db: D1Database,
+  q: { boardId: string; periodKey: string; userId: string },
+): Promise<{ score: number; wpm_x100: number; status: LbStatus } | null> {
+  return db
+    .prepare(
+      "SELECT score, wpm_x100, status FROM leaderboard_entries WHERE board_id = ?1 AND period_key = ?2 AND user_id = ?3",
+    )
+    .bind(q.boardId, q.periodKey, q.userId)
+    .first<{ score: number; wpm_x100: number; status: LbStatus }>();
+}
+
+/** 1 + the number of OTHER users' 'ok' rows that would rank ahead of `score` achieved at `achievedAt`. */
+export async function predictRank(
+  db: D1Database,
+  q: { boardId: string; periodKey: string; userId: string; score: number; achievedAt: number },
+): Promise<number> {
+  const c = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM leaderboard_entries WHERE board_id = ?1 AND period_key = ?2 AND status = 'ok'
+         AND user_id <> ?3 AND (score > ?4 OR (score = ?4 AND achieved_at <= ?5))`,
+    )
+    .bind(q.boardId, q.periodKey, q.userId, q.score, q.achievedAt)
+    .first<{ n: number }>();
+  return (c?.n ?? 0) + 1;
+}
+
 export function getUserByDevice(db: D1Database, deviceId: string): Promise<UserRow | null> {
   return db
     .prepare(

@@ -116,9 +116,15 @@ importers:
 
   workers/api:
     dependencies:
+      '@hd2d/content':
+        specifier: workspace:*
+        version: link:../../packages/content
       '@hd2d/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@hd2d/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
       hono:
         specifier: 4.13.13
         version: 4.13.13

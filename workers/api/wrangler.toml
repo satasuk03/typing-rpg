@@ -13,3 +13,44 @@ migrations_dir = "migrations"
 [[kv_namespaces]]
 binding = "LB_CACHE"
 id = "00000000000000000000000000000000"
+
+# Rebuild the KV top-100 every minute (interfaces §10 / plan T5.2).
+[triggers]
+crons = ["* * * * *"]
+
+# Workers Rate Limiting binding (period must be 10 or 60). Keyed per IP (auth) or per user (save, runs).
+[[ratelimits]]
+name = "RL_AUTH"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "RL_SAVE"
+namespace_id = "1002"
+simple = { limit = 2, period = 60 }
+
+[[ratelimits]]
+name = "RL_RUN"
+namespace_id = "1003"
+simple = { limit = 10, period = 60 }
+
+# Non-secret config. Secrets (JWT_SECRET, TICKET_SECRET) come from `wrangler secret put` / .dev.vars (see .dev.vars.example).
+# AC_* thresholds: interfaces §10. IKI-based ones are PROVISIONAL: tune on real data before the season starts.
+[vars]
+SEASON_KEY = "S1"
+AC_RUN_TTL_MS = "600000"
+AC_CLOCK_SLACK_MS = "5000"
+AC_MAX_SUSTAINED_WPM = "220"
+AC_SUSTAINED_SPAN_MS = "30000"
+AC_MAX_BURST_WPM = "300"
+AC_BURST_SPAN_MS = "5000"
+AC_MIN_IKI_CV = "0.15"
+AC_FAST_IKI_MS = "15"
+AC_MAX_FAST_IKI_SHARE = "0.02"
+AC_QUANT_MIN_PERIOD_MS = "8"
+AC_QUANT_MAX_SHARE = "0.6"
+AC_MAX_JANK_SHARE = "0.10"
+AC_PERFECT_MIN_KEYS = "400"
+AC_PERFECT_MIN_WPM = "150"
+AC_PB_JUMP_REVIEW_WPM = "35"
+AC_MIN_KEYS = "20"
