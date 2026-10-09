@@ -14,14 +14,20 @@ For the next orchestrator session. Read this, then `docs/STATUS.md` (task table,
 | Save survives reload + second browser | `pnpm --filter game test:net` (vs real `wrangler dev`), `apps/game/tests/app/save.spec.ts` |
 | Leaderboard accepts legit, rejects forged | net e2e + `workers/api/tests/{api,security}.test.ts` |
 
-**Milestones:** M0–M5 done. M6: T6.1 balance, T6.2 bots, T6.4 perf done; **T6.3 visual polish nearly done** (see "Remaining").
+**Milestones:** M0–M6 done, including both T6.3 polish rounds (HUD H1/H2, level data, world W). What's left is PO sign-off and small polish leftovers.
 
-**Gate:** `bash scripts/check.sh` → CHECK PASS (~1,316 tests: typecheck, Biome lint, vitest, content validate, sim determinism, sim purity, Node↔Chromium parity, bot quick).
+**Gate:** `bash scripts/check.sh` → CHECK PASS (~1,330 tests: typecheck, Biome lint, vitest, content validate, sim determinism, sim purity, Node↔Chromium parity, bot quick).
 
 ## Remaining work (in priority order)
 
 1. **PO sign-off "typing feels juicy" (T2.6 AC)** — not yet given. Point the PO at `pnpm dev` → `http://localhost:5173/?scene=play&level=ch1-l05` (add `&wpm-bot=60` to watch) and the sheets in `apps/game/tests/vfx/__shots__/sheets/*.jpg`. Apply their feedback.
-2. **T6.3 world polish track (W)** — see the last row of STATUS. If it was merged before this handoff, verify its stills; otherwise its branch is `worktree-agent-a4f9e1abc87b84248`. Items: backlog #3/#4 (hero legibility ≥0.75 silhouette test, cave rim), BREAK glare, aegis hex lattice, coin fountain size, #14 parry, #15 bolts, #16 finisher, #17 hue drift, #23 forest aura, data-driven torch/rune colours (L10 violet torches), #7 adds fade-in, and **the browser bot never visibly cast Fireball — investigate if not resolved**.
+2. **T6.3 leftovers** (all backlog rounds are merged; these are what the last reviews still saw):
+   - Boss intro: the Golem reads washed white with sparkle motes during the intro card (`apps/game/tests/vfx/__shots__/metal-l10-boss-intro.png`; that still predates the H1 merge, so re-capture on main first: the HUD should be hidden there now).
+   - Fireball + auto-slash on the bright forest still make a large white glare blob next to the hero (`metal-real-skillcast.png`).
+   - Parry hex shards and the BREAK ring are barely visible.
+   - `tests/level/typing-fx.spec.ts` L10 flaked once on the "pop/tag covers a letter" HUD invariant (passed on re-run): investigate on a quiet machine.
+   - Metal-only specs: run `*.metal.ts` with `apps/game/tests/vfx/playwright.metal.config.ts` (the default configs skip them).
+   - A good next step is a second Opus art review on Metal captures of `main` to confirm the backlog is closed and decide on PO sign-off material.
 3. **Re-measure on a quiet machine** (no agents running): `apps/game/tests/hud/typingPerf.spec.ts` (budget 0.45 ms/key amortised; it fails only under load) and `typingSettings.spec.ts`. Also re-run `pnpm --filter game exec playwright test -c tests/perf/playwright.config.ts frame-budget` once.
 4. **Known small gaps** (STATUS "Open items"): journal translations not in SaveBlob (needs a `@hd2d/shared` schema bump, `journal.notes`); New Game resets only local save (cloud merge may resurrect progress); no "hollow" vocab for L10 (validator warning); Turnstile not verified; `generate.mjs` for levels is stale (JSON is source of truth); spec §10.2 pool sizes outdated (A 576 / B 192).
 5. **Deployment** (not done; ask the PO first): D1 `database_id` and KV id in `workers/api/wrangler.toml` are placeholders; secrets via `wrangler secret put JWT_SECRET` / `TICKET_SECRET`; set `ALLOWED_ORIGINS`; the game's API is off by default (`?api=<url>` or `VITE_API_URL`).
