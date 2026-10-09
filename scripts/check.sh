@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quality gate: typecheck -> lint -> unit tests -> sim determinism -> sim purity grep -> Node/Chromium parity.
+# Quality gate: typecheck -> lint -> unit tests -> content validate -> sim determinism -> sim purity grep -> Node/Chromium parity.
 # No e2e (run `pnpm test:e2e` separately).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -15,6 +15,9 @@ trap 'echo; echo "CHECK FAIL: ${failed:-unknown step}"' ERR
 failed="typecheck"; step "typecheck"; pnpm -s typecheck
 failed="lint"; step "lint (biome)"; pnpm -s lint
 failed="unit tests"; step "unit tests"; pnpm -s test
+failed="content validate"; step "content validate (word data, trial passages, CONTENT_VERSION)"
+pnpm -s --filter @hd2d/content-tools validate
+
 failed="sim determinism"; step "sim determinism test"
 pnpm -s exec vitest run --reporter=verbose --project @hd2d/sim packages/sim/tests/determinism.test.ts
 

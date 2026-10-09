@@ -1,0 +1,31 @@
+# False positives for the substring check. One token per line; a trailing * allows any suffix
+# (for example "pass*" allows pass, passes, passage). Lowercase only. Keep entries narrow:
+# never allow a bare prefix of a blocked substring (no "ass*").
+assist*
+assess*
+assume*
+assure*
+assign*
+assemble*
+associat*
+bass*
+brass*
+class*
+glass*
+grass*
+harass*
+lass*
+mass*
+pass*
+sassy
+embassy
+compass*
+hello*
+shell*
+sextant*
+grape*
+drape*
+scrape*
+cockpit*
+peacock*
+dickens*
