@@ -62,5 +62,12 @@ export function checkSnapshot(s: HudDebugSnapshot): string[] {
   (s.popTexts ?? []).forEach((t, i) => {
     if (/^-?0$/.test(t.trim())) out.push(`pop ${i} shows a 0 damage number`);
   });
+  // T6.3 R2 P2-2 / P2-3 / P2-6: typing FX never land on the guard label, the panel text or the next letter
+  const ko = s.fxKeepOut;
+  if (ko) {
+    if (ko.label > 0) out.push(`typing FX cover a guard label (${ko.label} px)`);
+    if (ko.panel > 0) out.push(`typing FX cover panel text (${ko.panel} px)`);
+    if (ko.next > 0) out.push(`typing FX touch the next letter or a streak head (${ko.next} px)`);
+  }
   return out;
 }

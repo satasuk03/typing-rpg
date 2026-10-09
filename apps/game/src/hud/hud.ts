@@ -113,6 +113,12 @@ export interface HudDebugSnapshot {
   /** Hero-panel text rows (CSS px); they must never overlap each other. */
   panelTextRects: { id: string; rect: Rect }[];
   bannerRects: Rect[];
+  /**
+   * FX pixels (alpha > 10) of the typing-FX above layer inside the keep-out rects (hero panel above the
+   * ATB bar, boss plate, stats panel, guard label rows, next letter +4 px). Set only while the typing FX
+   * are attached; all counts must be 0 (T6.3 R2 P2-2 / P2-3 / P2-6).
+   */
+  fxKeepOut?: { panel: number; label: number; next: number; rects: number };
   fx: number;
   banners: number;
   frame: { avgMs: number; p95Ms: number; maxMs: number; count: number };
@@ -132,6 +138,8 @@ interface Ghost {
 }
 
 const FRAME_SAMPLES = 240;
+/** Boss BREAK pop: max design-px distance of its centre from the boss head anchor. */
+const BOSS_BREAK_MAX_DIST = 160;
 
 export class Hud {
   readonly fx = new EffectLayers();
@@ -185,6 +193,11 @@ export class Hud {
   private panelText: { id: string; rect: Rect }[] = [];
   /** 0 during the boss intro, then 1 over 300 ms: panels, combo and skill orbs fade back in. */
   private introFade = 1;
+  private keepOutProbe: (() => NonNullable<HudDebugSnapshot["fxKeepOut"]>) | null = null;
+  setKeepOutProbe(fn: (() => NonNullable<HudDebugSnapshot["fxKeepOut"]>) | null): void {
+    this.keepOutProbe = fn;
+  }
+  private readonly dotMerge = new Map<number, { pop: Pop; n: number; sum: number; at: number }>();
   private immuneAt = new Map<number, number>();
   /** DOM overlays (tutorial cards) the plates must stay clear of, in CSS px. */
   private reserved: Rect[] = [];
@@ -313,6 +326,7 @@ export class Hud {
     this.layoutState = newLayoutState();
     this.heroTrail = 1;
     this.immuneAt.clear();
+    this.dotMerge.clear();
     this.introFade = 1;
   }
 
@@ -342,6 +356,28 @@ export class Hud {
     out.w = r.w * this.s;
     out.h = r.h * this.s;
     return true;
+  }
+  /**
+   * Allocation-free rect (CSS px) of a plate's label row ("GUARD 1.0s" tab) incl. the live timer text;
+   * false when the plate has no label. The VFX layers keep clear of it (T6.3 R2 P2-2).
+   */
+  getPlateLabelRectInto(plateId: number, out: Rect): boolean {
+    const e = this.entries.get(plateId);
+    if (!e || !e.geom.label) return false;
+    const chars = e.geom.label.length + (e.geom.hasTimer ? 6 : 0);
+    out.x = (e.box.x + e.geom.fx) * this.s;
+    out.y = e.box.y * this.s;
+    out.w = (chars * 10 + 6) * this.s;
+    out.h = 18 * this.s;
+    return true;
+  }
+  /** Backing-store pixel ratio of the HUD canvas. */
+  getDpr(): number {
+    return this.dpr;
+  }
+  /** Live boss plate rect (CSS px) or null. */
+  getBossPlateCss(): Rect | null {
+    return this.bossRectCss;
   }
   /** Allocation-free `getPlateRect` (CSS px); also answers for 1.2 s after the plate was removed. */
   getPlateRectInto(plateId: number, out: Rect): boolean {
@@ -542,11 +578,25 @@ export class Hud {
           const last = this.immuneAt.get(e.targetId) ?? -9;
           if (e.kind !== "chip" && e.kind !== "dot" && this.time - last >= 1) {
             this.immuneAt.set(e.targetId, this.time);
-            this.pops.spawn("chip", "IMMUNE", anchor, 0.8);
+            this.pops.spawn("chip", "IMMUNE", { kind: "enemy", id: e.targetId, part: "head" }, 0.8);
           }
           break;
         }
-        if (e.kind === "chip" || e.kind === "dot") {
+        if (e.kind === "dot") {
+          // T6.3 R2 P3-5: DoT ticks on one target within 400 ms merge into one number ("3 x3")
+          const m = this.dotMerge.get(e.targetId);
+          if (m && this.pops.pops.includes(m.pop) && this.time - m.at <= 0.4) {
+            m.n++;
+            m.sum += e.damage;
+            m.at = this.time;
+            m.pop.text = m.sum === e.damage * m.n ? `${e.damage} \u00d7${m.n}` : String(m.sum);
+            break;
+          }
+          const pop = this.pops.spawn("chip", String(e.damage), anchor, 0.8);
+          this.dotMerge.set(e.targetId, { pop, n: 1, sum: e.damage, at: this.time });
+          break;
+        }
+        if (e.kind === "chip") {
           this.pops.spawn("chip", String(e.damage), anchor, 0.8);
           break;
         }
@@ -980,7 +1030,18 @@ export class Hud {
       const pose = this.popPose(c, p, set);
       const base: Rect = { x: pose.x - pose.w / 2, y: pose.y - pose.h / 2, w: pose.w, h: pose.h };
       const at = (ox: number, oy: number): Rect => ({ ...base, x: base.x + ox, y: base.y + oy });
+      // T6.3 R2 P2-4: a boss BREAK pop stays within 160 design px of the boss head, else drops under the bar
+      const bossBreak =
+        p.kind === "break" &&
+        bossAlive &&
+        p.anchor.kind === "enemy" &&
+        p.anchor.id === view?.boss?.enemyId;
+      const head = bossBreak ? this.popAnchorCss(p.anchor) : null;
+      const near = (r: Rect): boolean =>
+        !head ||
+        Math.hypot(r.x + r.w / 2 - head.x / s, r.y + r.h / 2 - head.y / s) <= BOSS_BREAK_MAX_DIST;
       const ok = (r: Rect): boolean =>
+        near(r) &&
         r.x >= 4 &&
         r.x + r.w <= this.W - 4 &&
         r.y >= 56 &&
@@ -997,6 +1058,20 @@ export class Hud {
           p.offY = best.y;
         }
       }
+      if (Number.isNaN(p.offX) && head) {
+        // fallback: directly under the boss bar (below its +22 px clearance), if no plate is there
+        const bp = bossPlateRect(this.W);
+        const r: Rect = {
+          ...base,
+          x: bp.x + bp.w / 2 - base.w / 2,
+          y: bp.y + bp.h + 24,
+        };
+        const free = !this.entriesBoxes().some((b) => overlapsRect(r, inflate(b, 4)));
+        if (free) {
+          p.offX = r.x - base.x;
+          p.offY = r.y - base.y;
+        }
+      }
       if (Number.isNaN(p.offX)) {
         p.offX = 0; // retry next frame
         p.offY = 0;
@@ -1011,6 +1086,13 @@ export class Hud {
     }
     c.globalAlpha = 1;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+
+  private entriesBoxes(): Rect[] {
+    const out: Rect[] = [];
+    for (const en of this.entries.values()) out.push(en.box);
+    for (const g of this.ghosts) out.push(g.box);
+    return out;
   }
 
   /** Hero body rect in design px: head/feet from the projector (width = 0.55 * height); null without a projector. */
@@ -1090,7 +1172,7 @@ export class Hud {
       }
       case "chip":
         y -= p.age * 30;
-        sz = 18 * p.size * punch;
+        sz = (p.text === "IMMUNE" ? 15 : 18 * p.size) * punch;
         break;
       case "heal":
         y -= p.age * 26;
@@ -1126,7 +1208,8 @@ export class Hud {
     const tw = c.measureText(text).width;
     c.letterSpacing = "0px";
     text = "";
-    const isTag = ["weak", "perfect", "block", "parry", "tag"].includes(p.kind);
+    const immune = p.kind === "chip" && p.text === "IMMUNE";
+    const isTag = immune || ["weak", "perfect", "block", "parry", "tag"].includes(p.kind);
     const w = isTag ? tw + 28 : tw + sz * 0.3;
     const h = isTag ? sz + 14 : sz * 1.15;
     return { x, y, w, h, punch };
@@ -1174,6 +1257,22 @@ export class Hud {
         break;
       }
       case "chip":
+        if (p.text === "IMMUNE") {
+          // T6.3 R2 P3-2: 15 px #d8e6ff on a dark pill (alpha 0.7), above the head
+          const sz = 15 * punch;
+          c.font = `700 ${sz}px ${FONT_DISP}`;
+          const pw = c.measureText(p.text).width + 20;
+          const ph = sz + 8;
+          c.save();
+          c.globalAlpha *= 0.7;
+          c.fillStyle = "#0a0814";
+          c.beginPath();
+          c.roundRect(x - pw / 2, y - ph / 2, pw, ph, ph / 2);
+          c.fill();
+          c.restore();
+          txt(c, p.text, x, y, sz, "#d8e6ff", { align: "center", f: FONT_DISP, w: 700, sw: 3 });
+          break;
+        }
         txt(c, p.text, x, y, 18 * p.size * punch, "#d8d0c0", {
           align: "center",
           f: FONT_DISP,
@@ -1330,6 +1429,7 @@ export class Hud {
       bossPlateRect: this.bossRectCss ? { ...this.bossRectCss } : null,
       panelTextRects: this.panelText.map((t) => ({ id: t.id, rect: this.toCss(t.rect) })),
       bannerRects: this.bannerRects.map((r) => ({ ...r })),
+      fxKeepOut: this.keepOutProbe?.(),
       fx: this.fx.count,
       banners: this.banners.banners.length,
       frame: {
