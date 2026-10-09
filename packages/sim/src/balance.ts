@@ -287,6 +287,11 @@ export const BALANCE = {
   FADE_DELAY_S: 1.5, // Fading word: the plate's letters fade this long after it appears (doc 01 4.1 "Ghost")
   DOOM_FALLBACK_TAIL: " and the old stones fall", // Doom Spell text built as <free-letter word> + tail when the pool is empty
   MINIGAME_FIRST_SPAWN_S: 2.6, // Falling Rubble: delay before the first word (the spawn period afterwards comes from the BossDef)
+  // T6.1 (TS-only, rule knob): the boss script's timers follow the enemy-interval pace factor (bossPlates.ts): rubble
+  // spawn / first spawn / fall x factor, Doom cadence x max(1, factor). false = T1.5 behaviour (authored ticks at any pace).
+  // Why: at 20 WPM the authored 2.6 s / 7 s rubble outpaced the typist (35% of words missed, 67% Second Winds, 37% boss
+  // clears) and Doom Spells (no ATB) ate phase 2 (docs/balance-ch1.md).
+  BOSS_SCRIPT_PACE_SCALE: true,
 } as const;
 
 const ticks = (s: number): number => Math.round(s * TICK_HZ);
@@ -497,6 +502,7 @@ function deriveConstants(B: typeof BALANCE) {
     BOSS_HIT_MULT_BP: bp(B.BOSS_HIT_MULT),
     DOOM_FALLBACK_TAIL: B.DOOM_FALLBACK_TAIL as string,
     MINIGAME_FIRST_SPAWN_T: ticks(B.MINIGAME_FIRST_SPAWN_S),
+    BOSS_SCRIPT_PACE_SCALE: B.BOSS_SCRIPT_PACE_SCALE as boolean,
     SECOND_WIND_HP_BP: bp(B.SECOND_WIND_HP),
     PREMIUM_REVIVE_HP_BP: bp(B.PREMIUM_REVIVE_HP),
     FAIL_GOLD_KEEP_BP: bp(B.FAIL_GOLD_KEEP),

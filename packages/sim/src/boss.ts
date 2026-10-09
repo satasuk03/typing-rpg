@@ -5,6 +5,7 @@
 //                     adds are dead (ruling: the adds' HP is part of the economy_sim boss model, so they cannot be skipped).
 //  Phase 2 (66-33%)   "Incantation": a Doom Spell every `doomEveryTicks`, measured from the RESOLUTION (success or failure)
 //                     of the previous one; the first starts `doomEveryTicks` after the phase's breather ends (typing live).
+//                     (T6.1: x max(1, pace factor) with BALANCE.BOSS_SCRIPT_PACE_SCALE, see bossPlates.ts.)
 //                     Timer = ceil(chars x 900 / pace) + 120 ticks. Success: the boss is staggered DOOM_STAGGER_T (damage x1.5
 //                     through the normal chain). Failure: mulBp(parHpM, DOOM_DMG_BP) to the hero, NON-LETHAL (clamped at 1 HP,
 //                     D14). The 33% gate holds until `minDoomSpells` have resolved and no Doom Spell is active (D16).
@@ -20,7 +21,13 @@
 //  Frost Lock         delays enemy attack impacts only; none of the script's timers look at it.
 //  Zen                the script's damage to the hero (Doom failure, rubble miss) is 0: "enemies never attack".
 import { K } from "./balance.ts";
-import { bossAttacksSuspended } from "./bossPlates.ts";
+import {
+  bossAttacksSuspended,
+  doomEveryTicks,
+  rubbleFallTicks,
+  rubbleFirstSpawnTicks,
+  rubbleSpawnTicks,
+} from "./bossPlates.ts";
 import type { Emit } from "./bus.ts";
 import {
   type DamageSpec,
@@ -132,7 +139,7 @@ export function stepBoss(state: LevelState, emit: Emit): void {
     t >= bs.nextSpawnTick &&
     boss.hpM > FINAL_GATE_M
   ) {
-    bs.nextSpawnTick += def.phase3.minigame.spawnEveryTicks;
+    bs.nextSpawnTick += rubbleSpawnTicks(state, def);
     spawnRubble(state, bs, boss, def, emit);
   }
 }
@@ -184,10 +191,10 @@ export function endBreather(state: LevelState, emit: Emit): void {
   const t = state.tick;
   resumeEncounter(state, emit);
   if (bs.phase === 2) {
-    bs.nextDoomTick = t + def.phase2.doomEveryTicks;
+    bs.nextDoomTick = t + doomEveryTicks(state, def);
   } else if (bs.phase === 3) {
     bs.minigameActive = true;
-    bs.nextSpawnTick = t + K.MINIGAME_FIRST_SPAWN_T;
+    bs.nextSpawnTick = t + rubbleFirstSpawnTicks(state);
     emit({
       type: "MinigameStarted",
       tick: t,
@@ -278,7 +285,7 @@ export function completeDoom(state: LevelState, plate: PlateState, emit: Emit): 
   boss.staggerUntil = until;
   bs.doom = null;
   bs.doomsResolved++;
-  bs.nextDoomTick = t + def.phase2.doomEveryTicks;
+  bs.nextDoomTick = t + doomEveryTicks(state, def);
   emit({
     type: "DoomSpellCompleted",
     tick: t,
@@ -329,7 +336,7 @@ function failDoom(
   }
   bs.doom = null;
   bs.doomsResolved++;
-  bs.nextDoomTick = state.tick + def.phase2.doomEveryTicks;
+  bs.nextDoomTick = state.tick + doomEveryTicks(state, def);
 }
 
 // ---------------------------------------------------------------- Falling Rubble
@@ -362,7 +369,8 @@ function spawnRubble(
   const text = pickRubble(state, bs);
   if (text === null) return;
   const lane = free[below(bs.rng, free.length)] as number;
-  const landTick = state.tick + mg.fallTicks;
+  const fall = rubbleFallTicks(state, def);
+  const landTick = state.tick + fall;
   const plate = addPlate(
     state,
     {
@@ -371,7 +379,7 @@ function spawnRubble(
       text,
       lane,
       expiresAt: landTick,
-      totalTicks: mg.fallTicks,
+      totalTicks: fall,
     },
     emit,
   );

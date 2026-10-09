@@ -93,24 +93,24 @@
       "skillsCast": 3
     },
     "golem-40wpm": {
-      "state": "2b85a60e",
-      "events": "0f40538b",
-      "inputs": 628,
-      "endTick": 15326,
+      "state": "4fa8a964",
+      "events": "1eca2095",
+      "inputs": 629,
+      "endTick": 15334,
       "outcome": "cleared",
       "autoAttacks": 50,
       "secondWindUsed": false,
       "skillsCast": 16
     },
     "golem-20wpm-sw": {
-      "state": "f01c41de",
-      "events": "14144783",
-      "inputs": 926,
-      "endTick": 36595,
+      "state": "f0480b5e",
+      "events": "0bff448c",
+      "inputs": 761,
+      "endTick": 32963,
       "outcome": "cleared",
-      "autoAttacks": 45,
+      "autoAttacks": 47,
       "secondWindUsed": true,
-      "skillsCast": 18
+      "skillsCast": 10
     }
   }
 }

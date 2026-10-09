@@ -80,7 +80,9 @@ const resolveGolem = () => resolveLevel(contentBundle, GOLEM_LEVEL, { dueWeakWor
 /** Per-scenario seed and pace (default seed 4242, pace 35). */
 const SCENARIO_RUN: Partial<Record<Scenario, { seed: number; pace: number }>> = {
   "golem-40wpm": { seed: 4242, pace: 40 },
-  "golem-20wpm-sw": { seed: 4242, pace: 20 },
+  // T6.1: with BOSS_SCRIPT_PACE_SCALE the 20 WPM starter kit no longer needs a Second Wind at the boss; this scenario keeps
+  // the coverage with a build without Aegis / Iron Will that guards 40% of the attacks (seed picked for a mid-boss SW).
+  "golem-20wpm-sw": { seed: 4245, pace: 20 },
 };
 
 const withKit = (
@@ -166,9 +168,10 @@ function combatScenario(name: Scenario) {
     case "golem-20wpm-sw":
       return {
         def: resolveGolem(),
-        loadout: withKit("sword", ["fireball", "aegis"], ["cleanCut", "steadyHands", "ironWill"]),
+        loadout: withKit("sword", ["fireball", null], ["cleanCut", "steadyHands", null]),
         wpm: 20,
         accuracy: 0.88,
+        guardAttempt: 0.4,
       };
     case "kit-hammer-hurt":
       // a sloppy typist taking hits: Mending Light, Piercing Thrust, Riposte, Comeback, Hammer knockback
@@ -189,11 +192,18 @@ function combatScenario(name: Scenario) {
 }
 
 export function combatGolden(name: Scenario): CombatGolden {
-  const { def, loadout, wpm, accuracy } = combatScenario(name);
+  const sc = combatScenario(name);
+  const { def, loadout, wpm, accuracy } = sc;
+  const guardAttempt = "guardAttempt" in sc ? sc.guardAttempt : undefined;
   const run = SCENARIO_RUN[name] ?? { seed: 4242, pace: 35 };
   const seed = run.seed;
   const options = mkOptions({ pace: run.pace });
-  const bot = runBot(def, loadout, seed, options, { wpm, accuracy, maxTicks: 72_000 });
+  const bot = runBot(def, loadout, seed, options, {
+    wpm,
+    accuracy,
+    maxTicks: 72_000,
+    guardAttempt,
+  });
   const res = replay(def, loadout, seed, options, bot.inputs);
   return {
     state: res.hash,

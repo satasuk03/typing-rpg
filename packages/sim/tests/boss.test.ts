@@ -3,6 +3,7 @@
 import { describe, expect, test } from "vitest";
 import { K } from "../src/balance.ts";
 import { doomTicks } from "../src/boss.ts";
+import { doomEveryTicks, rubbleFallTicks, rubbleSpawnTicks } from "../src/bossPlates.ts";
 import { mulBp } from "../src/fixed.ts";
 import type {
   EventOf,
@@ -13,6 +14,7 @@ import type {
 } from "../src/index.ts";
 import type { EnemyState } from "../src/state.ts";
 import { freezeEnemy } from "../src/statuses.ts";
+import { PACE_FACTOR_BP } from "../src/tables.generated.ts";
 import { BOSS, Driver, ENEMIES, mkDef, mkLoadout, type mkOptions } from "./typingHarness.ts";
 
 const DOOM = [
@@ -674,4 +676,51 @@ describe("determinism and plates", () => {
     const letters = d.plates().map((p) => p.text.charAt(0).toLowerCase());
     expect(new Set(letters).size).toBe(letters.length);
   });
+});
+
+describe("T6.1 BALANCE.BOSS_SCRIPT_PACE_SCALE: the boss script's timers follow the pace factor", () => {
+  const MG = BOSS.phase3.minigame;
+  const pf = (pace: number): number => PACE_FACTOR_BP[pace - K.PACE_MIN] as number;
+
+  test("the knob is on, and pace 35 (factor 1) keeps the authored ticks", () => {
+    expect(K.BOSS_SCRIPT_PACE_SCALE).toBe(true);
+    expect(pf(35)).toBe(10_000);
+  });
+
+  test.each([20, 35, 75])("pace %i: Doom cadence x max(1, factor)", (pace) => {
+    const d = start({}, { pace });
+    toPhase(d, 2);
+    const t0 = last(d, "BossPhaseChanged").breatherUntilTick;
+    const want = mulBp(BOSS.phase2.doomEveryTicks, Math.max(10_000, pf(pace)));
+    expect(bs(d).nextDoomTick).toBe(t0 + want);
+    expect(doomEveryTicks(d.state, BOSS)).toBe(want);
+    if (pace === 20) expect(want).toBe(1331); // 900 x 1.4795: a slow typist keeps a real damage window between spells
+    if (pace === 75) expect(want).toBe(900); // never shorter than authored
+  });
+
+  test.each([20, 35, 75])(
+    "pace %i: Falling Rubble first spawn, period and fall time x factor",
+    (pace) => {
+      const d = start(
+        { phase2: { endAtHpBp: 3300, doomEveryTicks: 900, minDoomSpells: 0 } },
+        { pace },
+      );
+      toPhase(d, 3);
+      const t0 = last(d, "BossPhaseChanged").breatherUntilTick;
+      const w = d.until("MinigameWordSpawned", 4000);
+      const fall = mulBp(MG.fallTicks, pf(pace));
+      const every = mulBp(MG.spawnEveryTicks, pf(pace));
+      expect(w.tick).toBe(t0 + mulBp(K.MINIGAME_FIRST_SPAWN_T, pf(pace)));
+      expect(w.landTick).toBe(w.tick + fall);
+      expect(d.view().plates.find((p) => p.id === w.plateId)?.totalTicks).toBe(fall);
+      expect([rubbleFallTicks(d.state, BOSS), rubbleSpawnTicks(d.state, BOSS)]).toEqual([
+        fall,
+        every,
+      ]);
+      d.step(every + 1);
+      expect(d.ofType("MinigameWordSpawned")[1]?.tick).toBe(w.tick + every);
+      if (pace === 20) expect(fall).toBe(Math.floor((MG.fallTicks * 14_795) / 10_000)); // x 1.4795
+      if (pace === 75) expect(fall).toBe(Math.floor((MG.fallTicks * 6000) / 10_000)); // x 0.6 (clamp)
+    },
+  );
 });

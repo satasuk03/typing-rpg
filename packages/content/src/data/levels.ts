@@ -11,7 +11,9 @@ import { LevelDef } from "../schemas.ts";
  *    wave pools are 75 and 65 (total 345 vs the sim's 235 + 118 for the adds).
  *  - gruntHit      = solved per level so that the whole level costs the reference typist (35 WPM, 92%, par gear) the same
  *    damage the sim budgets (DMG_FRAC 0.40 x par HP x saw). The layouts hold more enemies than the sim's 2-encounter
- *    pattern, so the per-hit value is lower than the sim table (3.9-7.6 vs 8.1-9.8). T6.1 retunes.
+ *    pattern, so the per-hit value is lower than the sim table (3.9-7.6 vs 8.1-9.8). T6.1 scales them by HIT_MULT below.
+ *  - T6.1: normal levels (L1-L9) use hp() / hit() / parRef(): the authored analytic values above times the global knobs
+ *    ENC_HP_MULT / HIT_MULT, measured on the real sim (docs/balance-ch1.md, `pnpm balance`). L10 keeps its authored values.
  *  - parRefS       = the 35-WPM reference typist's active time: sum of encounter HP / reference DPS (5.54 HP/s) + 2 s intro per wave
  *    (+ boss HP, 2.5 Doom Spells of ~50 chars at 2.4 chars/s, the finisher and the intro on L10).
  *  - plateLength   = wide enough that every biome pool stays feasible (T4.1: biome words reach 6-10 letters; the bands are
@@ -27,6 +29,27 @@ const gr = (g?: Gimmick): EnemyRef => ref("goblin-raider", g);
 function ref(enemy: string, gimmick?: Gimmick): EnemyRef {
   return gimmick === undefined ? { enemy } : { enemy, gimmick };
 }
+
+/**
+ * T6.1 knob: x encounter HP of the normal levels. The authored pools give economy_sim's reference typist a 36 s x saw
+ * time-to-kill on the ANALYTIC model; on the real sim (weakness x1.3, shield BREAK x1.8, parry counters, Clean Cut crits:
+ * PO 2026-10-09 "keep them, retune HP") the same typist kills ~20% faster. 1.2 restores the authored TTK on average over
+ * L1-L9 (and ~11-12 auto-attacks per encounter at 35 WPM, plan §9).
+ */
+export const ENC_HP_MULT = 1.2;
+/**
+ * T6.1 knob: x grunt hit of the normal levels, solved on the real sim (`pnpm --filter @hd2d/balance solve-hits --global`)
+ * so that the reference typist with a build economy_sim can model (no Aegis, no Iron Will: its guard has no barrier and
+ * blocks take 20%) takes the authored budget, DMG_FRAC 0.40 x par HP x (1 + 0.025 (p-1)) per level, summed over L1-L9.
+ * The starter kit's Aegis and Iron Will then show up as damage below the budget, which is their value.
+ */
+export const HIT_MULT = 1.34;
+const r1 = (x: number): number => Math.round(x * 100) / 100;
+const hp = (authored: number): number => r1(authored * ENC_HP_MULT);
+const hit = (authored: number): number => r1(authored * HIT_MULT);
+/** parRefS from the authored value: its HP part (sum HP / 5.54 HP/s) scales with ENC_HP_MULT, the 2 s wave intros do not. */
+const parRef = (authored: number, waves: number): number =>
+  Math.round(((authored - 2 * waves) * ENC_HP_MULT + 2 * waves) * 10) / 10;
 
 const walk = (first: boolean): Segment => ({
   kind: "walk",
@@ -88,11 +111,11 @@ export const LEVELS: LevelDef[] = [
     biome: "forest",
     plateLength: [3, 5],
     tutorial: true,
-    parRefS: 76,
+    parRefS: parRef(76, 2),
     star3: { kind: "streak", combo: 8 },
     segments: chain([
-      enc("Glade Path", 199.4, 7.6, [ms(), ms()]),
-      enc("Mossy Clearing", 199.4, 7.6, [ms(), mu(), ms()]),
+      enc("Glade Path", hp(199.4), hit(7.6), [ms(), ms()]),
+      enc("Mossy Clearing", hp(199.4), hit(7.6), [ms(), mu(), ms()]),
     ]),
   }),
   // L2: 2 encounters (3 + 3). Bats arrive.
@@ -101,11 +124,11 @@ export const LEVELS: LevelDef[] = [
     name: "Whispering Wood",
     biome: "forest",
     plateLength: [3, 6],
-    parRefS: 77.4,
+    parRefS: parRef(77.4, 2),
     star3: { kind: "parTime", slack: 1.2 },
     segments: chain([
-      enc("Mushroom Hollow", 203.4, 6.88, [ms(), mu(), ms()]),
-      enc("Firefly Bend", 203.4, 6.88, [mu(), bt(), ms()]),
+      enc("Mushroom Hollow", hp(203.4), hit(6.88), [ms(), mu(), ms()]),
+      enc("Firefly Bend", hp(203.4), hit(6.88), [mu(), bt(), ms()]),
     ]),
   }),
   // L3: first 3-encounter level.
@@ -114,12 +137,12 @@ export const LEVELS: LevelDef[] = [
     name: "Amber Edge",
     biome: "forest",
     plateLength: [3, 6],
-    parRefS: 118.3,
+    parRefS: parRef(118.3, 3),
     star3: { kind: "untouched", maxHits: 4 },
     segments: chain([
-      enc("Fallen Leaves", 207.4, 3.95, [ms(), bt(), mu()]),
-      enc("Hollow Log", 207.4, 3.95, [mu(), ms(), bt()]),
-      enc("Broken Columns", 207.4, 3.95, [bt(), mu(), ms()]),
+      enc("Fallen Leaves", hp(207.4), hit(3.95), [ms(), bt(), mu()]),
+      enc("Hollow Log", hp(207.4), hit(3.95), [mu(), ms(), bt()]),
+      enc("Broken Columns", hp(207.4), hit(3.95), [bt(), mu(), ms()]),
     ]),
   }),
   // L4: ruins. Goblin Scouts arrive; the Fading word debuts alone in encounter 2.
@@ -128,12 +151,12 @@ export const LEVELS: LevelDef[] = [
     name: "Ember Gate",
     biome: "ruins",
     plateLength: [3, 6],
-    parRefS: 120.5,
+    parRefS: parRef(120.5, 3),
     star3: { kind: "guardian", parries: 3 },
     segments: chain([
-      enc("Torch Line", 211.3, 4.46, [ms(), gs(), bt()]),
-      enc("The Fading Sign", 211.3, 4.46, [bt(), gs("fading"), mu()]),
-      enc("Gatehouse Yard", 211.3, 4.46, [gs(), bt(), gs()]),
+      enc("Torch Line", hp(211.3), hit(4.46), [ms(), gs(), bt()]),
+      enc("The Fading Sign", hp(211.3), hit(4.46), [bt(), gs("fading"), mu()]),
+      enc("Gatehouse Yard", hp(211.3), hit(4.46), [gs(), bt(), gs()]),
     ]),
   }),
   // L5: Goblin Raider (Brute) debuts in encounter 3.
@@ -142,12 +165,12 @@ export const LEVELS: LevelDef[] = [
     name: "Overgrown Court",
     biome: "ruins",
     plateLength: [3, 6],
-    parRefS: 122.6,
+    parRefS: parRef(122.6, 3),
     star3: { kind: "streak", combo: 15 },
     segments: chain([
-      enc("Ivy Arches", 215.3, 4.48, [mu(), gs(), ms()]),
-      enc("Fountain Steps", 215.3, 4.48, [gs(), bt(), mu("fading")]),
-      enc("Raider Camp", 215.3, 4.48, [gr(), bt(), ms()]),
+      enc("Ivy Arches", hp(215.3), hit(4.48), [mu(), gs(), ms()]),
+      enc("Fountain Steps", hp(215.3), hit(4.48), [gs(), bt(), mu("fading")]),
+      enc("Raider Camp", hp(215.3), hit(4.48), [gr(), bt(), ms()]),
     ]),
   }),
   // L6: the Scrambled word debuts alone in encounter 2.
@@ -156,12 +179,12 @@ export const LEVELS: LevelDef[] = [
     name: "Moonlit Colonnade",
     biome: "ruins",
     plateLength: [3, 7],
-    parRefS: 124.8,
+    parRefS: parRef(124.8, 3),
     star3: { kind: "noSkills" },
     segments: chain([
-      enc("Pillar Walk", 219.3, 3.85, [gs(), bt(), ms()]),
-      enc("Whispering Stones", 219.3, 3.85, [mu(), gs("scrambled"), bt()]),
-      enc("Torchlit Hall", 219.3, 3.85, [gr(), ms(), bt()]),
+      enc("Pillar Walk", hp(219.3), hit(3.85), [gs(), bt(), ms()]),
+      enc("Whispering Stones", hp(219.3), hit(3.85), [mu(), gs("scrambled"), bt()]),
+      enc("Torchlit Hall", hp(219.3), hit(3.85), [gr(), ms(), bt()]),
     ]),
   }),
   // L7: both gimmicks in the level, never in the same encounter yet.
@@ -170,12 +193,12 @@ export const LEVELS: LevelDef[] = [
     name: "The Descent",
     biome: "ruins",
     plateLength: [3, 7],
-    parRefS: 127,
+    parRefS: parRef(127, 3),
     star3: { kind: "parTime", slack: 1.1 },
     segments: chain([
-      enc("Last Columns", 223.3, 4.46, [gs(), gr(), bt()]),
-      enc("Stair of Fading", 223.3, 4.46, [gs("fading"), bt(), mu()]),
-      enc("Cave Mouth", 223.3, 4.46, [gr(), gs("scrambled"), bt()]),
+      enc("Last Columns", hp(223.3), hit(4.46), [gs(), gr(), bt()]),
+      enc("Stair of Fading", hp(223.3), hit(4.46), [gs("fading"), bt(), mu()]),
+      enc("Cave Mouth", hp(223.3), hit(4.46), [gr(), gs("scrambled"), bt()]),
     ]),
   }),
   // L8: cave. First encounter with both gimmicks together (the encounter limit is 2 distinct gimmicks).
@@ -184,12 +207,12 @@ export const LEVELS: LevelDef[] = [
     name: "Crystal Gallery",
     biome: "cave",
     plateLength: [3, 6],
-    parRefS: 129.1,
+    parRefS: parRef(129.1, 3),
     star3: { kind: "guardian", parries: 5 },
     segments: chain([
-      enc("Glow Shelf", 227.3, 4.96, [bt(), mu(), bt()]),
-      enc("Crystal Vault", 227.3, 4.96, [gs("fading"), bt("scrambled"), gr()]),
-      enc("Echo Chamber", 227.3, 4.96, [gr(), bt(), mu()]),
+      enc("Glow Shelf", hp(227.3), hit(4.96), [bt(), mu(), bt()]),
+      enc("Crystal Vault", hp(227.3), hit(4.96), [gs("fading"), bt("scrambled"), gr()]),
+      enc("Echo Chamber", hp(227.3), hit(4.96), [gr(), bt(), mu()]),
     ]),
   }),
   // L9: the hardest normal level (sim: L9 = 1.45x L1 in HP x hit).
@@ -198,12 +221,12 @@ export const LEVELS: LevelDef[] = [
     name: "Fungal Warren",
     biome: "cave",
     plateLength: [3, 7],
-    parRefS: 131.3,
+    parRefS: parRef(131.3, 3),
     star3: { kind: "untouched", maxHits: 3 },
     segments: chain([
-      enc("Spore Run", 231.3, 4.18, [mu(), ms(), gs()]),
-      enc("Mushroom Maze", 231.3, 4.18, [bt("scrambled"), gr(), ms("fading")]),
-      enc("Drip Gallery", 231.3, 4.18, [gs("fading"), gr(), bt("scrambled")]),
+      enc("Spore Run", hp(231.3), hit(4.18), [mu(), ms(), gs()]),
+      enc("Mushroom Maze", hp(231.3), hit(4.18), [bt("scrambled"), gr(), ms("fading")]),
+      enc("Drip Gallery", hp(231.3), hit(4.18), [gs("fading"), gr(), bt("scrambled")]),
     ]),
   }),
   // L10: boss level. Layout: 2 waves, 3 waves, then the Ruin Golem.

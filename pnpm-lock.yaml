@@ -90,6 +90,13 @@ importers:
         version: 0.28.2
 
   tools/balance:
+    dependencies:
+      '@hd2d/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@hd2d/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
     devDependencies:
       tsx:
         specifier: ^4.23.15
