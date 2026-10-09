@@ -463,11 +463,12 @@ export function drawBossPlate(p: PanelCtx, v: LevelView, e: EnemyView, st: Enemy
     diamond(c, px, r.y + 68, 6, "#0c0910");
     diamond(c, px, r.y + 68, 4.5, i <= boss.phase ? GOLD : "#3a3040");
   }
-  txt(c, boss.title.toUpperCase(), r.x + r.w - 60, r.y + 68, 10, "#c8b8d8", {
-    align: "right",
-    ls: 1,
-    stroke: false,
-  });
+  if (e.brokenTicksLeft <= 0)
+    txt(c, boss.title.toUpperCase(), r.x + r.w - 60, r.y + 68, 10, "#c8b8d8", {
+      align: "right",
+      ls: 1,
+      stroke: false,
+    });
   if (e.shieldMax > 0) shieldBadge(c, r.x + 30, r.y + 46, String(e.shield), broken, 17);
   e.weaknesses.forEach((wk, i) => {
     damageIcon(c, wk.type, r.x + r.w - 40 + (i - 0.5) * 22, r.y + 46, 7, wk.revealed);

@@ -958,12 +958,16 @@ export class Hud {
       obst.push(br);
       this.bossRectCss = this.toCss(bossPlateRect(this.W));
     } else this.bossRectCss = null;
-    obst.push(COMBO_AREA(this.W), { ...HERO_PANEL }, {
-      x: this.W - 22 - STATS_PANEL_W,
-      y: 18,
-      w: STATS_PANEL_W,
-      h: 104,
-    });
+    obst.push(
+      COMBO_AREA(this.W),
+      { ...HERO_PANEL },
+      {
+        x: this.W - 22 - STATS_PANEL_W,
+        y: 18,
+        w: STATS_PANEL_W,
+        h: 104,
+      },
+    );
     for (const pl of view?.plates ?? []) {
       if (pl.kind !== "guard") continue;
       const en = this.entries.get(pl.id);
