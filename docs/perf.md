@@ -80,3 +80,10 @@ against a recording fake AudioContext and fails if any oscillator or filter freq
 | Result | cleared 57 s | cleared 53 s | cleared 84 s | cleared 95 s | cleared 84 s | cleared 87 s | cleared 87 s | cleared 83 s | cleared 93 s | cleared 162 s |
 
 **Zero console errors and zero unhandled rejections** (1 passed, 15.3 min). DoD line: PASS.
+
+## Quiet-machine re-measure on main (orchestrator, 2026-10-09, 43a8a88, no agents running)
+
+- **Frame budget (Metal, `frame-budget`, 8/8 passed):** L05 and L10 at tiers 0/1/2: p95 16.7–16.8 ms (vsync-locked); CPU avg 1.8–2.0 ms (HUD 0.81–0.86, GL 0.58–0.78). Tier 2 at 4× throttle: L05 p95 16.8 / p99 33.3 (cpu 6.6 ms), L10 p95 16.8 (cpu 4.65 ms). DoD perf lines still PASS with all T6.3 polish merged.
+- **`tests/hud/typingSettings.spec.ts`:** 3/3 pass.
+- **`tests/level/typing-fx.spec.ts` (`--repeat-each=2`):** 4/4 pass, 0 readability violations (L1 26–30 probes, L10 94–96 probes). The earlier L10 "pop covers a letter" flake did not reproduce.
+- **`tests/hud/typingPerf.spec.ts`: FAILS on a quiet machine:** perKey 0.739 / 0.764 / 0.752 ms (budget 0.45), draw 0.63–0.65 ms/key; parts/key: sparksAbove 0.26, tier 0.15, shatter 0.07, streaks 0.05. This is a real regression from chunk C + H2 (chunk B was 0.43–0.47), not load. Frame impact is small (≈0.06 ms/frame at 90 WPM), but the gate spec must pass. Being fixed (HUD perf worker).
