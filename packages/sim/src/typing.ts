@@ -81,6 +81,18 @@ export interface PlateSpec {
   fadeAt?: number | null;
 }
 
+const SENTENCE_KINDS: readonly PlateKind[] = ["doom", "finisher", "secondWind", "minigame"];
+/** Sentence plates fold case when the level says so (caseMode "strict" still wins); other plates follow plateFolds. */
+function plateFoldsFor(
+  kind: PlateKind,
+  text: string,
+  foldSentences: boolean,
+  caseMode: "auto" | "strict",
+): boolean {
+  if (foldSentences && caseMode !== "strict" && SENTENCE_KINDS.includes(kind)) return true;
+  return plateFolds(text, caseMode);
+}
+
 /** Adds a plate and emits PlateShown. Exclusive kinds are auto-targeted (TargetAcquired). The caller guarantees letter uniqueness. */
 export function addPlate(state: LevelState, spec: PlateSpec, emit: Emit): PlateState {
   const enc = state.enc as EncounterState;
@@ -91,7 +103,7 @@ export function addPlate(state: LevelState, spec: PlateSpec, emit: Emit): PlateS
     kind: spec.kind,
     text: spec.text,
     display: spec.display ?? spec.text,
-    fold: plateFolds(spec.text, run.options.caseMode),
+    fold: plateFoldsFor(spec.kind, spec.text, run.def.foldSentences, run.options.caseMode),
     typed: 0,
     perfect: true,
     typos: 0,

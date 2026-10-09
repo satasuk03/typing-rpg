@@ -52,6 +52,8 @@ export const GOLD_UNIT: readonly number[] = [
   937, 1055, 1186, 1335, 1501, 1689, 1900, 2138, 2405, 2706, 3044,
 ];
 
+/** Effective cache rarity in basis points with the published pity (exact Markov chain, doc 02 section 6.5). */
+export const CACHE_EFFECTIVE_BP = { C: 3836, U: 3165, R: 2140, E: 705, L: 154 } as const;
 /** LEVEL_GOLD[chapter - 1][index - 1], index 1..10: first-clear gold, boss = index 10 (economy_sim level_gold). */
 export const LEVEL_GOLD: readonly (readonly number[])[] = [
   [100, 103, 106, 109, 112, 115, 118, 121, 124, 381],
