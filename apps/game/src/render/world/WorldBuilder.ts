@@ -33,6 +33,7 @@ import {
   slotAnchorName,
   toRenderBiome,
   type V2,
+  type V3,
   type ZoneDef,
 } from "./layout";
 
@@ -382,10 +383,12 @@ export function buildWorld(
     style: StyleDef,
     flame: number,
     light: PropLightDef | undefined,
+    flameColor?: V3,
   ): void => {
     need(key);
     world.addProp(key, x, y, z, { ...styleOpts(style), scale, flip, foreground });
-    if (flame > 0) world.addFlame(x, y + world.flameY(key) * scale, z, flame, foreground);
+    if (flame > 0)
+      world.addFlame(x, y + world.flameY(key) * scale, z, flame, foreground, true, flameColor);
     if (light) addLight(x, y, z, light);
   };
 
@@ -410,7 +413,7 @@ export function buildWorld(
 
   // --- explicit props
   for (const p of layout.props) {
-    place(p.key, p.x, p.y, p.z, p.scale, p.flip, p.foreground, p, p.flame, p.light);
+    place(p.key, p.x, p.y, p.z, p.scale, p.flip, p.foreground, p, p.flame, p.light, p.flameColor);
   }
 
   // --- scatters (seeded; placement rng is always advanced so edits to avoidBattle do not reshuffle)
@@ -424,7 +427,7 @@ export function buildWorld(
       const flip = s.flipRandom && R() < 0.5;
       const skip = R() < s.gap || battleCenters.some((c) => Math.abs(x - c) < s.avoidBattle);
       if (skip) continue;
-      place(key, x, y, z, scale, flip, s.foreground, s, s.flame, s.light);
+      place(key, x, y, z, scale, flip, s.foreground, s, s.flame, s.light, s.flameColor);
     }
   }
 
@@ -460,7 +463,7 @@ export function buildWorld(
       );
     }
   }
-  for (const r of layout.runes) world.addRuneCircle(r.x, r.z, r.size, r.intensity);
+  for (const r of layout.runes) world.addRuneCircle(r.x, r.z, r.size, r.intensity, r.color);
 
   const added = [...scene.children, ...fg.children].filter((o) => !before.has(o));
   const path = new WalkPath(layout.walkPath);

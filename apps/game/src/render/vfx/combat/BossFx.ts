@@ -79,9 +79,10 @@ export class BossFx {
     this.lit = true;
     if (kit.scale.k <= 0 || !kit.deps.enemyInfo(this.bossId, INFO)) return;
     const cy = INFO.y + INFO.height * 0.55;
-    kit.star(INFO.x + 0.3, cy + 1.2, INFO.z + 1, 5, 0.5, 0.5, [1, 3, 3.4], 1.3);
+    // the star sits BEHIND the golem's head and is kept cool and modest: at 5 u x [1, 3, 3.4] it blew the head out
+    kit.star(INFO.x + 0.3, cy + 1.2, INFO.z - 0.4, 3.2, 0.5, 0.5, [0.3, 1.0, 1.25], 0.7);
     kit.ring(INFO.x, 0.06, INFO.z, 0.5, 11, 0.9, [0.5, 2.4, 2.6], [0.2, 0.8, 1.2], 1.4, true);
-    kit.flash(INFO.x, cy, INFO.z + 1.5, [0.4, 0.95, 1], 2.6, 8, 1.2);
+    kit.flash(INFO.x, cy, INFO.z + 1.5, [0.4, 0.95, 1], 1.5, 8, 1.0);
     kit.sparks(INFO.x, cy, INFO.z, kit.n(60), [0.8, 2.8, 3.2], 7, {
       kind: PK_PIXEL,
       size: 0.08,
@@ -91,7 +92,7 @@ export class BossFx {
     });
     kit.shake(0.8, 1.4);
     this.surge = 1;
-    kit.postFlash(0.1, [0.5, 0.95, 1], 220, 0.12);
+    kit.postFlash(0.05, [0.5, 0.95, 1], 220, 0.08);
   }
 
   bossPhase(e: EventOf<"BossPhaseChanged">): void {

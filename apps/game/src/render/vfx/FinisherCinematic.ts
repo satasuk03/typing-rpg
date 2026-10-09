@@ -15,7 +15,12 @@
  * hit-stops stay (a freeze is not motion). k = 0: nothing here (the handle compresses the death to 300 ms).
  * The arcs are drawn here (a stretched Beam quad each) so the finisher reads even when the T2.3 library has
  * not registered `slashArc`; the callback is still called for it.
+ *
+ * T6.3 #16: chromatic aberration <= 0.006 and zoom <= 0.04 (the resolve frame used to smear), the flashes are warm
+ * [1, 0.92, 0.75] and fall below 0.1 within 120 ms, and every slash line is clipped to the viewport (it used to run
+ * off both screen edges at the camera push's narrow FOV).
  */
+import { Vector3 } from "three";
 import { clamp01, easeOutQuad } from "../../level/typingFxParams";
 import { FxKind } from "../materials/fx";
 import type { RenderWorld } from "../RenderWorld";
@@ -48,6 +53,16 @@ const SPEC: ParticleSpec = newSpec();
 const GOLD: Rgb = [2.4, 1.8, 0.6];
 const GOLD_WHITE: Rgb = [2.6, 2.3, 1.5];
 const BARS = 0.12;
+/** Finisher post flash: warm, and gone (< 0.1) well inside 120 ms. */
+export const FLASH_RGB: Rgb = [1, 0.92, 0.75];
+export const FLASH_PEAK = 0.3;
+export const FLASH_MS = 90;
+/** Camera punch ceilings (T6.3 #16). */
+export const CA_MAX = 0.006;
+export const ZOOM_MAX = 0.04;
+/** Slash lines stay inside this NDC box. */
+const VIEW_LIMIT = 0.9;
+const NDC = new Vector3();
 /** Camera push pose relative to the boss (spec 9.2). */
 export const PUSH = { dx: -1.5, dist: 13, fov: 24, pitch: 9, followRate: 6 } as const;
 
@@ -127,8 +142,9 @@ export class FinisherCinematic {
     this.bz = EN.z;
     const k = set.effectsIntensity;
     this.td.hitStop(FIN_T.freezeMs * Math.max(0.5, k));
-    this.host.postFlash(0.35, [1, 1, 1], 120, 0.35);
-    if (!set.reducedMotion) this.world.camera.punch(0, set.reducedFlash ? 0 : 0.004 * k, 0);
+    this.host.postFlash(FLASH_PEAK, FLASH_RGB, FLASH_MS, FLASH_PEAK);
+    if (!set.reducedMotion)
+      this.world.camera.punch(0, set.reducedFlash ? 0 : Math.min(CA_MAX, 0.004 * k), 0);
     this.bars = 0;
   }
 
@@ -171,7 +187,12 @@ export class FinisherCinematic {
     this.td.hitStop((big ? 160 : 40) * Math.max(0.5, k));
     if (!set.reducedMotion) {
       this.world.camera.shake(big ? 0.4 : 0.1, (big ? 1.0 : 0.3) * k);
-      if (big) this.world.camera.punch(0.6 * k, set.reducedFlash ? 0 : 0.003 * k, 0.03 * k);
+      if (big)
+        this.world.camera.punch(
+          0.6 * k,
+          set.reducedFlash ? 0 : Math.min(CA_MAX, 0.003 * k),
+          Math.min(ZOOM_MAX, 0.03 * k),
+        );
     }
     this.lights.flash(
       this.bx,
@@ -208,6 +229,27 @@ export class FinisherCinematic {
     }
   }
 
+  /**
+   * Length of a slash line (centred on the boss, along `angle`) shrunk so both ends stay inside the viewport box.
+   * @hot
+   */
+  private clipLen(len: number, angle: number): number {
+    const cam = this.world.camera;
+    cam.project(this.bx, this.by, this.bz + 0.45, NDC);
+    const cx = NDC.x;
+    const cy = NDC.y;
+    // direction of the quad's long axis in the action plane (the quad is rotated about z)
+    const dx = -Math.sin(angle) * len * 0.5;
+    const dy = Math.cos(angle) * len * 0.5;
+    cam.project(this.bx + dx, this.by + dy, this.bz + 0.45, NDC);
+    const ex = Math.abs(NDC.x - cx);
+    const ey = Math.abs(NDC.y - cy);
+    let f = 1;
+    if (ex > 1e-4) f = Math.min(f, Math.max(0, VIEW_LIMIT - Math.abs(cx)) / ex);
+    if (ey > 1e-4) f = Math.min(f, Math.max(0, VIEW_LIMIT - Math.abs(cy)) / ey);
+    return len * Math.max(0.15, Math.min(1, f));
+  }
+
   /** @hot `realDt` seconds of real time. */
   update(realDt: number, set: TypingFxSettings): void {
     const k = set.effectsIntensity;
@@ -223,7 +265,7 @@ export class FinisherCinematic {
         continue;
       }
       const grow = easeOutQuad(Math.min(1, u * 3));
-      const len = 2.8 * s.size * grow;
+      const len = this.clipLen(2.8 * s.size * grow, s.angle);
       const w = 0.2 * s.size * (1 - 0.6 * u);
       const f = 1 - u * u;
       const c = s.rgb;
@@ -290,7 +332,7 @@ export class FinisherCinematic {
       this.stage = 2;
       this.fireSlash(45, 2.0, GOLD_WHITE, set, 1);
       this.fireSlash(-45, 2.0, GOLD_WHITE, set, 2);
-      this.host.postFlash(0.35, [1, 0.95, 0.85], 120, 0.35);
+      this.host.postFlash(FLASH_PEAK, FLASH_RGB, FLASH_MS, FLASH_PEAK);
     }
     // return
     if (this.stage === 2 && ms >= FIN_T.returnMs) {

@@ -43,6 +43,8 @@ const FLASH_GAIN = 0.85;
 const FLASH_RADIUS_GAIN = 0.8;
 /** Typing post flash cap (R6). */
 export const POST_FLASH_CAP = 0.12;
+/** The ATB-ignite flash of the hero sprite is a tint, not a white-out: it never mixes more than this toward the flash colour (T6.3 #3). */
+const HERO_FLASH_MAX = 0.03;
 const GOLD: Rgb = [2.4, 1.8, 0.6];
 const PINK: Rgb = [1, 0.88, 0.96];
 const GOLD_LIGHT: Rgb = [1, 0.7, 0.22];
@@ -366,7 +368,7 @@ export class TypingWorldFx {
       el[0],
       el[1],
       el[2],
-      1.7 * FLASH_GAIN,
+      1.2 * FLASH_GAIN,
       Math.min(LIGHT_MAX_RADIUS, 4 * FLASH_RADIUS_GAIN),
       0.3,
     );
@@ -426,7 +428,7 @@ export class TypingWorldFx {
       0.45,
     );
     if (to >= 3) this.punch(0.25, 0.0009, 0.009);
-    if (to >= 4) this.postFlash(0.1, PINK, 120);
+    if (to >= 4) this.postFlash(0.07, PINK, 120);
   }
 
   // ---------------------------------------------------------------- frame
@@ -482,7 +484,7 @@ export class TypingWorldFx {
       if (u >= 1) {
         this.flashT = -1;
         this.cb.actorFlash("hero", 0, [1, 1, 1]);
-      } else this.cb.actorFlash("hero", 1 - u, [1.7, 1.6, 1.5]);
+      } else this.cb.actorFlash("hero", (1 - u) * HERO_FLASH_MAX, [1.7, 1.6, 1.5]);
     }
     this.barrier.setHero(this.aura.heroX, this.aura.heroZ);
     this.barrier.update(dt, this.time, this.settings);

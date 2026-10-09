@@ -14,6 +14,7 @@ import { checkSnapshot } from "../hud/invariants";
 import type { MockScenario } from "../hud/mock/mockDriver";
 import { MockDriver } from "../hud/mock/mockDriver";
 import { WEAPON_ANCHOR_OFFSET } from "../level/typingFxParams";
+import { analyseHero } from "../render/vfx/heroProbe";
 import { createTypingFx, type TypingFxHandle } from "../render/vfx/TypingFxHandle";
 import { makeWorldBackdrop, type WorldBackdrop } from "./hudTestScene";
 
@@ -100,6 +101,8 @@ export interface HeroProbe {
   area: number;
   /** Sum of the Sobel edge magnitude (luminance, 0..255) over those pixels. */
   edge: number;
+  /** Luminance contrast of the hero against its 64 px surround (>= 1). */
+  contrast: number;
   rect: { x: number; y: number; w: number; h: number };
 }
 
@@ -394,6 +397,12 @@ export function start(glCanvas: HTMLCanvasElement): void {
       off.height = glCanvas.height;
       const ctx = off.getContext("2d", { willReadFrequently: true });
       if (!ctx) throw new Error("no 2d context");
+      // the crop carries a 64 px margin: it is the surround of the contrast metric
+      const M = 64;
+      const cx = Math.max(0, rect.x - M);
+      const cy = Math.max(0, rect.y - M);
+      const cw = Math.min(off.width - cx, rect.w + 2 * M);
+      const ch = Math.min(off.height - cy, rect.h + 2 * M);
       const grab = (hide: boolean): ImageData => {
         bd.hero.actor.mesh.visible = !hide;
         bd.frame(0);
@@ -403,34 +412,14 @@ export function start(glCanvas: HTMLCanvasElement): void {
         ctx.drawImage(glCanvas, 0, 0);
         if (includeHud) ctx.drawImage(hudCanvas, 0, 0, off.width, off.height);
         bd.hero.actor.mesh.visible = true;
-        return ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
+        return ctx.getImageData(cx, cy, cw, ch);
       };
       const shown = grab(false);
       const hidden = grab(true);
       bd.frame(0);
       hud.render(driver.view, 1, 0);
-      const W = rect.w;
-      const H = rect.h;
-      const lum = (d: Uint8ClampedArray, i: number): number =>
-        0.2126 * (d[i] as number) + 0.7152 * (d[i + 1] as number) + 0.0722 * (d[i + 2] as number);
-      let area = 0;
-      let edge = 0;
-      for (let y = 1; y < H - 1; y++) {
-        for (let x = 1; x < W - 1; x++) {
-          const i = (y * W + x) * 4;
-          const dr = (shown.data[i] as number) - (hidden.data[i] as number);
-          const dg = (shown.data[i + 1] as number) - (hidden.data[i + 1] as number);
-          const db = (shown.data[i + 2] as number) - (hidden.data[i + 2] as number);
-          if (Math.hypot(dr, dg, db) <= 24) continue;
-          area++;
-          const L = (dx: number, dy: number): number =>
-            lum(shown.data, ((y + dy) * W + x + dx) * 4);
-          const gx = L(1, -1) + 2 * L(1, 0) + L(1, 1) - L(-1, -1) - 2 * L(-1, 0) - L(-1, 1);
-          const gy = L(-1, 1) + 2 * L(0, 1) + L(1, 1) - L(-1, -1) - 2 * L(0, -1) - L(1, -1);
-          edge += Math.hypot(gx, gy);
-        }
-      }
-      return { area, edge, rect };
+      const m = analyseHero(shown.data, hidden.data, cw, ch, 24, M);
+      return { area: m.area, edge: m.edge, contrast: m.contrast, rect };
     },
     consoleErrors,
   };

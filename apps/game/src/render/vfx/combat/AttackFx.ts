@@ -9,7 +9,7 @@
 import type { EventOf } from "@hd2d/sim";
 import { elementIndex, WEAPON_ANCHOR_OFFSET } from "../../../level/typingFxParams";
 import { ELEMENT_RGB } from "../colors";
-import { PK_GLOW, PK_PIXEL } from "../PooledParticles";
+import { PK_GLOW, PK_HEX, PK_PIXEL } from "../PooledParticles";
 import type { EnemyInfo, FxKit } from "./kit";
 import { P_BOLT, type Projectiles } from "./Projectiles";
 import {
@@ -386,20 +386,43 @@ export class AttackFx {
     const cy = EN.y;
     const cz = EN.z;
     this.kit.deps.enemyInfo(e.enemyId, INFO);
-    const w = Math.max(2.6, INFO.height * 1.3);
-    kit.hex(cx, cy, cz + 0.6, w, w * 1.7, 0.4, [0.7, 1.1, 1.7], 0.45);
-    kit.sparks(cx, cy, cz, kit.n(50), SHARD_BLUE, 9, {
+    // T6.3: the old 6 u white-blue hex disc + 7 u ring read as a dome that owned the peak frame. Now: a thin, luminance-
+    // capped ring (<= 2.4 HDR), a SMALL hex flash kept inside the body, and 14 hex shards that fly out and tumble.
+    const w = Math.max(2.4, INFO.height * 1.15);
+    kit.hex(cx, cy, cz + 0.6, w * 0.8, w * 1.15, 0.28, [0.22, 0.42, 0.75], 0.5);
+    for (let i = 0; i < kit.n(14); i++) {
+      const a = (i / 14) * Math.PI * 2 + kit.rnd() * 0.4;
+      const s = 4 + kit.rnd() * 4.5;
+      const sp = kit.p(
+        cx,
+        cy,
+        cz + 0.4,
+        Math.cos(a) * s,
+        Math.sin(a) * s * 0.9 + 1.5,
+        (kit.rnd() - 0.5) * 2,
+        0.8 + kit.rnd() * 0.4,
+        0.2 + kit.rnd() * 0.12,
+        PK_HEX,
+        [0.45, 0.95, 1.7],
+      );
+      sp.size1 = 0.1;
+      sp.grav = 7;
+      sp.drag = 1.4;
+      sp.spin = 6 + kit.rnd() * 10;
+      kit.emitA(sp);
+    }
+    kit.sparks(cx, cy, cz, kit.n(34), SHARD_BLUE, 9, {
       kind: PK_PIXEL,
       size: 0.08,
       life: 0.8,
       grav: 8,
       st: 0,
     });
-    kit.sparks(cx, cy, cz, kit.n(18), [2.4, 3.4, 4.2], 6, { life: 0.4, grav: 4 });
-    kit.ring(cx, cy, cz + 0.6, 0.5, 7, 0.45, [2, 3, 4], [0.6, 0.8, 2], 1.2);
-    kit.star(cx, cy, cz + 0.8, 3.2, 0.5, 0.3, [2, 2.6, 3.4], 1.0, 0.785);
-    kit.flash(cx, cy, cz + 1, [0.6, 0.8, 1], 2.4, 6, 0.4);
-    kit.postFlash(0.1, [0.7, 0.85, 1], 140, 0.14);
+    kit.sparks(cx, cy, cz, kit.n(12), [1.6, 2.4, 3.2], 6, { life: 0.4, grav: 4 });
+    kit.ring(cx, cy, cz + 0.6, 0.5, 5.2, 0.4, [0.8, 1.5, 2.4], [0.3, 0.55, 1.5], 1.25);
+    kit.star(cx, cy, cz + 0.8, 2.4, 0.5, 0.25, [0.9, 1.4, 2.0], 0.7, 0.785);
+    kit.flash(cx, cy, cz + 1, [0.6, 0.8, 1], 1.4, 6, 0.3);
+    kit.postFlash(0.05, [0.7, 0.85, 1], 120, 0.08);
     this.rim(e.enemyId, 1, [2, 3, 4], 0.3);
   }
 

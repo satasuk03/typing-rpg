@@ -41,7 +41,10 @@ import {
 } from "./renderer";
 import { ProceduralSpriteSource } from "./sprites/ProceduralSpriteSource";
 import type { BackdropKind, SpriteSource } from "./sprites/SpriteSource";
-import { clamp, makeRng, PX } from "./util";
+import { clamp, makeRng, PX, type Vec3Tuple } from "./util";
+
+/** Default colour of a layout Rune decal (linear HDR). */
+export const RUNE_COLOR: Vec3Tuple = [0.25, 1.4, 1.5];
 
 export interface RenderWorldOptions {
   /** Sprite provider. Defaults to the POC procedural generators. */
@@ -119,6 +122,8 @@ export class RenderWorld {
   private contextLost = false;
   private disposed = false;
   private readonly flames: Flame[] = [];
+  /** Colour arrays of torch lights (the default and the layout's `flameColor`s): `shadowFor` aims away from these. */
+  private readonly torchColors = new Set<readonly number[]>([TORCH_COLOR]);
   private readonly rays: GodRay[] = [];
   private readonly followCam: Object3D[] = [];
   private readonly owned: { dispose(): void }[] = [];
@@ -352,21 +357,48 @@ export class RenderWorld {
     return new SpriteActor(this.requireRes(), this.scene, f, o);
   }
 
-  /** Pixel flame + glow quads + a flickering point light + torch embers. */
-  addFlame(x: number, y: number, z: number, size = 0.55, foreground = false, light = true): void {
+  /**
+   * Pixel flame + glow quads + a flickering point light + torch embers. `color` (layout `flameColor`, linear near 1)
+   * recolours the flame, its glow and its light; absent = the default torch orange (TORCH_COLOR).
+   */
+  addFlame(
+    x: number,
+    y: number,
+    z: number,
+    size = 0.55,
+    foreground = false,
+    light = true,
+    color?: readonly [number, number, number],
+  ): void {
     const res = this.requireRes();
+    const lightCol: Vec3Tuple = color ? [color[0], color[1], color[2]] : TORCH_COLOR;
+    if (color) this.torchColors.add(lightCol);
+    // flame palette from the colour: saturated (pow 2.2 of c / max), so [1, 0.55, 1.1] reads violet, not white
+    const m = Math.max(color?.[0] ?? 1, color?.[1] ?? 1, color?.[2] ?? 1, 0.001);
+    const sat: Vec3Tuple = color
+      ? [(color[0] / m) ** 2.2, (color[1] / m) ** 2.2, (color[2] / m) ** 2.2]
+      : [1, 1, 1];
     const quad = res.trackGeo(new PlaneGeometry(1, 1));
     const layer = foreground ? this.fgScene : this.scene;
     const fm = res.adopt(
-      fxMaterial(this.lighting, FxKind.Flame, [1, 1, 1], [1, 1, 1], 1, this.rng() * 100),
+      fxMaterial(this.lighting, FxKind.Flame, sat, [1, 1, 1], 1, this.rng() * 100),
     );
+    // uP > 0.5 selects the tinted palette in the Flame shader (0 = the original orange, untouched)
+    (fm.uniforms.uP as { value: number }).value = color ? 1 : 0;
     const mesh = new Mesh(quad, fm);
     mesh.scale.set(size * 0.62, size, 1);
     mesh.position.set(x, y + size * 0.42, z + 0.02);
     mesh.renderOrder = 6;
     layer.add(mesh);
     const gm = res.adopt(
-      fxMaterial(this.lighting, FxKind.Glow, [1.0, 0.45, 0.14], [1, 1, 1], 0.9, this.rng() * 100),
+      fxMaterial(
+        this.lighting,
+        FxKind.Glow,
+        color ? [sat[0] * 1.0, sat[1] * 1.0, sat[2] * 1.0] : [1.0, 0.45, 0.14],
+        [1, 1, 1],
+        0.9,
+        this.rng() * 100,
+      ),
     );
     const glow = new Mesh(quad, gm);
     glow.scale.set(size * 4.2, size * 4.2, 1);
@@ -381,7 +413,7 @@ export class RenderWorld {
         y: y + size * 0.6,
         z: z + 0.35,
         radius: foreground ? 7 : 9.5,
-        color: TORCH_COLOR,
+        color: lightCol,
         intensity: foreground ? 1.8 : 2.3,
         scatter: foreground ? 0 : 0.009,
         flicker: true,
@@ -416,11 +448,15 @@ export class RenderWorld {
   }
 
   /** Glowing ground rune circle (boss hollow). `intensity` can be driven by the caller via the returned material. */
-  addRuneCircle(x: number, z: number, size: number, intensity: number): ShaderMaterial {
+  addRuneCircle(
+    x: number,
+    z: number,
+    size: number,
+    intensity: number,
+    color: readonly [number, number, number] = RUNE_COLOR,
+  ): ShaderMaterial {
     const res = this.requireRes();
-    const mat = res.adopt(
-      fxMaterial(this.lighting, FxKind.Rune, [0.25, 1.4, 1.5], [1, 1, 1], intensity),
-    );
+    const mat = res.adopt(fxMaterial(this.lighting, FxKind.Rune, color, [1, 1, 1], intensity));
     const m = new Mesh(res.trackGeo(new PlaneGeometry(1, 1)), mat);
     m.rotation.x = -Math.PI / 2;
     m.scale.set(size, size, 1);
@@ -482,7 +518,7 @@ export class RenderWorld {
     let best: { x: number; z: number } | null = null;
     let bd = 1e9;
     for (const L of this.lights.staticLights) {
-      if (L.color !== TORCH_COLOR || L.z > 4) continue;
+      if (!this.torchColors.has(L.color) || L.z > 4) continue;
       const d = Math.abs(L.x - x) + Math.abs(L.z - z) * 0.5;
       if (d < bd) {
         bd = d;

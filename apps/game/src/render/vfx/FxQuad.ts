@@ -1,5 +1,6 @@
 import { Mesh, PlaneGeometry, type ShaderMaterial, type Vector3 } from "three";
 import { type FxKindId, fxMaterial } from "../materials/fx";
+import { HERO_DAMP } from "../materials/heroGuard";
 import type { RenderWorld } from "../RenderWorld";
 
 /**
@@ -20,7 +21,7 @@ export class FxQuad {
     seed = 0,
   ) {
     this.geo = new PlaneGeometry(1, 1);
-    this.mat = fxMaterial(world.lighting, kind, [1, 1, 1], [1, 1, 1], 0, seed);
+    this.mat = fxMaterial(world.lighting, kind, [1, 1, 1], [1, 1, 1], 0, seed, HERO_DAMP);
     this.mesh = new Mesh(this.geo, this.mat);
     this.mesh.renderOrder = renderOrder;
     this.mesh.frustumCulled = false;

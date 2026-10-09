@@ -264,9 +264,9 @@ export const CHEST_STYLE: Readonly<Record<ChestTier, ChestStyle>> = {
   },
 };
 
-/** Coins for a gold amount: 6 + amount/12, capped at 40 (a passive pickup is small). */
+/** Coins for a gold amount: 14 + amount/7, capped at 72 (a passive pickup is small). T6.3: was 6 + amount/12, cap 40. */
 export function coinCount(amount: number, source: "encounter" | "passive"): number {
-  const n = Math.min(40, 6 + Math.floor(amount / 12));
+  const n = Math.min(72, 14 + Math.floor(amount / 7));
   return source === "passive" ? Math.max(3, Math.floor(n / 3)) : n;
 }
 

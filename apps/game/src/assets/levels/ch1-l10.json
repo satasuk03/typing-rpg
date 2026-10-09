@@ -556,7 +556,12 @@
               "height": 0,
               "fieldInstances": [
                 { "__identifier": "key", "__type": "String", "__value": "prop.post" },
-                { "__identifier": "flame", "__type": "Float", "__value": 0.5 }
+                { "__identifier": "flame", "__type": "Float", "__value": 0.5 },
+                {
+                  "__identifier": "flameColor",
+                  "__type": "Array<Float>",
+                  "__value": [1.0, 0.55, 1.1]
+                }
               ]
             },
             {
@@ -668,7 +673,12 @@
               "height": 0,
               "fieldInstances": [
                 { "__identifier": "key", "__type": "String", "__value": "prop.post" },
-                { "__identifier": "flame", "__type": "Float", "__value": 0.5 }
+                { "__identifier": "flame", "__type": "Float", "__value": 0.5 },
+                {
+                  "__identifier": "flameColor",
+                  "__type": "Array<Float>",
+                  "__value": [1.0, 0.55, 1.1]
+                }
               ]
             },
             {
@@ -728,7 +738,8 @@
               "height": 0,
               "fieldInstances": [
                 { "__identifier": "size", "__type": "Float", "__value": 6.4 },
-                { "__identifier": "intensity", "__type": "Int", "__value": 1 }
+                { "__identifier": "intensity", "__type": "Int", "__value": 1 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [0.95, 0.35, 1.7] }
               ]
             },
             {
@@ -738,7 +749,8 @@
               "height": 0,
               "fieldInstances": [
                 { "__identifier": "size", "__type": "Float", "__value": 4.2 },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.55 }
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.55 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [0.95, 0.35, 1.7] }
               ]
             },
             {
@@ -748,7 +760,8 @@
               "height": 0,
               "fieldInstances": [
                 { "__identifier": "size", "__type": "Float", "__value": 4.2 },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.55 }
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.55 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [0.95, 0.35, 1.7] }
               ]
             },
             {
@@ -758,7 +771,8 @@
               "height": 0,
               "fieldInstances": [
                 { "__identifier": "size", "__type": "Float", "__value": 3.6 },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.45 }
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.45 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [0.95, 0.35, 1.7] }
               ]
             },
             {

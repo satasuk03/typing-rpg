@@ -1,9 +1,11 @@
 /**
  * SentenceBolts (spec §9.1): the world half of a finished sentence word. The HUD collapses the word into an
  * orb and hands its screen position over; `launch` receives the point already converted to the action plane
- * (`screenToActionPlane`). A bolt (glow core + star head) flies 260 ms along an arc (apex +1.2 u) to the
- * boss's body, throwing 4 trail particles per frame, and bursts on arrival: star, light flash, shake, 10
- * sparks. Bolts escalate through the sentence (`0.7 + 0.6 * (wordIndex + 1) / wordCount`); the last word of
+ * (`screenToActionPlane`). A bolt flies 250 ms along an arc (apex +1.2 u) to the boss's body and bursts on arrival:
+ * star, light flash, shake, 10 sparks. T6.3 #15: the bolt used to be invisible in flight, so it is now three layers:
+ * a 1.2 u soft halo in the bolt colour, a small 0.35 u hot core that turns violet -> white over the flight, and a
+ * 6-sample trail (6 glow particles per frame spread along the path travelled since the last frame, shrinking and
+ * fading), plus a rotating star head. Bolts escalate through the sentence (`0.7 + 0.6 * (wordIndex + 1) / wordCount`); the last word of
  * a doom sentence is x1.5 with a camera punch; second wind sends teal bolts at the hero (a heal).
  *
  * Two bolt slots (words arrive at typing speed, never closer than a flight apart); a third steals the oldest.
@@ -18,14 +20,17 @@ import {
   newSpec,
   type ParticleSpec,
   PK_GLOW,
-  PK_STREAK,
   type PooledParticles,
   resetSpec,
 } from "./PooledParticles";
 import type { TypingFxSettings } from "./types";
 
-export const BOLT_FLIGHT_S = 0.26;
-const APEX = 0.45;
+export const BOLT_FLIGHT_S = 0.25;
+/** Arc height above the straight line at mid-flight (world units). */
+export const BOLT_APEX = 1.2;
+export const BOLT_CORE = 0.35;
+export const BOLT_HALO = 1.2;
+export const BOLT_TRAIL_SAMPLES = 6;
 const SLOTS = 2;
 const SPEC: ParticleSpec = newSpec();
 
@@ -55,6 +60,12 @@ interface Bolt {
   rgb: Rgb;
   /** Impact clock (s), -1 until it arrives. */
   hitT: number;
+  /** Where the bolt was last frame (the trail is spread from here to the current position). */
+  px: number;
+  py: number;
+  /** False until the first flight frame has set `px/py`. */
+  seen: boolean;
+  halo: FxQuad;
   core: FxQuad;
   head: FxQuad;
   burst: FxQuad;
@@ -89,6 +100,10 @@ export class SentenceBolts {
         heal: false,
         rgb: [1, 1, 1],
         hitT: -1,
+        px: 0,
+        py: 0,
+        seen: false,
+        halo: new FxQuad(world, FxKind.Glow, 9),
         core: new FxQuad(world, FxKind.Glow, 10),
         head: new FxQuad(world, FxKind.Star, 11),
         burst: new FxQuad(world, FxKind.Star, 11),
@@ -127,6 +142,7 @@ export class SentenceBolts {
     q.rgb[1] = rgb[1];
     q.rgb[2] = rgb[2];
     q.hitT = -1;
+    q.seen = false;
     this.launched++;
   }
 
@@ -148,6 +164,7 @@ export class SentenceBolts {
   clear(): void {
     for (const q of this.b) {
       q.live = false;
+      q.halo.intensity(0);
       q.core.intensity(0);
       q.head.intensity(0);
       q.burst.intensity(0);
@@ -164,6 +181,7 @@ export class SentenceBolts {
       live++;
       if (k <= 0) {
         q.live = false;
+        q.halo.intensity(0);
         q.core.intensity(0);
         q.head.intensity(0);
         q.burst.intensity(0);
@@ -176,46 +194,64 @@ export class SentenceBolts {
         // ease-in so the bolt accelerates into the target; the arc apex is +1.2 u
         const e = u * u * (3 - 2 * u) * 0.35 + u * 0.65;
         const x = q.sx + (q.tx - q.sx) * e;
-        const y = q.sy + (q.ty - q.sy) * e + APEX * 4 * e * (1 - e);
+        const y = q.sy + (q.ty - q.sy) * e + BOLT_APEX * 4 * e * (1 - e);
         const z = q.sz + 0.3;
         const s = q.scale;
+        // violet -> white over the flight: the hot core whitens as the bolt arrives
+        const w = u * u;
+        const cr = c[0] * 1.4 + (3.2 - c[0] * 1.4) * w;
+        const cg = c[1] * 1.4 + (3.2 - c[1] * 1.4) * w;
+        const cb = c[2] * 1.4 + (3.2 - c[2] * 1.4) * w;
+        q.halo
+          .color(c[0] * 0.9, c[1] * 0.9, c[2] * 0.9)
+          .at(x, y, z - 0.05)
+          .size(BOLT_HALO * s)
+          .intensity(0.9 * k);
         q.core
-          .color(c[0], c[1], c[2])
+          .color(cr, cg, cb)
           .at(x, y, z)
-          .size(1.7 * s)
-          .intensity(2.0 * k);
+          .size(BOLT_CORE * (0.8 + 0.4 * s) * 1.0)
+          .intensity(3.0 * k);
         q.head
-          .color(c[0] * 1.3, c[1] * 1.3, c[2] * 1.3)
+          .color(c[0] * 1.2, c[1] * 1.2, c[2] * 1.2)
           .at(x, y, z + 0.05)
-          .size(1.3 * s)
-          .intensity(2.2 * k);
+          .size(0.85 * s)
+          .intensity(1.2 * k);
         q.head.mesh.rotation.z = time * 6;
-        // trail: 4 particles per frame (pool A, streak kind), thrown behind the bolt
-        const n = Math.max(1, Math.round(4 * k));
+        // trail: 6 samples per frame spread from where the bolt was to where it is now (pool A, glow kind), each
+        // shrinking and fading; early samples are violet, late ones whiten with the core
+        if (!q.seen) {
+          q.px = x;
+          q.py = y;
+          q.seen = true;
+        }
+        const n = Math.max(1, Math.round(BOLT_TRAIL_SAMPLES * k));
         for (let i = 0; i < n; i++) {
+          const f = (i + 1) / n;
           resetSpec(SPEC);
-          const back = (i / n) * 0.1;
-          SPEC.x = x - (q.tx - q.sx) * back * 0.1 + (((i * 37) % 7) - 3) * 0.02;
-          SPEC.y = y + (((i * 53) % 5) - 2) * 0.03;
+          SPEC.x = q.px + (x - q.px) * f;
+          SPEC.y = q.py + (y - q.py) * f;
           SPEC.z = z;
-          SPEC.vx = -(q.tx - q.sx) * 0.4;
-          SPEC.vy = ((i % 3) - 1) * 0.4;
-          SPEC.size = 0.17 * s;
-          SPEC.size1 = 0.03;
-          SPEC.st = 0.15;
-          SPEC.life = 0.25;
-          SPEC.r = c[0] * 1.1;
-          SPEC.g = c[1] * 1.1;
-          SPEC.b = c[2] * 1.1;
-          SPEC.kind = PK_STREAK;
+          SPEC.vy = ((i % 3) - 1) * 0.25;
+          SPEC.size = (0.32 + 0.08 * f) * s;
+          SPEC.size1 = 0.04;
+          SPEC.life = 0.3;
+          SPEC.r = cr * 0.55;
+          SPEC.g = cg * 0.55;
+          SPEC.b = cb * 0.55;
+          SPEC.a = 0.9;
+          SPEC.kind = PK_GLOW;
           this.pool.emit(SPEC);
         }
+        q.px = x;
+        q.py = y;
         if (u >= 1) this.impact(q, set);
       } else {
         q.hitT += dt;
         const u = q.hitT / 0.22;
         if (u >= 1) {
           q.live = false;
+          q.halo.intensity(0);
           q.core.intensity(0);
           q.head.intensity(0);
           q.burst.intensity(0);
@@ -229,6 +265,7 @@ export class SentenceBolts {
           .size(s * 1.1)
           .intensity(1.1 * (1 - u) * k);
         q.head.intensity(0);
+        q.halo.intensity(0);
         q.burst
           .color(c[0] * 1.3, c[1] * 1.3, c[2] * 1.3)
           .at(q.tx, q.ty, q.tz + 0.4)
@@ -282,6 +319,7 @@ export class SentenceBolts {
 
   dispose(): void {
     for (const q of this.b) {
+      q.halo.dispose();
       q.core.dispose();
       q.head.dispose();
       q.burst.dispose();

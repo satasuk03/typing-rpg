@@ -114,3 +114,28 @@ owns 3 lights of its own (typing keeps its 3; 16 slots in total).
 
 Dev: `?scene=play&level=ch1-l08&demo=1` then `window.__play.demo("crit" | "fireball" | "chest:Gold" | ...)` (see
 `dev/combatFxDemo.ts`); `&combat=0` turns the library off.
+
+## T6.3 world polish (hero readability, QA backlog #3 #4 #7 #14-#17 #23)
+
+- **Hero guard** (`materials/heroGuard.ts`): the hero's body box in NDC is one shared uniform. Aura shapes (`AuraQuad`)
+  cap their alpha to 0.35 inside it, every `FxQuad` and the slash `ArcPool` multiply their light by 0.5 / 0.45 there. It is
+  written each frame by `HeroAura.update`. A glow around and beside the hero, never a veil over it.
+- **No white-outs on the sprite:** the ATB-ignite hero flash is capped at 0.03 (a tint), pixel motes rise beside the hero (|dx| >= 0.5)
+  and mostly behind it, T4 orbit stars pass behind the body, the skill cast flash sits at the weapon tip (`SkillFx.skillCast`).
+- **Cave rim light** (`materials/sprite.ts`, hero only: `caveRim` 0.6): an albedo-lit fill plus an outline rim in the mood's `hi` tint,
+  both scaled by the mood's `caveK` (new shared uniforms `uCaveK`, `uHiTint` in `lighting.ts`).
+- **Parry flash** (`GuardBarrier`, `PARRY_FLASH`): a `FxKind.Disc` flash (core #7fe8ff, rim #3ab8ff, 140 ms, r 0.9 u) at the blade tip,
+  6 `PK_HEX` shards (new particle kind: hexagon with a bright rim).
+- **Aegis** uses the new `FxKind.Hex` (domed hex lattice, travelling shimmer, fresnel rim). **BREAK** is a thin ring plus 14 hex shards.
+- **Sentence bolts:** 1.2 u halo, 0.35 u core (violet to white), 6-sample trail, 250 ms, arc 1.2 u.
+- **Finisher:** CA <= 0.006, zoom <= 0.04, warm flash [1, 0.92, 0.75] gone in 90 ms, slash lines clipped to the viewport (`clipLen`).
+- **Tier 4:** hue drift 0.25 Hz (`T4_HUE_DEG_PER_SEC`). Forest aura rings and rays +30 % (`FOREST_SHAPE_GAIN`), uAdd 0.2.
+- **Layout colours:** `Prop`/`Scatter` `flameColor` (torch flame, glow, light and cast-shadow source) and `Rune` `color`; absent = the old values.
+  `ch1-l10.json`: two of three torches and all four rune decals are violet.
+- **Boss adds** (`level/stage.ts`): hidden through `bossIntro`, then dissolved in over 300 ms (`ADDS_FADE_SEC`).
+- **Coin fountain:** `coinCount` 14 + amount/7 (cap 72), 0.2 u coins, a glow sprite on every second coin, a warm bloom and star.
+
+Captures on real Metal: `PW_PORT=<unique> pnpm exec playwright test -c tests/vfx/playwright.metal.config.ts metal-stills`
+(`STILL_DIR` redirects; `STILLS_ONLY=a,b` picks stills) and `metal-skillcast` (the bot casts Fireball for real). `heroSilhouette.spec.ts`
+(typing scene) and `heroSilhouettePlay.spec.ts` (real runner: skill cast, crit, slash, chest + slash, aegis; L9 / L10 cave contrast >= 2.0) share
+`render/vfx/heroProbe.ts`. Pick a port nobody else uses (`lsof -i :PORT`): a stray dev server from another worktree answers silently.

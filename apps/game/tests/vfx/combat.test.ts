@@ -77,8 +77,8 @@ describe("combat params", () => {
   });
 
   it("coin and dissolve counts are bounded", () => {
-    expect(coinCount(0, "encounter")).toBe(6);
-    expect(coinCount(100000, "encounter")).toBe(40);
+    expect(coinCount(0, "encounter")).toBe(14);
+    expect(coinCount(100000, "encounter")).toBe(72);
     expect(coinCount(240, "passive")).toBeLessThan(coinCount(240, "encounter"));
     expect(dissolveCount(true, 3)).toBeLessThanOrEqual(170);
     expect(dissolveCount(false, 2)).toBeLessThanOrEqual(110);

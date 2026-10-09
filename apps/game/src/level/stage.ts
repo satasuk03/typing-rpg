@@ -13,6 +13,10 @@ import type { EnemyView, LevelView } from "@hd2d/sim";
 import type { HudAnchor, HudProjector } from "../hud";
 import type { CameraPose, RenderWorld, SpriteActor, SpriteFrame } from "../render";
 import { HERO_LUM_CAP } from "../render/vfx/colors";
+
+/** Hero rim-light strength at caveK = 1 (T6.3 #4); the sprite shader scales it by the mood's caveK and tints it with `hi`. */
+const HERO_CAVE_RIM = 0.6;
+
 import { motionK } from "../render/vfx/combat/params";
 import type { WorldHandle } from "../render/world";
 import { WEAPON_ANCHOR_OFFSET } from "./typingFxParams";
@@ -105,7 +109,13 @@ interface EnemyActor {
   attackT: number;
   deadT: number;
   flash: number;
+  /** Boss adds: hidden while the boss intro plays (true), then materialised over ADDS_FADE_SEC (`fadeT` counts up). */
+  introHidden: boolean;
+  fadeT: number;
 }
+
+/** Boss adds stay hidden until the boss intro ends, then dissolve in over this long (T6.3 #7). */
+export const ADDS_FADE_SEC = 0.3;
 
 export interface StageOptions {
   enemies: ReadonlyMap<string, EnemyDef>;
@@ -176,7 +186,11 @@ export class LevelStage {
       hurt: f("hurt"),
       win: f("win"),
     };
-    this.hero = this.world.addActor("hero", "idle", { rim: 1.3, blobW: 1.25 });
+    this.hero = this.world.addActor("hero", "idle", {
+      rim: 1.3,
+      blobW: 1.25,
+      caveRim: HERO_CAVE_RIM,
+    });
     this.hero.setLumCap(HERO_LUM_CAP);
     this.placeHero();
   }
@@ -262,6 +276,8 @@ export class LevelStage {
       attackT: Infinity,
       deadT: Infinity,
       flash: 0,
+      introHidden: false,
+      fadeT: Infinity,
     };
     this.foes.set(id, e);
     this.world.shadowFor(actor, pos.x, pos.z);
@@ -543,6 +559,26 @@ export class LevelStage {
     e.attackT += dt;
     if (e.deadT !== Infinity) e.deadT += dt;
     e.flash = Math.max(0, e.flash - dt * 12);
+
+    // boss adds (every living non-boss while a boss is on stage) stay hidden through the intro, then dissolve in
+    const view = this.lastView;
+    if (ev.alive && !ev.isBoss && view !== null && view.enemies.some((x) => x.isBoss)) {
+      if (view.phase === "bossIntro") {
+        e.introHidden = true;
+        e.fadeT = Infinity;
+        e.actor.visible = false;
+      } else if (e.introHidden) {
+        e.introHidden = false;
+        e.fadeT = 0;
+        e.actor.visible = true;
+        e.actor.setDissolve(1);
+      }
+    }
+    if (e.fadeT !== Infinity && ev.alive) {
+      e.fadeT += dt;
+      e.actor.setDissolve(clamp01(1 - e.fadeT / ADDS_FADE_SEC));
+      if (e.fadeT >= ADDS_FADE_SEC) e.fadeT = Infinity;
+    }
 
     let dx = 0;
     let dz = 0;
