@@ -2,12 +2,13 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.6** (2026-10-09) |
+| **Doc version** | **1.7** (2026-10-10) |
 | **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **1.7** (2026-10-10): PO decision 2026-10-09, recorded by the orchestrator. §3.3 key streak: a typo drops the streak **one VFX tier** (tier ≥ 2 → `KEY_STREAK_TIERS[tier−2]`, else 0) instead of resetting to 0; thresholds 10/25/50/100 unchanged. `KeyStreakTierChanged` on a typo may now have `to > 0`, so consumers must not assume a downward change means 0. Same rule in Trial (streak is not in the score or the claim). VFX/audio only: balance output byte-identical. SIM_VERSION stays 1 (pre-release; golden typing/trial fixtures regenerated). Implemented in `typing.ts` (`keyStreakAfterTypo`) and `trial.ts`.
 - **1.6** (2026-10-09): T6.1 and T3.1 notes, recorded by the orchestrator.
   - `BALANCE.BOSS_SCRIPT_PACE_SCALE = true` (approved): rubble spawn, first spawn and fall time are × the pace factor `(35/Pace)^0.7`, and the Doom cadence is × max(1, factor). Identical at Pace 35. `SIM_VERSION` stays 1 (pre-release).
   - Content: `ENC_HP_MULT 1.2` and `HIT_MULT 1.34` on L1–L9 (see `docs/balance-ch1.md`). "Active time" in balance targets = sim time + the 10 s level-end screen, matching economy_sim.
@@ -481,7 +482,7 @@ For tick `t`, the client applies all inputs with `tick === t` in order. `step` t
 - `comboTier`: 0 below 5; Bronze 1 at ≥ 5; Silver 2 at ≥ 15; Gold 3 at ≥ 30; Radiant 4 at ≥ 50. The tier shows in the HUD combo counter and the hero aura.
 
 **Key streak, VFX only (PO hybrid).**
-- `keyStreak` counts consecutive correct keys. It resets to 0 on **any** typo, stray ones included, in every combo mode, and it persists across plates and encounters within a level.
+- `keyStreak` counts correct keys and persists across plates and encounters within a level. On **any** typo, stray ones included, in every combo mode, it drops **one tier**: with `keyStreakTier` ≥ 2 it becomes `KEY_STREAK_TIERS[tier − 2]` (e.g. 120 → 50, 60 → 25, 30 → 10), otherwise 0. Climbing back re-fires `KeyStreakTierChanged` upward; a downward change may end at a non-zero tier. `maxKeyStreak` keeps the peak; Escape does not change the streak. `Typo.keyStreakBefore` is the pre-typo value. The same rule applies in Trial (v1.7).
 - `keyStreakTier` (`KEY_STREAK_TIERS = [10, 25, 50, 100]`): 0 white; 1 gold at ≥ 10; 2 ember at ≥ 25; 3 azure at ≥ 50; 4 prismatic at ≥ 100. It drives plate/letter colour, trails, embers and the click pitch.
 - It has no mechanical effect. The sim computes it so that the HUD and VFX never derive it themselves.
 
