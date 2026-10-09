@@ -8,7 +8,7 @@ import type { PlateTint } from "../../fx";
 import { bossPlateRect, HERO_PANEL, STATS_PANEL_W } from "../../panels";
 import { perimPoint } from "../../plates";
 import { drawHalo, type GlowSprites } from "./glowSprites";
-import { blendTints, FILL, hueBucket, I_BUCKET, TINT_KINDS, tintFor } from "./palette";
+import { blendTints, FILL, FILL_COUNT, hueBucket, I_BUCKET, TINT_KINDS, tintFor } from "./palette";
 import { HudPool } from "./pool";
 import { K_NOTE, K_RING, L_ABOVE, type RectLike, type SparkEnv, type SparkField } from "./sparks";
 
@@ -33,6 +33,10 @@ const RLW1 = 7;
 const RALPHA = 8;
 
 const PT = { x: 0, y: 0 };
+// scratch for the colour-grouped ember draw (nothing allocated per frame)
+const ECNT = new Uint16Array(FILL_COUNT);
+const EAL = new Uint8Array(POOL_CAP.embers);
+const EORDER = new Uint16Array(POOL_CAP.embers);
 /** Ring radius cap, design px (polish #18: the 260 px ring crossed the boss bar and stats panel). */
 export const RING_R_MAX = 120;
 const DESIGN_W = 1280;
@@ -336,23 +340,51 @@ export class StreakTierFx {
       c.globalAlpha = 0.35;
       c.fillStyle = "#140a06";
       c.fill();
-      let lastA = -1;
-      let lastC = -1;
+      // coloured pixels grouped by colour (one style parse per colour, not per ember), alpha in 1/8 steps
+      const cnt = ECNT;
+      cnt.fill(0);
+      let nLive = 0;
       for (let i = 0; i < em.count; i++) {
         const u = (age[i] as number) / (life[i] as number);
         const al = Math.round(Math.min(1, u * 6) * (1 - u) * 8) / 8;
-        if (al <= 0) continue;
-        if (al !== lastA) {
-          c.globalAlpha = al;
-          lastA = al;
+        if (al <= 0) {
+          EAL[i] = 0;
+          continue;
         }
+        EAL[i] = al * 8;
         const ci = col[i] as number;
-        if (ci !== lastC) {
-          c.fillStyle = FILL[ci] as string;
-          lastC = ci;
+        cnt[ci] = (cnt[ci] as number) + 1;
+        nLive++;
+      }
+      if (nLive > 0) {
+        let acc = 0;
+        for (let k = 0; k < FILL_COUNT; k++) {
+          const v = cnt[k] as number;
+          cnt[k] = acc;
+          acc += v;
         }
-        const sz = Math.max(2, Math.round((size[i] as number) * 1.5 * S));
-        c.fillRect(Math.round(ex[i] as number), Math.round(ey[i] as number), sz, sz);
+        for (let i = 0; i < em.count; i++) {
+          if (EAL[i] === 0) continue;
+          const ci = col[i] as number;
+          EORDER[cnt[ci] as number] = i;
+          cnt[ci] = (cnt[ci] as number) + 1;
+        }
+        let lastA = -1;
+        for (let k = 0; k < nLive; ) {
+          const ci = col[EORDER[k] as number] as number;
+          const end = cnt[ci] as number;
+          c.fillStyle = FILL[ci] as string;
+          for (; k < end; k++) {
+            const i = EORDER[k] as number;
+            const al = (EAL[i] as number) / 8;
+            if (al !== lastA) {
+              c.globalAlpha = al;
+              lastA = al;
+            }
+            const sz = Math.max(2, Math.round((size[i] as number) * 1.5 * S));
+            c.fillRect(Math.round(ex[i] as number), Math.round(ey[i] as number), sz, sz);
+          }
+        }
       }
     }
   }

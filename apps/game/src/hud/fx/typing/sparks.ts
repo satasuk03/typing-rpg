@@ -5,7 +5,7 @@
  */
 import { POOL_CAP, STREAK_STYLE } from "../../../level/typingFxParams";
 import { drawGlow, type GlowSprites } from "./glowSprites";
-import { FILL, I_BUCKET, I_WHITE, sparkIndex } from "./palette";
+import { FILL, FILL_COUNT, I_BUCKET, I_WHITE, sparkIndex } from "./palette";
 import { HudPool } from "./pool";
 
 // float fields
@@ -22,6 +22,11 @@ const COL = 1;
 const LAYER = 2;
 
 const HALO = "#140a06";
+// scratch for the colour-grouped draw (module level: nothing is allocated per frame)
+const CI = new Uint8Array(POOL_CAP.sparks);
+const ORDER = new Uint16Array(POOL_CAP.sparks);
+const GLINTS = new Uint16Array(POOL_CAP.sparks);
+const CNT = new Uint16Array(FILL_COUNT);
 /** Tuned up from the spec (see the tuning log): 1.5x spark count and larger pixels read at 1280x720. */
 export const SPARK_BOOST = 2;
 export const SPARK_SPEED = 1.5;
@@ -133,8 +138,19 @@ export class SparkField {
     }
   }
 
+  /** @hot True when at least one started entry belongs to `layer` (lets callers skip clip / state setup). */
+  hasLayer(layer: number): boolean {
+    const p = this.pool;
+    const lay = p.b[LAYER] as Uint8Array;
+    const age = p.f[AGE] as Float32Array;
+    for (let i = p.count - 1; i >= 0; i--)
+      if (lay[i] === layer && (age[i] as number) >= 0) return true;
+    return false;
+  }
+
   /** @hot Draw the entries of one layer. The caller sets the composite op ("lighter"). */
   draw(c: CanvasRenderingContext2D, layer: number, S: number, sprites: GlowSprites): void {
+    if (!this.hasLayer(layer)) return;
     const p = this.pool;
     const x = p.f[X] as Float32Array;
     const y = p.f[Y] as Float32Array;
@@ -154,6 +170,8 @@ export class SparkField {
     let anyLine = false;
     c.globalAlpha = 0.4;
     c.fillStyle = HALO;
+    c.beginPath();
+    let nHalo = 0;
     for (let i = 0; i < n; i++) {
       if (lay[i] !== layer || (age[i] as number) < 0) continue;
       const kd = kind[i] as number;
@@ -165,13 +183,15 @@ export class SparkField {
       const px = Math.round(x[i] as number);
       const py = Math.round(y[i] as number);
       if (kd === K_GLINT) {
-        c.fillRect(px - arm - o, py - 1 - o, arm * 2 + 1 + 2 * o, 2 + 2 * o);
-        c.fillRect(px - 1 - o, py - arm - o, 2 + 2 * o, arm * 2 + 1 + 2 * o);
+        c.rect(px - arm - o, py - 1 - o, arm * 2 + 1 + 2 * o, 2 + 2 * o);
+        c.rect(px - 1 - o, py - arm - o, 2 + 2 * o, arm * 2 + 1 + 2 * o);
       } else {
         const sz = Math.max(1, Math.round((size[i] as number) * S));
-        c.fillRect(px - o, py - o, sz + 2 * o, sz + 2 * o);
+        c.rect(px - o, py - o, sz + 2 * o, sz + 2 * o);
       }
+      nHalo++;
     }
+    if (nHalo > 0) c.fill();
     if (anyLine) {
       c.beginPath();
       for (let i = 0; i < n; i++) {
@@ -187,15 +207,18 @@ export class SparkField {
       c.lineWidth = 3.5 * S;
       c.stroke();
     }
-    // pass 2: the coloured sparks, then glows
-    let lastFill = -1;
-    let lastAlpha = -1;
+    // pass 2: glows / notes in spawn order, then the coloured sparks GROUPED BY COLOUR. A canvas style
+    // setter parses its colour string every time it is set (the dominant JS cost of this loop at tier 4,
+    // where every spark has its own prism bucket), so the sparks of one colour are drawn together and the
+    // style is set once per colour instead of once per spark.
+    const cnt = CNT;
+    cnt.fill(0);
+    let nPix = 0;
     for (let i = 0; i < n; i++) {
       if (lay[i] !== layer) continue;
       const a = age[i] as number;
       if (a < 0) continue;
-      const u = a / (life[i] as number);
-      const rest = 1 - u;
+      const rest = 1 - a / (life[i] as number);
       const kd = kind[i] as number;
       let ci = col[i] as number;
       if (a < 0.05 && kd <= K_LINE) ci = I_WHITE;
@@ -211,7 +234,6 @@ export class SparkField {
           rest * rest,
         );
         c.globalCompositeOperation = "source-over";
-        lastAlpha = -1;
         continue;
       }
       if (kd === K_NOTE) {
@@ -222,9 +244,7 @@ export class SparkField {
         drawGlow(c, sprites, ci, x[i] as number, y[i] as number, r, al);
         c.globalCompositeOperation = "source-over";
         c.globalAlpha = al;
-        lastAlpha = -1;
         c.fillStyle = FILL[I_WHITE] as string;
-        lastFill = I_WHITE;
         const ar = Math.round(r * 0.75);
         const px = Math.round(x[i] as number);
         const py = Math.round(y[i] as number);
@@ -232,37 +252,87 @@ export class SparkField {
         c.fillRect(px - 1, py - ar, 2, ar * 2 + 1);
         continue;
       }
-      // alpha in 1/16 steps: fewer state changes, no visible banding on 3-6 px sparks
-      const al = Math.round(rest ** 0.7 * 16) / 16;
-      if (al !== lastAlpha) {
-        c.globalAlpha = al;
-        lastAlpha = al;
+      CI[i] = ci;
+      cnt[ci] = (cnt[ci] as number) + 1;
+      nPix++;
+    }
+    if (nPix === 0) return;
+    // counting sort of the pixel sparks by colour (stable: spawn order inside a colour)
+    let acc = 0;
+    for (let k = 0; k < FILL_COUNT; k++) {
+      const v = cnt[k] as number;
+      cnt[k] = acc;
+      acc += v;
+    }
+    for (let i = 0; i < n; i++) {
+      if (lay[i] !== layer || (age[i] as number) < 0) continue;
+      const kd = kind[i] as number;
+      if (kd === K_FLARE || kd === K_NOTE) continue;
+      const ci = CI[i] as number;
+      ORDER[cnt[ci] as number] = i;
+      cnt[ci] = (cnt[ci] as number) + 1;
+    }
+    let lastAlpha = -1;
+    let nGlint = 0;
+    let lineW = false;
+    for (let k = 0; k < nPix; ) {
+      const first = ORDER[k] as number;
+      const ci = CI[first] as number;
+      const end = cnt[ci] as number; // exclusive: cnt[] now holds each colour's end offset
+      c.fillStyle = FILL[ci] as string;
+      let strokeSet = false;
+      for (; k < end; k++) {
+        const i = ORDER[k] as number;
+        const kd = kind[i] as number;
+        const rest = 1 - (age[i] as number) / (life[i] as number);
+        // alpha in 1/16 steps: fewer state changes, no visible banding on 3-6 px sparks
+        const al = Math.round(rest ** 0.7 * 16) / 16;
+        if (al !== lastAlpha) {
+          c.globalAlpha = al;
+          lastAlpha = al;
+        }
+        if (kd === K_LINE) {
+          if (!strokeSet) {
+            c.strokeStyle = FILL[ci] as string;
+            strokeSet = true;
+          }
+          if (!lineW) {
+            c.lineWidth = 2 * S;
+            lineW = true;
+          }
+          c.beginPath();
+          c.moveTo(x[i] as number, y[i] as number);
+          c.lineTo(
+            (x[i] as number) - (vx[i] as number) * 0.05,
+            (y[i] as number) - (vy[i] as number) * 0.05,
+          );
+          c.stroke();
+          continue;
+        }
+        const px = Math.round(x[i] as number);
+        const py = Math.round(y[i] as number);
+        if (kd === K_GLINT) {
+          c.fillRect(px - arm, py - 1, arm * 2 + 1, 2);
+          c.fillRect(px - 1, py - arm, 2, arm * 2 + 1);
+          GLINTS[nGlint++] = i;
+        } else {
+          const sz = Math.max(1, Math.round((size[i] as number) * S));
+          c.fillRect(px, py, sz, sz);
+        }
       }
-      if (lastFill !== ci) {
-        c.fillStyle = FILL[ci] as string;
-        c.strokeStyle = FILL[ci] as string;
-        lastFill = ci;
-      }
-      const px = Math.round(x[i] as number);
-      const py = Math.round(y[i] as number);
-      if (kd === K_LINE) {
-        c.lineWidth = 2 * S;
-        c.beginPath();
-        c.moveTo(x[i] as number, y[i] as number);
-        c.lineTo(
-          (x[i] as number) - (vx[i] as number) * 0.05,
-          (y[i] as number) - (vy[i] as number) * 0.05,
-        );
-        c.stroke();
-      } else if (kd === K_GLINT) {
-        c.fillRect(px - arm, py - 1, arm * 2 + 1, 2);
-        c.fillRect(px - 1, py - arm, 2, arm * 2 + 1);
-        c.fillStyle = FILL[I_WHITE] as string;
-        c.fillRect(px - 2, py - 2, 4, 4);
-        lastFill = I_WHITE;
-      } else {
-        const sz = Math.max(1, Math.round((size[i] as number) * S));
-        c.fillRect(px, py, sz, sz);
+    }
+    if (nGlint > 0) {
+      // white hot centres of the glints (one style set for all of them)
+      c.fillStyle = FILL[I_WHITE] as string;
+      for (let g = 0; g < nGlint; g++) {
+        const i = GLINTS[g] as number;
+        const rest = 1 - (age[i] as number) / (life[i] as number);
+        const al = Math.round(rest ** 0.7 * 16) / 16;
+        if (al !== lastAlpha) {
+          c.globalAlpha = al;
+          lastAlpha = al;
+        }
+        c.fillRect(Math.round(x[i] as number) - 2, Math.round(y[i] as number) - 2, 4, 4);
       }
     }
   }
