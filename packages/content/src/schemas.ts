@@ -38,6 +38,7 @@ export const WordEntry = z.object({
 export type WordEntry = z.infer<typeof WordEntry>;
 
 export const Gimmick = z.enum(["fading", "scrambled"]);
+export type Gimmick = z.infer<typeof Gimmick>;
 export const EnemyDef = z.object({
   id: z.string(),
   name: z.string(),
@@ -56,6 +57,7 @@ export const EnemyDef = z.object({
 export type EnemyDef = z.infer<typeof EnemyDef>;
 
 export const EnemyRef = z.object({ enemy: z.string(), gimmick: Gimmick.optional() });
+export type EnemyRef = z.infer<typeof EnemyRef>;
 export const EncounterDef = z
   .object({
     name: z.string(),
@@ -67,6 +69,7 @@ export const EncounterDef = z
     (e) => new Set(e.waves.flat().flatMap((r) => (r.gimmick ? [r.gimmick] : []))).size <= 2,
     "max 2 gimmicks/encounter",
   );
+export type EncounterDef = z.infer<typeof EncounterDef>;
 
 export const MinigameDef = z.object({
   kind: z.literal("fallingRubble"),
@@ -76,6 +79,7 @@ export const MinigameDef = z.object({
   clearAtkMult: z.number().positive(),
   missHit: z.number().positive(),
 });
+export type MinigameDef = z.infer<typeof MinigameDef>;
 export const BossDef = z.object({
   id: z.string(),
   name: z.string(),
@@ -109,6 +113,7 @@ export const Segment = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("encounter"), encounter: EncounterDef }),
   z.object({ kind: z.literal("boss"), bossId: z.string() }),
 ]);
+export type Segment = z.infer<typeof Segment>;
 export const LevelDef = z.object({
   id: z.string().regex(/^ch\d+-l\d+$/),
   chapter: z.number().int().min(1).max(30),
@@ -154,6 +159,7 @@ export const ActiveSkillDef = z.object({
   sfxId: z.string(),
   unlockLevel: z.string().optional(),
 });
+export type ActiveSkillDef = z.infer<typeof ActiveSkillDef>;
 export const PassiveDef = z.object({
   id: z.enum([
     "cleanCut",
@@ -171,6 +177,7 @@ export const PassiveDef = z.object({
   iconId: z.string(),
   unlockLevel: z.string().optional(),
 });
+export type PassiveDef = z.infer<typeof PassiveDef>;
 export const TrialDef = z.object({
   id: z.string(),
   name: z.string(),
@@ -178,6 +185,8 @@ export const TrialDef = z.object({
   // Standardized pool (same for everyone); the run seed picks one. >= 1600 chars covers 60 s at 300+ WPM.
   passages: z.array(TypableText.min(1600)).min(30),
 });
+
+export type TrialDef = z.infer<typeof TrialDef>;
 
 export const ContentBundle = z.strictObject({
   words: z.array(WordEntry),

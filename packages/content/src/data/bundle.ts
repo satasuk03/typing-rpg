@@ -1,18 +1,20 @@
 import type { ContentBundle } from "../schemas.ts";
+import { BOSSES } from "./bosses.ts";
+import { ENEMIES } from "./enemies.ts";
+import { GEAR } from "./gear.ts";
+import { LEVELS } from "./levels.ts";
+import { ACTIVES, PASSIVES } from "./skills.ts";
 import { TYPING_TRIAL } from "./trials.ts";
 import { WORDS } from "./words.ts";
 
-/**
- * The T4.1 slice of the content bundle (words + trial). T4.2 fills enemies, bosses, levels and gear;
- * until then those arrays are empty, and CONTENT_VERSION covers only what exists.
- */
+/** The full Chapter 1 content bundle (T4.1 words + trial, T4.2 enemies, boss, levels, gear, skills). */
 export const contentBundle: ContentBundle = {
   words: WORDS,
-  enemies: [],
-  bosses: [],
-  levels: [],
-  gear: [],
-  actives: [],
-  passives: [],
+  enemies: ENEMIES,
+  bosses: BOSSES,
+  levels: LEVELS,
+  gear: GEAR,
+  actives: ACTIVES,
+  passives: PASSIVES,
   trials: [TYPING_TRIAL],
 };
