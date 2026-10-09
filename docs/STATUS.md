@@ -1,6 +1,6 @@
 # Status — Chapter I vertical slice
 
-Maintained by the orchestrator. One line per task: owner · state · AC evidence.
+Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** One line per task: owner · state · AC evidence.
 
 | Task | Owner (model) | State | AC evidence |
 |---|---|---|---|
@@ -22,6 +22,7 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T6.3 review | Art director (opus) | **done** → `docs/qa/t6.3-polish-backlog.md` (25 items; root cause: combat camera punch ~10× too strong) | 82 Metal captures, 0 console errors |
 | T6.3 level data slice (#4 data, #5, #6, #7 anchors, #21, #22) | Render (sonnet) | **done** (merged dac421c) | Metal captures: L10 hue 287–298° in every pose (was 290–334); L9 luma +30%; L4 less haze; L8 cold crystal gallery, distinct from L10; L10 adds anchors. Side-by-sides `docs/qa/t6.3-level-polish/`. Open (round 2, render code): torch flame + rune colour are hardcoded, so not data-driven yet |
 | HUD DPR2 perf + audio freq warning | Platform (sonnet) | **done** (merged 9879e61) | HUD backing store capped per tier [2, 1.5, 1]; Retina tier 2 at 4× throttle p95 33/83 → 16.8 ms; audio clamped to 20–20k Hz with a sweep test |
+| T6.3 world polish track (W: #3, #4, #14–17, #23, BREAK/aegis/coins, data-driven torch+rune colours, #7 fade-in, Fireball cast check) | VFX (sonnet) | in progress (branch worktree-agent-a4f9e1abc87b84248) | — |
 | T6.3 round 2 HUD FX + screens (H2: #18, #19, #24; #20 already satisfied) | UI (sonnet) | **done** (merged 17189f4) | tier ring ≤120 px and clipped from panels; ATB streak/sparks clipped to the bar; title hero clears the cursor; map scrim + hero legs visible; cache reveal with chest, rarity pillar and rays, ghost text removed. Stills `docs/qa/t6.3-h2/`. typingPerf/typingSettings fail only under machine load: re-measure on a quiet machine |
 | T6.3 round 1 HUD (H1: #8–13, #25) | UI (sonnet) | **done** (merged b734fff) | boss intro owns the screen (HUD hidden, gradient card); barrier glyph, no 2ND WIND/HP overlap (invariant); pops avoid the hero, boss bar and panels; ≤3 tags per anchor, WEAK merge, PERFECT as a border flash; IMMUNE instead of "0"; BREAK 52 px + boss-row chip. New invariants enforced in all readability specs. Stills `docs/qa/t6.3-h1/` |
 | T1.2 Typing engine | Sim (sonnet) | **done** (merged 9c34986) | 82 rule-named typing tests; property test 120 levels / 697k ticks / 7k guard swaps: no shared first letters, events in tick order; golden typing replays + Chromium parity |
