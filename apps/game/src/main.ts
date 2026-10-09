@@ -29,6 +29,12 @@ function boot(): void {
     return;
   }
 
+  // Dev-only route: ?scene=trial[&api=http://localhost:8787] is the Typing Trial + leaderboard (src/dev/trialScene.ts).
+  if (new URLSearchParams(location.search).get("scene") === "trial") {
+    void import("./dev/trialScene").then((m) => m.start(glCanvas));
+    return;
+  }
+
   // Dev-only route: ?scene=hud-test (src/dev/hudTestScene.ts).
   if (new URLSearchParams(location.search).get("scene") === "hud-test") {
     void import("./dev/hudTestScene").then((m) => m.start(glCanvas));

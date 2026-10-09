@@ -1,0 +1,21 @@
+# Wrangler config for the net-layer e2e (Playwright webServer). Runs the REAL Worker (workers/api) against a fresh local D1.
+# Differences from workers/api/wrangler.toml: no [[ratelimits]] bindings (RATE_LIMIT_DISABLED=1, so parallel tests that
+# share 127.0.0.1 are not throttled), CORS allows only the e2e game origin, no cron.
+name = "hd2d-api-e2e"
+main = "../../../../workers/api/src/index.ts"
+compatibility_date = "2026-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hd2d-e2e"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "../../../../workers/api/migrations"
+
+[[kv_namespaces]]
+binding = "LB_CACHE"
+id = "00000000000000000000000000000000"
+
+[vars]
+SEASON_KEY = "S1"
+ALLOWED_ORIGINS = "http://localhost:5183"
+RATE_LIMIT_DISABLED = "1"

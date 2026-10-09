@@ -98,19 +98,3 @@ export const SaveBlob = SaveBlobV1; // alias to the latest version
 export type SaveBlob = z.infer<typeof SaveBlob>;
 /** Compile-time proof that a save can feed buildLoadout. */
 export const saveIsLoadoutSource = (s: SaveBlob): LoadoutSource => s;
-/** Runs MIGRATIONS[v] for v = raw.schemaVersion .. latest-1, then SaveBlob.parse. */
-export function migrateSave(_raw: unknown): SaveBlob {
-  throw new Error("migrateSave: not implemented (T5.x, Backend engineer)");
-}
-export const MIGRATIONS: Readonly<Record<number, (old: unknown) => unknown>> = {}; // MIGRATIONS[1]: v1 -> v2, ...
-export function summarize(_save: SaveBlob): SaveSummary {
-  throw new Error("summarize: not implemented (T5.x, Backend engineer)");
-}
-/** Three-way merge; `base` = last blob this client synced with the server (null if never synced). */
-export function mergeSaves(
-  _base: SaveBlob | null,
-  _local: SaveBlob,
-  _server: SaveBlob,
-): { merged: SaveBlob; needsUserChoice: boolean } {
-  throw new Error("mergeSaves: not implemented (T5.x, Backend engineer)");
-}
