@@ -526,7 +526,7 @@ export class FxKit {
   /** @hot `dt` is the stage's dilated dt. */
   update(dt: number): void {
     this.time += dt;
-    this.arcs.gain = 1 - (1 - this.glare) * (2 / 3);
+    this.arcs.gain = 0.4 + 0.6 * Math.min(1, (this.glare - 0.4) / 0.6); // 0.4 forest .. 1 cave
     this.arcs.update(dt);
     this.ghosts.update(dt);
     this.stars.update(dt);

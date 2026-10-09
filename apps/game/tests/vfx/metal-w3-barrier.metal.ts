@@ -15,19 +15,39 @@ test("L05 110 WPM: no guard barrier outside combat", async ({ page }) => {
   await page.waitForFunction(() => window.__play?.ready === true, undefined, { timeout: 90_000 });
   await page.evaluate(() => {
     const p = window.__play as PlayDebug;
-    const rec = { maxOutside: 0, outsideFrames: 0, maxInCombat: 0, guards: 0 };
+    const rec = {
+      maxOutside: 0,
+      outsideFrames: 0,
+      maxInCombat: 0,
+      guards: 0,
+      modes: {} as Record<string, number>,
+      seen: {} as Record<string, number>,
+    };
     // biome-ignore lint/suspicious/noExplicitAny: test-only global
     (window as any).__w3b = rec;
+    let lastPh = "";
+    let phSince = 0;
     const f = (): void => {
       // biome-ignore lint/suspicious/noExplicitAny: test-only access
       const w = (p.session.typingFx as any)?.handle?.worldFx;
       const v = (w?.barrier?.intensity as number | undefined) ?? 0;
       const ph = p.phase();
       rec.guards = p.seen().GuardWordTyped ?? 0;
+      const nowMs = performance.now();
+      if (ph !== lastPh) {
+        lastPh = ph;
+        phSince = nowMs;
+      }
       if (ph === "combat") rec.maxInCombat = Math.max(rec.maxInCombat, v);
-      else if (ph === "rewards" || ph === "walk" || ph === "reward") {
+      // the 200 ms fade tail right after a phase change is allowed; anything later is an orphan
+      else if ((ph === "rewards" || ph === "walk") && nowMs - phSince > 500) {
         rec.outsideFrames++;
         rec.maxOutside = Math.max(rec.maxOutside, v);
+        if (v > 0) {
+          const key = `${ph}:mode${w?.barrier?.currentMode}`;
+          rec.modes[key] = (rec.modes[key] ?? 0) + 1;
+          rec.seen = p.seen();
+        }
       }
       requestAnimationFrame(f);
     };

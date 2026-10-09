@@ -274,7 +274,7 @@ export class RewardFx {
         .color2(st.beamCore[0], st.beamCore[1], st.beamCore[2])
         .at(this.x, 7.2, this.z - 0.1)
         .size(st.width * (1 + wob), 14.4)
-        .intensity(st.beam * k * g * (0.5 + 0.5 * kit.glare));
+        .intensity(st.beam * k * g * kit.glare);
       this.halo
         .color(st.beamCol[0] * 0.6, st.beamCol[1] * 0.6, st.beamCol[2] * 0.6)
         .color2(st.beamCol[0] * 0.4, st.beamCol[1] * 0.4, st.beamCol[2] * 0.4)

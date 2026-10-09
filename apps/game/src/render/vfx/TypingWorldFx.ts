@@ -188,6 +188,10 @@ export class TypingWorldFx {
         } else if (e.to === 0) {
           this.aura.gutter(this.view?.comboMode === "zen" ? 4 : 8);
           this.downIn = -1;
+        } else if (e.to < e.from) {
+          // a one-tier typo drop (0 < to < from): a soft dim, much weaker than the break-to-0 gutter
+          this.aura.stepDown(e.to);
+          this.downIn = -1;
         } else this.aura.setStreakTier(e.to, false);
         break;
       case "ComboTierChanged":
