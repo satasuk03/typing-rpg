@@ -83,7 +83,7 @@ export type HudNotice =
     }
   | { type: "plateRemoved"; plateId: number; reason: string; rect: Rect | null }
   | { type: "atbFilled"; anchor: { x: number; y: number } }
-  | { type: "tierChanged"; which: "combo" | "keyStreak"; to: number };
+  | { type: "tierChanged"; which: "combo" | "keyStreak"; to: number; from?: number };
 
 export interface HudDebugPlate {
   id: number;
@@ -140,6 +140,8 @@ interface Ghost {
 const FRAME_SAMPLES = 240;
 /** Boss BREAK pop: max design-px distance of its centre from the boss head anchor. */
 const BOSS_BREAK_MAX_DIST = 160;
+/** Any other enemy's BREAK pop: preferred max distance from its head. */
+const BREAK_MAX_DIST = 200;
 
 export class Hud {
   readonly fx = new EffectLayers();
@@ -293,8 +295,8 @@ export class Hud {
     };
   }
   /** Key-streak tier flash (the TypingHudFx fires it on the tier-up downbeat). */
-  triggerTierFlash(): void {
-    this.tierFlash = 1;
+  triggerTierFlash(strength = 1): void {
+    this.tierFlash = Math.max(this.tierFlash, strength);
   }
   /** Screen-edge typo vignette with an explicit peak alpha (spec caps: 0.25 / 0.35 guard / 0.12 stray). */
   flashTypoVignette(alpha: number): void {
@@ -651,8 +653,9 @@ export class Hud {
         this.emit({ type: "tierChanged", which: "combo", to: e.to });
         break;
       case "KeyStreakTierChanged":
-        if (!this.typingFxAttached) this.tierFlash = 1;
-        this.emit({ type: "tierChanged", which: "keyStreak", to: e.to });
+        // a typo drops ONE tier (interfaces v1.7 §3.3): to < from with to > 0 is a subtle step-down, never a tier-up flash
+        if (!this.typingFxAttached) this.tierFlash = e.to > e.from ? 1 : e.to > 0 ? 0.25 : 0;
+        this.emit({ type: "tierChanged", which: "keyStreak", to: e.to, from: e.from });
         break;
       default:
         break;
@@ -1036,10 +1039,12 @@ export class Hud {
         bossAlive &&
         p.anchor.kind === "enemy" &&
         p.anchor.id === view?.boss?.enemyId;
-      const head = bossBreak ? this.popAnchorCss(p.anchor) : null;
+      // other enemies: the same rule with a looser limit, and an unconstrained retry instead of the under-bar drop
+      const head =
+        p.kind === "break" && p.anchor.kind === "enemy" ? this.popAnchorCss(p.anchor) : null;
+      let maxD = bossBreak ? BOSS_BREAK_MAX_DIST : BREAK_MAX_DIST;
       const near = (r: Rect): boolean =>
-        !head ||
-        Math.hypot(r.x + r.w / 2 - head.x / s, r.y + r.h / 2 - head.y / s) <= BOSS_BREAK_MAX_DIST;
+        !head || Math.hypot(r.x + r.w / 2 - head.x / s, r.y + r.h / 2 - head.y / s) <= maxD;
       const ok = (r: Rect): boolean =>
         near(r) &&
         r.x >= 4 &&
@@ -1058,7 +1063,13 @@ export class Hud {
           p.offY = best.y;
         }
       }
-      if (Number.isNaN(p.offX) && head) {
+      if (Number.isNaN(p.offX) && head && !bossBreak) {
+        maxD = Number.POSITIVE_INFINITY;
+        const best = this.freeSpot(base, [...obst, ...placed], ok);
+        p.offX = best.x;
+        p.offY = best.y;
+      }
+      if (Number.isNaN(p.offX) && bossBreak) {
         // fallback: directly under the boss bar (below its +22 px clearance), if no plate is there
         const bp = bossPlateRect(this.W);
         const r: Rect = {

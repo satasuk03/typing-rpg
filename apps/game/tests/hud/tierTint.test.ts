@@ -99,3 +99,17 @@ describe("tint application rules", () => {
     expect(FILL.every((s) => typeof s === "string" && s.startsWith("#"))).toBe(true);
   });
 });
+
+describe("typo step-down (interfaces v1.7 3.3): 4 -> 3 is a re-tint, not a tier-up", () => {
+  it("setTier(lower non-zero) cross-fades to that tier's tint and spawns no tier-up ring", async () => {
+    const { StreakTierFx } = await import("../../src/hud/fx/typing/tierFx");
+    const fx = new StreakTierFx();
+    fx.snapTier(4);
+    fx.setTier(3);
+    expect(fx.tier).toBe(3);
+    expect(fx.fading).toBe(true);
+    expect(fx.rings.count).toBe(0);
+    expect(fx.tintFor("word")).toEqual(blendTints(4, 3, 0));
+    expect(tintFor(3, "word")).not.toBeNull();
+  });
+});

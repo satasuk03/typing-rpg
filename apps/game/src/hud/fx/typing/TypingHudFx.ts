@@ -407,7 +407,11 @@ export class TypingHudFx {
       this.tierFx.tierUp(to, R, this.sparks, this.env, hud.getSettings().reducedFlash);
       if (id >= 0 && !hud.getSettings().reducedFlash && hud.getSettings().effectsIntensity > 0)
         hud.plateFx.flashBorder(id, 60, 200);
-    } else this.tierFx.setTier(to);
+    } else {
+      // typo step-down: re-tint to the lower tier (cross-fade) with a brief subtle pulse, no tier-up burst
+      this.tierFx.setTier(to);
+      if (to > 0 && !hud.getSettings().reducedFlash) hud.triggerTierFlash(0.25);
+    }
   }
 
   /**
