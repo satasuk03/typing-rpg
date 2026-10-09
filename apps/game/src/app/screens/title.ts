@@ -59,6 +59,7 @@ export function titleScreen(app: App, _arg: ScreenArg): Screen {
   actions(root, {
     continue: () => {
       app.sfx("uiConfirm");
+      if (!progress && app.beginFirstRun()) return;
       app.go("map", {});
     },
     new: () => confirmNew(app),
@@ -90,7 +91,7 @@ function confirmNew(app: App): void {
     erase: () => {
       app.store.reset();
       close();
-      app.go("map", {});
+      if (!app.beginFirstRun()) app.go("map", {});
     },
   });
 }

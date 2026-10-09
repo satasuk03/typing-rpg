@@ -1,7 +1,7 @@
 /**
  * Real-game boot (the default route): fonts, net layer, save store, audio, then the title screen.
  * Query flags (all optional, mainly for tests): `api=off|<url>`, `wpm-bot=75[&bot-acc=..&bot-seed=..]`, `tier=0|1|2`,
- * `audio=0`, `fonts=0`, `dev=1` (exposes `__grant`), `screen=<name>` (start on a screen).
+ * `audio=0`, `fonts=0`, `onboard=0` (no first-run flow), `dev=1` (exposes `__grant`), `screen=<name>` (start on a screen).
  */
 import { AudioEngine } from "../audio";
 import { loadHudFonts } from "../hud/fonts";
@@ -11,6 +11,7 @@ import { createNet, type Net } from "../net";
 import { isQualityTier, type QualityTier } from "../render";
 import { App, type ScreenName } from "./app";
 import { cacheScreen } from "./screens/cache";
+import { calibrateScreen } from "./screens/calibrate";
 import { completeScreen } from "./screens/complete";
 import { inventoryScreen } from "./screens/inventory";
 import { journalScreen } from "./screens/journal";
@@ -18,6 +19,7 @@ import { loadoutScreen } from "./screens/loadout";
 import { mapScreen } from "./screens/map";
 import { readQuality, settingsScreen } from "./screens/settings";
 import { shopScreen } from "./screens/shop";
+import { storyScreen } from "./screens/story";
 import { titleScreen } from "./screens/title";
 
 export interface DevHooks {
@@ -82,6 +84,7 @@ export async function start(
     audio,
     fonts,
     tier,
+    onboarding: q.get("onboard") !== "0",
     bot:
       botWpm === undefined
         ? undefined
@@ -96,6 +99,8 @@ export async function start(
       journal: journalScreen,
       settings: settingsScreen,
       complete: completeScreen,
+      story: storyScreen,
+      calibrate: calibrateScreen,
     },
   });
   app.consoleErrors = consoleErrors;

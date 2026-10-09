@@ -45,7 +45,7 @@ export interface RenderActions {
 
 /** DOM overlay hooks (screens.ts). */
 export interface UiActions {
-  hint(text: string, sec: number): void;
+  hint(text: string, sec: number, cue?: "target" | "atb" | "combo" | "skill" | "guard"): void;
   secondWind(on: boolean): void;
 }
 
@@ -131,7 +131,7 @@ export const BINDINGS: BindingTable = {
   LevelCleared: b("LevelCleared"),
   LevelFailed: b("LevelFailed", { render: (_e, c) => c.render.slowMo(0.3, 1.2) }),
   TutorialCue: b("TutorialCue", {
-    render: (e, c) => c.ui.hint(TUTORIAL_TEXT[e.cue], 6),
+    render: (e, c) => c.ui.hint(TUTORIAL_TEXT[e.cue], 6, e.cue),
   }),
 
   // ---- plates & typing (HUD + typing VFX hook) ----

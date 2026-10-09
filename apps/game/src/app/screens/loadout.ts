@@ -4,6 +4,7 @@ import { gearDef, heroStatsOf, instanceOf } from "../../meta/ops";
 import type { App, Screen, ScreenArg } from "../app";
 import { actions, el, esc, header, stat } from "../dom";
 import { iconHtml } from "../icons";
+import { fillSkillText } from "../skillText";
 
 const SLOT_LABEL = { weapon: "Weapon", armor: "Armor", charm: "Charm" } as const;
 
@@ -22,22 +23,7 @@ export function loadoutScreen(app: App, arg: ScreenArg): Screen {
   root.append(body);
   let focusKey = (arg.focus as string | undefined) ?? "";
 
-  /** Skill text placeholders are filled from BALANCE by the sim side later; until then they read as plain words. */
-  const fill = (text: string, _id: string): string =>
-    text
-      .replace(/\{dmg\} of your ATK/g, "heavy damage")
-      .replace(/\{secs\} s\b/g, "a few seconds")
-      .replace(/\{(\w+)\}/g, (_m, k: string) =>
-        k === "dmg"
-          ? "heavy damage"
-          : k === "charge"
-            ? "a few"
-            : k === "secs"
-              ? "a few seconds"
-              : k === "heal"
-                ? "a good amount"
-                : "several",
-      );
+  const fill = fillSkillText;
 
   const draw = (): void => {
     const s = app.store.save;
@@ -74,7 +60,7 @@ export function loadoutScreen(app: App, arg: ScreenArg): Screen {
         return `<button class="hd-item" data-act="pick-passive" data-slot="${i}" data-key="p-${i}">
           ${d ? iconHtml(d.iconId, { alt: d.name }) : `<span class="hd-ico plain empty"></span>`}
           <span class="grow"><span class="hd-eyebrow">Passive ${i + 1}${d ? ` &middot; ${d.tag}` : ""}</span><br><span class="nm">${d ? esc(d.name) : "Empty"}</span><br>
-          <span class="hd-dim">${d ? esc(d.description) : "Choose a passive"}</span></span></button>`;
+          <span class="hd-dim">${d ? esc(fill(d.description, d.id)) : "Choose a passive"}</span></span></button>`;
       })
       .join("");
     body.innerHTML = `
@@ -105,7 +91,7 @@ export function loadoutScreen(app: App, arg: ScreenArg): Screen {
       opts.push({
         id: d.id,
         name: d.name,
-        text: kind === "active" ? fill(d.description, d.id) : d.description,
+        text: fill(d.description, d.id),
         icon: "iconId" in d ? d.iconId : "",
         locked: unlocked ? undefined : `Clear level ${lv?.index ?? "?"} to unlock`,
       });
