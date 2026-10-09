@@ -102,7 +102,7 @@ export const LbTrialQuery = z.object({
 });
 export const LbEntry = z.object({
   rank: z.number().int().positive(),
-  userId: z.string(),
+  publicId: z.string(), // random public id (users.public_id); never the internal user id
   displayName: z.string(),
   wpmX100: z.number().int(),
   accuracyBp: z.number().int(),

@@ -15,14 +15,15 @@ import { Hono } from "hono";
 import type { NewFlag, RunRow, RunTransition } from "../db/index.ts";
 import {
   createRun,
-  getLeaderboardEntry,
   getRun,
-  leaderboardMe,
+  hasOpenFlag,
+  insertFlag,
   persistRunResult,
   predictRank,
+  runCounters,
 } from "../db/index.ts";
 import { rebuildAllTopCaches } from "../lib/cache.ts";
-import { hmacB64Url, hmacVerifyB64Url, randomToken, randomU32, sha256Hex } from "../lib/crypto.ts";
+import { deriveSeed, hmacB64Url, hmacVerifyB64Url, randomToken, sha256Hex } from "../lib/crypto.ts";
 import { BOARD_ID, type Env, periodKeyFor, readAcConfig } from "../lib/env.ts";
 import { ApiError, STATUS_OF } from "../lib/errors.ts";
 import { analyzeTiming, type KeyRec } from "../lib/heuristics.ts";
@@ -30,10 +31,12 @@ import {
   type AppEnv,
   authenticate,
   type Ctx,
+  defer,
   parseBody,
   rateLimit,
   secretOf,
 } from "../lib/http.ts";
+import { rankOfBest, standingOf } from "../lib/standing.ts";
 
 export const runRoutes = new Hono<AppEnv>();
 
@@ -83,13 +86,38 @@ runRoutes.post("/start", async (c) => {
   if (!trial) throw new ApiError("internal", "no trial content");
   const cfg = readAcConfig(c.env);
   const now = c.get("deps").now();
+  const periodKey = periodKeyFor(c.env, "season");
+  // M1: the passage is a fixed per-user, per-season sequence: seed = HMAC(TICKET_SECRET, user|season|n) where n counts
+  // SUBMITTED runs. Abandoned/expired tickets do not advance n, so abandoning never rerolls the passage.
+  const counters = await runCounters(c.env.DB, { userId: user.sub, periodKey });
+  const seed = await deriveSeed(
+    secretOf(c.env, "TICKET_SECRET"),
+    user.sub,
+    periodKey,
+    counters.consumed,
+  );
+  if (
+    counters.total >= cfg.abandonMinTickets &&
+    counters.abandoned / counters.total > cfg.abandonMaxRate &&
+    !(await hasOpenFlag(c.env.DB, { userId: user.sub, reasonCode: "abandon_rate" }))
+  ) {
+    await insertFlag(c.env.DB, {
+      id: crypto.randomUUID(),
+      runId: null,
+      userId: user.sub,
+      reasonCode: "abandon_rate",
+      severity: "review",
+      detailsJson: JSON.stringify({ ...counters, periodKey, maxRate: cfg.abandonMaxRate }),
+      now,
+    });
+  }
   const row = {
     id: crypto.randomUUID(),
     user_id: user.sub,
     mode: body.mode,
     board_id: body.boardId,
     trial_id: trial.id,
-    seed: randomU32(),
+    seed,
     issued_at: now,
     expires_at: now + cfg.runTtlMs,
     sim_version: SIM_VERSION as number,
@@ -109,6 +137,7 @@ runRoutes.post("/start", async (c) => {
     simVersion: row.sim_version,
     contentVersion: row.content_version,
     sig,
+    periodKey,
   });
   return c.json({
     runId: row.id,
@@ -328,40 +357,25 @@ runRoutes.post("/submit", async (c) => {
   const flagged = ranked && hits.length > 0;
 
   const submitNonce = randomToken(16);
-  const seasonKey = periodKeyFor(c.env, "season");
-  const periods = [seasonKey, periodKeyFor(c.env, "all")];
-  const lbStatus = flagged ? "flagged" : "ok";
-  const existingBy: Record<string, Awaited<ReturnType<typeof getLeaderboardEntry>>> = {};
+  const seasonKey = run.period_key ?? periodKeyFor(c.env, "season"); // L7: credit the period the ticket was issued in
+  const allKey = periodKeyFor(c.env, "all");
+  const periods = [seasonKey, allKey];
+  const standings: Record<string, Awaited<ReturnType<typeof standingOf>>> = {};
   for (const p of periods) {
-    existingBy[p] = await getLeaderboardEntry(db, {
-      boardId: BOARD_ID,
-      periodKey: p,
-      userId: user.sub,
-    });
+    standings[p] = await standingOf(db, { boardId: BOARD_ID, periodKey: p, userId: user.sub });
   }
-  const wouldReplace = (ex: (typeof existingBy)[string]): boolean => {
-    if (!ex) return true;
-    if (ex.status === "removed") return false;
-    if (lbStatus === "ok") return ex.status === "flagged" || verified.score > ex.score;
-    return ex.status === "flagged" && verified.score > ex.score;
-  };
-  const seasonEx = existingBy[seasonKey] ?? null;
+  // H1: pb/rank are computed from the owner's EFFECTIVE best (public row or shadow row) and never look at whether
+  // this run is flagged, so a flagged and an ok submission with the same score get byte-identical answers.
+  const seasonSt = standings[seasonKey] as Awaited<ReturnType<typeof standingOf>>;
+  const rankQ = { boardId: BOARD_ID, periodKey: seasonKey, userId: user.sub };
   let pb = false;
   let rank: number | null = null;
-  if (ranked) {
-    pb = wouldReplace(seasonEx);
+  if (ranked && seasonSt.kind !== "removed") {
+    pb = seasonSt.kind === "none" || verified.score > seasonSt.best.score;
     if (pb) {
-      rank = await predictRank(db, {
-        boardId: BOARD_ID,
-        periodKey: seasonKey,
-        userId: user.sub,
-        score: verified.score,
-        achievedAt: now,
-      });
-    } else if (seasonEx && seasonEx.status !== "removed") {
-      rank =
-        (await leaderboardMe(db, { boardId: BOARD_ID, periodKey: seasonKey, userId: user.sub }))
-          ?.rank ?? null;
+      rank = await predictRank(db, { ...rankQ, score: verified.score, achievedAt: now });
+    } else if (seasonSt.kind === "best") {
+      rank = await rankOfBest(db, rankQ, seasonSt.best);
     }
   }
 
@@ -386,7 +400,8 @@ runRoutes.post("/submit", async (c) => {
       });
     }
   }
-  const prevAll = existingBy[periodKeyFor(c.env, "all")];
+  const allSt = standings[allKey];
+  const prevAll = allSt?.kind === "best" ? allSt.best : null;
   if (ranked && prevAll && verified.wpmX100 - prevAll.wpm_x100 >= cfg.pbJumpReviewWpm * 100) {
     flags.push({
       id: crypto.randomUUID(),
@@ -425,17 +440,30 @@ runRoutes.post("/submit", async (c) => {
   // 9. one batch: conditional UPDATE ... WHERE status='open' + nonce-guarded writes
   const won = await persistRunResult(db, {
     transition,
-    leaderboard: ranked
-      ? periods.map((periodKey) => ({
-          boardId: BOARD_ID,
-          periodKey,
-          userId: user.sub,
-          wpmX100,
-          accuracyBp,
-          achievedAt: now,
-          status: lbStatus,
-        }))
-      : [],
+    // ok runs feed the public board; flagged runs feed the owner-only shadow table (never the public one).
+    leaderboard:
+      ranked && !flagged
+        ? periods.map((periodKey) => ({
+            boardId: BOARD_ID,
+            periodKey,
+            userId: user.sub,
+            wpmX100,
+            accuracyBp,
+            achievedAt: now,
+            status: "ok" as const,
+          }))
+        : [],
+    shadow:
+      ranked && flagged
+        ? periods.map((periodKey) => ({
+            boardId: BOARD_ID,
+            periodKey,
+            userId: user.sub,
+            wpmX100,
+            accuracyBp,
+            achievedAt: now,
+          }))
+        : [],
     replay:
       ranked && (flagged || (pb && rank !== null && rank <= REPLAY_KEEP_RANK))
         ? { logB64: body.log, expiresAt: now + REPLAY_TTL_MS }
@@ -448,12 +476,10 @@ runRoutes.post("/submit", async (c) => {
     if (!cur) throw new ApiError("internal", "run vanished");
     return replayResponse(cur, logHash);
   }
-  if (!flagged && pb && rank !== null && rank <= TOP_N) {
-    try {
-      await rebuildAllTopCaches(c.env as Env, now);
-    } catch (e) {
-      console.error("top-100 cache rebuild failed", e); // the 60 s cron will retry
-    }
+  // H1(c): the condition depends only on pb/rank (identical for flagged and ok runs) and the rebuild is always
+  // deferred, so neither the work done nor the response time reveals the shadow flag.
+  if (pb && rank !== null && rank <= TOP_N) {
+    await defer(c, rebuildAllTopCaches(c.env as Env, now));
   }
   return c.json(responseBody);
 });

@@ -58,6 +58,12 @@ PK `id`; `reason_code`, `severity` (info/review/shadow), `details` JSON (heurist
 ### gem_ledger, purchases (0005; empty in the slice)
 `gem_ledger`: append-only signed movements (`bucket` paid/free, `delta <> 0`), UNIQUE `idempotency_key`, triggers abort UPDATE/DELETE. Indexes `(user_id, created_at)` (history/balance) and `(source_type, source_id)` (audit by purchase/reward). `purchases`: UNIQUE `provider_ref` (webhook dedupe), index `(user_id, created_at)`.
 
+## Security-review additions (0006, 0007)
+- `devices.device_secret_hash` (0006): sha256 of the client's 256-bit device secret; `/auth/anon` for a known device id needs the matching secret.
+- `users.public_id` (0007, unique): random id shown on leaderboards instead of `users.id`.
+- `runs.period_key` (0007): season key fixed at `/runs/start`; the run is credited to it at submit. The per-user ticket sequence (`n`) is the count of `accepted|flagged|rejected` runs for (user, period).
+- `leaderboard_shadow` (0007): owner-only best of FLAGGED runs per board-period. `leaderboard_entries` only receives `ok` runs now (and moderation `removed`). pb/rank for the owner use the better of the two rows, so the shadow flag is not observable from responses.
+
 ## Notes
 - Doc 03's double-entry ledger (accounts/tx/entries) was simplified to a single append-only `gem_ledger` per the T5.1 brief; a later migration may add accounts without rewriting this one.
 - Blobs/logs are base64 TEXT, not BLOB: D1 returns BLOB columns as number arrays, and the wire format is already base64.

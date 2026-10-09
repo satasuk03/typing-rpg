@@ -16,10 +16,25 @@ export type AppEnv = {
 };
 export type Ctx = Context<AppEnv>;
 
+const MIN_SECRET_CHARS = 32;
+
+/** L3: both secrets present, >= 32 chars, distinct, and no dev-only- placeholder outside ENV=local. */
 export function secretOf(env: Env, name: "JWT_SECRET" | "TICKET_SECRET"): string {
-  const v = env[name];
-  if (!v) throw new ApiError("internal", `${name} is not configured`);
-  return v;
+  const jwt = env.JWT_SECRET;
+  const ticket = env.TICKET_SECRET;
+  const bad = (why: string) => new ApiError("internal", `server misconfigured: ${why}`);
+  for (const [n, v] of [
+    ["JWT_SECRET", jwt],
+    ["TICKET_SECRET", ticket],
+  ] as const) {
+    if (!v) throw bad(`${n} is not configured`);
+    if (v.length < MIN_SECRET_CHARS) throw bad(`${n} must be at least ${MIN_SECRET_CHARS} chars`);
+    if (v.startsWith("dev-only-") && env.ENV !== "local") {
+      throw bad(`${n} is a dev placeholder (only allowed with ENV=local)`);
+    }
+  }
+  if (jwt === ticket) throw bad("JWT_SECRET and TICKET_SECRET must differ");
+  return (name === "JWT_SECRET" ? jwt : ticket) as string;
 }
 
 /** Bearer auth. `required: false` yields null when no Authorization header is present (a bad token still 401s). */
@@ -61,8 +76,12 @@ export async function parseBody<T>(
   maxChars: number,
   pre?: (raw: unknown) => void,
 ): Promise<T> {
-  const text = await c.req.text();
-  if (text.length > maxChars) throw new ApiError("payload_too_large", "request body too large");
+  // L1: refuse on Content-Length before reading anything, and cap chunked bodies while streaming.
+  const declared = Number(c.req.header("Content-Length") ?? "0");
+  if (Number.isFinite(declared) && declared > maxChars) {
+    throw new ApiError("payload_too_large", "request body too large");
+  }
+  const text = await readCapped(c.req.raw.body, maxChars);
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -74,4 +93,42 @@ export async function parseBody<T>(
   if (!r.success)
     throw new ApiError("bad_request", "invalid request body", r.error.issues.slice(0, 5));
   return r.data;
+}
+
+/** Reads a request body as UTF-8 text, aborting once more than `maxBytes` have arrived. */
+async function readCapped(
+  body: ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+): Promise<string> {
+  if (!body) return "";
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new ApiError("payload_too_large", "request body too large");
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(total);
+  let o = 0;
+  for (const ch of chunks) {
+    all.set(ch, o);
+    o += ch.length;
+  }
+  return new TextDecoder().decode(all);
+}
+
+/** Schedule background work after the response (waitUntil); where no ExecutionContext exists (unit tests) await it. */
+export async function defer(c: Ctx, work: Promise<unknown>): Promise<void> {
+  const safe = work.catch((e) => console.error("deferred task failed", e));
+  try {
+    c.executionCtx.waitUntil(safe);
+  } catch {
+    await safe;
+  }
 }

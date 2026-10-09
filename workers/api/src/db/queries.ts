@@ -30,14 +30,23 @@ export function insertUserStmt(
     friendCode: string;
     ageBand?: UserRow["age_band"];
     region?: string | null;
+    publicId?: string | null;
     now: number;
   },
 ): D1PreparedStatement {
   return db
     .prepare(
-      "INSERT INTO users (id, display_name, friend_code, age_band, region, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+      "INSERT INTO users (id, display_name, friend_code, age_band, region, created_at, public_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     )
-    .bind(u.id, u.displayName, u.friendCode, u.ageBand ?? "unknown", u.region ?? null, u.now);
+    .bind(
+      u.id,
+      u.displayName,
+      u.friendCode,
+      u.ageBand ?? "unknown",
+      u.region ?? null,
+      u.now,
+      u.publicId ?? null,
+    );
 }
 
 export function insertDeviceStmt(
@@ -82,13 +91,25 @@ export function getUserById(db: D1Database, userId: string): Promise<UserRow | n
 export function getLeaderboardEntry(
   db: D1Database,
   q: { boardId: string; periodKey: string; userId: string },
-): Promise<{ score: number; wpm_x100: number; status: LbStatus } | null> {
+): Promise<{
+  score: number;
+  wpm_x100: number;
+  accuracy_bp: number;
+  achieved_at: number;
+  status: LbStatus;
+} | null> {
   return db
     .prepare(
-      "SELECT score, wpm_x100, status FROM leaderboard_entries WHERE board_id = ?1 AND period_key = ?2 AND user_id = ?3",
+      "SELECT score, wpm_x100, accuracy_bp, achieved_at, status FROM leaderboard_entries WHERE board_id = ?1 AND period_key = ?2 AND user_id = ?3",
     )
     .bind(q.boardId, q.periodKey, q.userId)
-    .first<{ score: number; wpm_x100: number; status: LbStatus }>();
+    .first<{
+      score: number;
+      wpm_x100: number;
+      accuracy_bp: number;
+      achieved_at: number;
+      status: LbStatus;
+    }>();
 }
 
 /** 1 + the number of OTHER users' 'ok' rows that would rank ahead of `score` achieved at `achievedAt`. */
@@ -137,18 +158,20 @@ export function insertRefreshTokenStmt(
 }
 
 export type RotateResult =
-  | { status: "ok"; userId: string; deviceId: string | null; familyId: string }
+  | { status: "ok"; userId: string; deviceId: string | null; familyId: string; graceReplay?: true }
   | { status: "invalid" } // unknown or expired -> 401 refresh_invalid
   | { status: "reused" }; // already rotated/revoked -> family revoked -> 401 refresh_reused
 
 /**
  * Exchange `oldHash` for `newHash` (same family). One batch = one transaction: mark the old token rotated
  * (only if still live) and insert the child guarded on that mark. Presenting an already-rotated or revoked
- * token revokes the whole family.
+ * token revokes the whole family, EXCEPT inside the grace window: the same parent presented again within `graceMs`
+ * of its rotation, asking for the same (deterministically derived) child, while that child is still unused and
+ * the family is live, is answered `ok` + `graceReplay` (a lost-response retry, not theft).
  */
 export async function rotateRefreshToken(
   db: D1Database,
-  a: { oldHash: string; newHash: string; now: number; expiresAt: number },
+  a: { oldHash: string; newHash: string; now: number; expiresAt: number; graceMs?: number },
 ): Promise<RotateResult> {
   const mark = db
     .prepare(
@@ -160,7 +183,8 @@ export async function rotateRefreshToken(
     .prepare(
       `INSERT INTO refresh_tokens (token_hash, user_id, device_id, family_id, parent_hash, issued_at, expires_at)
        SELECT ?2, user_id, device_id, family_id, ?1, ?3, ?4 FROM refresh_tokens
-       WHERE token_hash = ?1 AND replaced_by = ?2 AND rotated_at = ?3`,
+       WHERE token_hash = ?1 AND replaced_by = ?2 AND rotated_at = ?3
+         AND NOT EXISTS (SELECT 1 FROM refresh_tokens WHERE token_hash = ?2)`,
     )
     .bind(a.oldHash, a.newHash, a.now, a.expiresAt);
   const [m] = await db.batch([mark, child]);
@@ -172,6 +196,32 @@ export async function rotateRefreshToken(
     return { status: "ok", userId: old.user_id, deviceId: old.device_id, familyId: old.family_id };
   }
   if (!old) return { status: "invalid" };
+  if (
+    a.graceMs !== undefined &&
+    old.revoked_at === null &&
+    old.rotated_at !== null &&
+    a.now - old.rotated_at <= a.graceMs &&
+    old.replaced_by === a.newHash
+  ) {
+    const child = await db
+      .prepare("SELECT * FROM refresh_tokens WHERE token_hash = ?1")
+      .bind(a.newHash)
+      .first<RefreshTokenRow>();
+    if (
+      child &&
+      child.rotated_at === null &&
+      child.revoked_at === null &&
+      child.expires_at > a.now
+    ) {
+      return {
+        status: "ok",
+        userId: old.user_id,
+        deviceId: old.device_id,
+        familyId: old.family_id,
+        graceReplay: true,
+      };
+    }
+  }
   if (old.rotated_at !== null || old.revoked_at !== null) {
     await revokeRefreshFamily(db, old.family_id, a.now);
     return { status: "reused" };
@@ -274,6 +324,7 @@ export interface NewRun {
   simVersion: number;
   contentVersion: string;
   sig: string;
+  periodKey?: string | null;
 }
 
 /** Abandon the user's previous open ticket (same mode) and insert the new one, atomically. */
@@ -286,8 +337,8 @@ export async function createRun(db: D1Database, r: NewRun): Promise<void> {
       .bind(r.userId, r.mode),
     db
       .prepare(
-        `INSERT INTO runs (id, user_id, mode, board_id, trial_id, seed, issued_at, expires_at, sim_version, content_version, sig)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+        `INSERT INTO runs (id, user_id, mode, board_id, trial_id, seed, issued_at, expires_at, sim_version, content_version, sig, period_key)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
       )
       .bind(
         r.id,
@@ -301,8 +352,43 @@ export async function createRun(db: D1Database, r: NewRun): Promise<void> {
         r.simVersion,
         r.contentVersion,
         r.sig,
+        r.periodKey ?? null,
       ),
   ]);
+}
+
+/**
+ * Per-user, per-period ticket counters (M1). `consumed` = runs that were actually submitted (any terminal verdict);
+ * abandoned/expired/open tickets do NOT advance it, so abandoning never rerolls the passage.
+ */
+export async function runCounters(
+  db: D1Database,
+  q: { userId: string; periodKey: string },
+): Promise<{ consumed: number; abandoned: number; total: number }> {
+  const r = await db
+    .prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN status IN ('accepted','flagged','rejected') THEN 1 ELSE 0 END), 0) AS consumed,
+         COALESCE(SUM(CASE WHEN status IN ('abandoned','expired') THEN 1 ELSE 0 END), 0) AS abandoned,
+         COUNT(*) AS total
+       FROM runs WHERE user_id = ?1 AND mode = 'trial' AND period_key = ?2`,
+    )
+    .bind(q.userId, q.periodKey)
+    .first<{ consumed: number; abandoned: number; total: number }>();
+  return r ?? { consumed: 0, abandoned: 0, total: 0 };
+}
+
+export async function hasOpenFlag(
+  db: D1Database,
+  q: { userId: string; reasonCode: string },
+): Promise<boolean> {
+  const r = await db
+    .prepare(
+      "SELECT 1 AS x FROM flags WHERE user_id = ?1 AND reason_code = ?2 AND review_state = 'open' LIMIT 1",
+    )
+    .bind(q.userId, q.reasonCode)
+    .first();
+  return r !== null;
 }
 
 export function getRun(db: D1Database, runId: string): Promise<RunRow | null> {
@@ -404,6 +490,83 @@ export function upsertLeaderboardStmt(db: D1Database, e: LbUpsert): D1PreparedSt
     );
 }
 
+export interface ShadowUpsert {
+  boardId: string;
+  periodKey: string;
+  userId: string;
+  runId: string;
+  wpmX100: number;
+  accuracyBp: number;
+  achievedAt: number;
+  submitNonce: string;
+}
+
+/** Owner-only best of FLAGGED runs (H1). Replaces only a lower score; guarded by the run's submit_nonce. */
+export function upsertShadowStmt(db: D1Database, e: ShadowUpsert): D1PreparedStatement {
+  const score = e.wpmX100 * 10_000 + e.accuracyBp;
+  return db
+    .prepare(
+      `INSERT INTO leaderboard_shadow (board_id, period_key, user_id, score, wpm_x100, accuracy_bp, run_id, achieved_at)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+       WHERE EXISTS (SELECT 1 FROM runs WHERE id = ?7 AND submit_nonce = ?9)
+       ON CONFLICT(board_id, period_key, user_id) DO UPDATE SET
+         score = excluded.score, wpm_x100 = excluded.wpm_x100, accuracy_bp = excluded.accuracy_bp,
+         run_id = excluded.run_id, achieved_at = excluded.achieved_at
+       WHERE excluded.score > leaderboard_shadow.score`,
+    )
+    .bind(
+      e.boardId,
+      e.periodKey,
+      e.userId,
+      score,
+      e.wpmX100,
+      e.accuracyBp,
+      e.runId,
+      e.achievedAt,
+      e.submitNonce,
+    );
+}
+
+export interface ShadowRow {
+  score: number;
+  wpm_x100: number;
+  accuracy_bp: number;
+  achieved_at: number;
+}
+
+export function getShadowEntry(
+  db: D1Database,
+  q: { boardId: string; periodKey: string; userId: string },
+): Promise<ShadowRow | null> {
+  return db
+    .prepare(
+      "SELECT score, wpm_x100, accuracy_bp, achieved_at FROM leaderboard_shadow WHERE board_id = ?1 AND period_key = ?2 AND user_id = ?3",
+    )
+    .bind(q.boardId, q.periodKey, q.userId)
+    .first<ShadowRow>();
+}
+
+/** Public ('ok') rows in rank order, skipping `excludeUserId`, for splicing the owner's shadow entry in (H1). */
+export async function leaderboardWindowOk(
+  db: D1Database,
+  q: {
+    boardId: string;
+    periodKey: string;
+    excludeUserId: string;
+    offset: number;
+    limit: number;
+  },
+): Promise<Omit<RankedEntry, "rank">[]> {
+  const r = await db
+    .prepare(
+      `${RANK_SELECT} WHERE e.board_id = ?1 AND e.period_key = ?2 AND e.status = 'ok' AND e.user_id <> ?3
+       ${ORDER} LIMIT ?4 OFFSET ?5`,
+    )
+    .bind(q.boardId, q.periodKey, q.excludeUserId, q.limit, q.offset)
+    .all<Omit<RankedEntry, "rank">>();
+  return r.results;
+}
+
 export function insertRunReplayStmt(
   db: D1Database,
   r: { runId: string; logB64: string; expiresAt: number; submitNonce: string },
@@ -426,6 +589,7 @@ export async function persistRunResult(
   a: {
     transition: RunTransition;
     leaderboard?: Omit<LbUpsert, "submitNonce" | "runId">[];
+    shadow?: Omit<ShadowUpsert, "submitNonce" | "runId">[];
     replay?: { logB64: string; expiresAt: number };
     flags?: Omit<NewFlag, "guard">[];
   },
@@ -434,6 +598,8 @@ export async function persistRunResult(
   const stmts: D1PreparedStatement[] = [transitionRunStmt(db, t)];
   for (const e of a.leaderboard ?? [])
     stmts.push(upsertLeaderboardStmt(db, { ...e, runId: t.runId, submitNonce: t.submitNonce }));
+  for (const e of a.shadow ?? [])
+    stmts.push(upsertShadowStmt(db, { ...e, runId: t.runId, submitNonce: t.submitNonce }));
   if (a.replay)
     stmts.push(
       insertRunReplayStmt(db, { runId: t.runId, submitNonce: t.submitNonce, ...a.replay }),
@@ -447,7 +613,7 @@ export async function persistRunResult(
 // ---------------------------------------------------------------- leaderboard reads
 
 const RANK_SELECT = `SELECT e.board_id, e.period_key, e.user_id, e.score, e.wpm_x100, e.accuracy_bp, e.run_id, e.status,
-  e.achieved_at, u.display_name FROM leaderboard_entries e JOIN users u ON u.id = e.user_id`;
+  e.achieved_at, u.display_name, u.public_id FROM leaderboard_entries e JOIN users u ON u.id = e.user_id`;
 const ORDER = "ORDER BY e.score DESC, e.achieved_at ASC, e.user_id ASC";
 
 /** Public top-N: 'ok' rows only. */

@@ -14,6 +14,13 @@ export interface Env {
   RL_AUTH?: RateLimitBinding;
   RL_SAVE?: RateLimitBinding;
   RL_RUN?: RateLimitBinding;
+  RL_LB?: RateLimitBinding;
+  /** "1" disables rate limiting (local/test only). Without it a missing binding is a hard error (fail closed). */
+  RATE_LIMIT_DISABLED?: string;
+  /** "local" permits the dev-only- placeholder secrets. */
+  ENV?: string;
+  /** Comma-separated CORS origin allowlist. Never reflected blindly; empty = no cross-origin access. */
+  ALLOWED_ORIGINS?: string;
   // [vars]
   SEASON_KEY?: string;
   [k: `AC_${string}`]: string | undefined;
@@ -36,6 +43,8 @@ export interface AcConfig {
   perfectMinWpm: number;
   pbJumpReviewWpm: number;
   minKeys: number;
+  abandonMinTickets: number;
+  abandonMaxRate: number;
 }
 
 const num = (v: string | undefined, d: number): number => {
@@ -62,6 +71,8 @@ export function readAcConfig(env: Partial<Env>): AcConfig {
     perfectMinWpm: num(env.AC_PERFECT_MIN_WPM, 150),
     pbJumpReviewWpm: num(env.AC_PB_JUMP_REVIEW_WPM, 35),
     minKeys: num(env.AC_MIN_KEYS, 20),
+    abandonMinTickets: num(env.AC_ABANDON_MIN_TICKETS, 8),
+    abandonMaxRate: num(env.AC_ABANDON_MAX_RATE, 0.5),
   };
 }
 

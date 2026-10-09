@@ -34,6 +34,8 @@ afterAll(async () => {
 });
 
 const dbOf = () => env.DB;
+const pub = async (u: { userId: string }): Promise<string> =>
+  (await dbOf().prepare("SELECT public_id p FROM users WHERE id=?1").bind(u.userId).first<J>()).p;
 const count = async (sql: string, ...b: unknown[]): Promise<number> =>
   (
     await dbOf()
@@ -304,7 +306,10 @@ describe("runs: submit", () => {
     const lb = await api("GET", "/lb/trial?scope=season&around=me", { token: u.token });
     expect(lb.status).toBe(200);
     expect(lb.body.periodKey).toBe("S1");
-    const mine = lb.body.top.find((e: J) => e.userId === u.userId);
+    const pid = await pub(u);
+    expect(pid).not.toBe(u.userId);
+    expect(JSON.stringify(lb.body)).not.toContain(u.userId); // internal id never leaks
+    const mine = lb.body.top.find((e: J) => e.publicId === pid);
     expect(mine.wpmX100).toBe(r.body.verified.wpmX100);
     expect(mine.isMe).toBe(true);
     expect(lb.body.me.rank).toBe(r.body.rank);
@@ -312,7 +317,7 @@ describe("runs: submit", () => {
     // anonymous callers get the top list, no `me`
     const anon = await api("GET", "/lb/trial?scope=all");
     expect(anon.body.me).toBeNull();
-    expect(anon.body.top.some((e: J) => e.userId === u.userId)).toBe(true);
+    expect(anon.body.top.some((e: J) => e.publicId === pid)).toBe(true);
     expect((await api("GET", "/lb/trial?around=me")).status).toBe(401);
     expect((await api("GET", "/lb/trial?scope=weird")).status).toBe(400);
   });
@@ -382,11 +387,13 @@ describe("runs: submit", () => {
       .bind(t.runId)
       .first<J>();
     expect(row.status).toBe("flagged");
-    const lbRow = await dbOf()
-      .prepare("SELECT status FROM leaderboard_entries WHERE user_id=?1 AND period_key='S1'")
-      .bind(u.userId)
-      .first<J>();
-    expect(lbRow.status).toBe("flagged");
+    // flagged runs live in the owner-only shadow table, never on the public board
+    expect(
+      await count("SELECT COUNT(*) n FROM leaderboard_entries WHERE user_id=?1", u.userId),
+    ).toBe(0);
+    expect(
+      await count("SELECT COUNT(*) n FROM leaderboard_shadow WHERE user_id=?1", u.userId),
+    ).toBe(2); // season + all
     const reasons = (
       await dbOf()
         .prepare("SELECT reason_code, severity FROM flags WHERE run_id=?1")
@@ -398,15 +405,19 @@ describe("runs: submit", () => {
     );
     expect(await count("SELECT COUNT(*) n FROM run_replays WHERE run_id=?1", t.runId)).toBe(1); // flagged runs keep their log
     // visible to the owner only
+    const pid = await pub(u);
     const owner = await api("GET", "/lb/trial?scope=season&around=me", { token: u.token });
-    expect(owner.body.me.userId).toBe(u.userId);
-    expect(owner.body.around.some((e: J) => e.userId === u.userId)).toBe(true);
+    expect(owner.body.me.publicId).toBe(pid);
+    expect(owner.body.me.isMe).toBe(true);
+    // H1(b): the owner sees their own flagged entry in `top` at its predicted rank
+    expect(owner.body.top.find((e: J) => e.publicId === pid)?.isMe).toBe(true);
+    expect(owner.body.around.some((e: J) => e.publicId === pid)).toBe(true);
     const other = await signup(api);
     const outsider = await api("GET", "/lb/trial?scope=season&around=me", { token: other.token });
-    expect(outsider.body.top.some((e: J) => e.userId === u.userId)).toBe(false);
+    expect(outsider.body.top.some((e: J) => e.publicId === pid)).toBe(false);
     expect(outsider.body.around ?? []).toEqual([]);
     const anon = await api("GET", "/lb/trial?scope=all");
-    expect(anon.body.top.some((e: J) => e.userId === u.userId)).toBe(false);
+    expect(anon.body.top.some((e: J) => e.publicId === pid)).toBe(false);
   });
 
   test("FORGED TIMING: perfectly constant IKIs (200 ms) -> flagged (iki_cv)", async () => {
@@ -613,6 +624,7 @@ describe("leaderboard cache (cron)", () => {
   test("rebuild writes the KV top-100 and /lb/trial serves it", async () => {
     const { u, sub } = await legitRun(101, 70);
     await submit(api, u.token, sub);
+    const pid = await pub(u);
     clock.t += 1000;
     await env.LB_CACHE.delete("lb:trial_wpm:S1");
     await env.LB_CACHE.delete("lb:trial_wpm:all");
@@ -621,7 +633,7 @@ describe("leaderboard cache (cron)", () => {
     expect(cached.updatedAt).toBe(clock.t);
     expect(cached.top.length).toBeGreaterThan(0);
     expect(cached.top.length).toBeLessThanOrEqual(100);
-    expect(cached.top.some((e: J) => e.userId === u.userId)).toBe(true);
+    expect(cached.top.some((e: J) => e.publicId === pid)).toBe(true);
     expect(cached.top.map((e: J) => e.rank)).toEqual(
       cached.top.map((_: unknown, i: number) => i + 1),
     );
@@ -634,11 +646,11 @@ describe("leaderboard cache (cron)", () => {
     expect(served.body.top.length).toBe(1);
     // around=me is live D1 regardless of the cache
     const around = await api("GET", "/lb/trial?scope=season&around=me", { token: u.token });
-    expect(around.body.around.some((e: J) => e.userId === u.userId)).toBe(true);
+    expect(around.body.around.some((e: J) => e.publicId === pid)).toBe(true);
     // cache miss falls back to a live build
     await env.LB_CACHE.delete("lb:trial_wpm:S1");
     const live = await api("GET", "/lb/trial?scope=season");
-    expect(live.body.top.some((e: J) => e.userId === u.userId)).toBe(true);
+    expect(live.body.top.some((e: J) => e.publicId === pid)).toBe(true);
   });
 
   test("cron sweep: expired open tickets -> expired; replays past TTL deleted; live ones kept", async () => {
