@@ -54,11 +54,21 @@ importers:
 
   packages/shared:
     dependencies:
+      '@hd2d/content':
+        specifier: workspace:*
+        version: link:../content
+      '@hd2d/sim':
+        specifier: workspace:*
+        version: link:../sim
       zod:
         specifier: ^4.6.5
         version: 4.6.5
 
-  packages/sim: {}
+  packages/sim:
+    dependencies:
+      '@hd2d/content':
+        specifier: workspace:*
+        version: link:../content
 
   tools/balance:
     devDependencies:

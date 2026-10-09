@@ -1,2 +1,11 @@
-// Placeholder. The sim kernel API is designed in docs/interfaces.md and built in T1.1.
-export { type Rng, sfc32 } from "./rng.ts";
+// Public API of @hd2d/sim (docs/interfaces.md §3).
+
+export * from "./api.ts";
+export * from "./errors.ts";
+export * from "./events.ts";
+export * from "./fixed.ts";
+export * from "./input.ts";
+export * from "./time.ts";
+export * from "./types.ts";
+export { SIM_VERSION } from "./version.ts";
+export * from "./view.ts";
