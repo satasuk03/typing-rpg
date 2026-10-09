@@ -4,6 +4,8 @@ For the next orchestrator session. Read this, then `docs/STATUS.md` (task table,
 
 ## Where things stand (2026-10-09)
 
+**Git:** all work is committed on local `main`; **nothing has been pushed** to `origin` (github.com/satasuk03/typing-rpg). Ask the PO before pushing. History contains ~26 MB of old PNG contact sheets (from commit 64b4ef0); a history rewrite before the first push would shrink it, but only with the PO's OK.
+
 **Every Definition-of-Done line in plan §1 is met on `main`:**
 
 | DoD line | Evidence |
