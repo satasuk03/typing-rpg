@@ -17,6 +17,12 @@ function boot(): void {
   const glCanvas = document.getElementById("gl") as HTMLCanvasElement;
   const hudCanvas = document.getElementById("hud") as HTMLCanvasElement;
 
+  // Dev-only route: ?scene=render-test renders the hard-coded diorama (src/dev/renderTestScene.ts).
+  if (new URLSearchParams(location.search).get("scene") === "render-test") {
+    void import("./dev/renderTestScene").then((m) => m.start(glCanvas));
+    return;
+  }
+
   const renderer = new WebGLRenderer({ canvas: glCanvas, antialias: false });
   renderer.setClearColor(0x080a12, 1);
   const scene = new Scene();
