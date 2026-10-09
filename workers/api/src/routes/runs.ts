@@ -1,6 +1,6 @@
 // POST /runs/start and POST /runs/submit: the anti-cheat pipeline of docs/interfaces.md §10.
 import { CONTENT_VERSION, contentBundle } from "@hd2d/content";
-import { RunStartRequest, RunSubmitRequest } from "@hd2d/shared";
+import { decodeLogWire, InflateError, RunStartRequest, RunSubmitRequest } from "@hd2d/shared";
 import type { TrialResim } from "@hd2d/sim";
 import {
   decodeTrialLog,
@@ -22,14 +22,7 @@ import {
   predictRank,
 } from "../db/index.ts";
 import { rebuildAllTopCaches } from "../lib/cache.ts";
-import {
-  fromB64,
-  hmacB64Url,
-  hmacVerifyB64Url,
-  randomToken,
-  randomU32,
-  sha256Hex,
-} from "../lib/crypto.ts";
+import { hmacB64Url, hmacVerifyB64Url, randomToken, randomU32, sha256Hex } from "../lib/crypto.ts";
 import { BOARD_ID, type Env, periodKeyFor, readAcConfig } from "../lib/env.ts";
 import { ApiError, STATUS_OF } from "../lib/errors.ts";
 import { analyzeTiming, type KeyRec } from "../lib/heuristics.ts";
@@ -132,39 +125,6 @@ runRoutes.post("/start", async (c) => {
 });
 
 // ---------------------------------------------------------------- submit helpers
-
-/** inflate(deflate-raw) with an output cap (zip-bomb guard). Throws LogError. */
-async function inflateRaw(bytes: Uint8Array, cap: number): Promise<Uint8Array> {
-  const ds = new DecompressionStream("deflate-raw");
-  const writer = ds.writable.getWriter();
-  writer.write(bytes).catch(() => {});
-  writer.close().catch(() => {});
-  const reader = ds.readable.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.length;
-      if (total > cap) {
-        await reader.cancel();
-        throw new LogError(`inflated log exceeds ${cap} bytes`);
-      }
-      chunks.push(value);
-    }
-  } catch (e) {
-    if (e instanceof LogError) throw e;
-    throw new LogError("log is not valid deflate-raw");
-  }
-  const out = new Uint8Array(total);
-  let o = 0;
-  for (const ch of chunks) {
-    out.set(ch, o);
-    o += ch.length;
-  }
-  return out;
-}
 
 /** Answer for a run that is no longer open (§10 step 2a): the stored response iff the same log, else 409. */
 function replayResponse(run: RunRow, logHash: string): Response {
@@ -289,10 +249,10 @@ runRoutes.post("/submit", async (c) => {
   // 5. decode (limits) + count + first dt + commands
   let decoded: ReturnType<typeof decodeTrialLog>;
   try {
-    decoded = decodeTrialLog(await inflateRaw(fromB64(body.log), MAX_LOG_BYTES));
+    decoded = decodeTrialLog(await decodeLogWire(body.log, MAX_LOG_BYTES));
     if (decoded.length !== body.eventCount) throw new LogError("count != eventCount");
   } catch (e) {
-    if (!(e instanceof LogError)) throw e;
+    if (!(e instanceof LogError || e instanceof InflateError)) throw e;
     return rejectTerminal(
       c,
       run,

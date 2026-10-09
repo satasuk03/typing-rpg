@@ -7,8 +7,13 @@ const B64 = z.base64();
 const Hex8 = z.string().regex(/^[0-9a-f]{8}$/);
 
 // POST /auth/anon            (rate 5/min/IP, Turnstile optional in slice)
+// deviceSecret: random 256-bit value (base64url, 43 chars) generated once at first launch and kept in IndexedDB.
+// The server stores only sha256(deviceSecret). Unknown deviceId -> account created. Known deviceId -> tokens only
+// if the secret matches (constant-time), else 401 unauthorized. The deviceId alone is NOT a credential.
+export const DeviceSecret = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 export const AuthAnonRequest = z.object({
   deviceId: z.uuid(),
+  deviceSecret: DeviceSecret,
   turnstileToken: z.string().optional(),
 });
 export const AuthTokens = z.object({

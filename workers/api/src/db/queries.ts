@@ -45,12 +45,30 @@ export function insertDeviceStmt(
   deviceId: string,
   userId: string,
   now: number,
+  secretHash: string | null = null,
 ): D1PreparedStatement {
   return db
     .prepare(
-      "INSERT INTO devices (device_id, user_id, created_at, last_seen_at) VALUES (?1, ?2, ?3, ?3)",
+      "INSERT INTO devices (device_id, user_id, created_at, last_seen_at, device_secret_hash) VALUES (?1, ?2, ?3, ?3, ?4)",
     )
-    .bind(deviceId, userId, now);
+    .bind(deviceId, userId, now, secretHash);
+}
+
+/** The device's owner plus the stored sha256(deviceSecret) hex (null for pre-0006 devices). */
+export async function getDeviceWithUser(
+  db: D1Database,
+  deviceId: string,
+): Promise<{ user: UserRow; secretHash: string | null } | null> {
+  const r = await db
+    .prepare(
+      `SELECT u.*, d.device_secret_hash AS device_secret_hash FROM devices d JOIN users u ON u.id = d.user_id
+       WHERE d.device_id = ?1 AND u.deleted_at IS NULL`,
+    )
+    .bind(deviceId)
+    .first<UserRow & { device_secret_hash: string | null }>();
+  if (!r) return null;
+  const { device_secret_hash, ...user } = r;
+  return { user, secretHash: device_secret_hash };
 }
 
 export function getUserById(db: D1Database, userId: string): Promise<UserRow | null> {

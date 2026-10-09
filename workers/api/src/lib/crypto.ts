@@ -20,10 +20,6 @@ export function fromB64Url(s: string): Uint8Array | null {
   }
 }
 
-export function fromB64(s: string): Uint8Array {
-  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-}
-
 export const hex = (bytes: ArrayBuffer | Uint8Array): string =>
   [...(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))]
     .map((b) => b.toString(16).padStart(2, "0"))

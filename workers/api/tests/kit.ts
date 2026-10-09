@@ -1,6 +1,7 @@
 // Test kit: an app bound to a real local D1/KV, a movable clock, and a generator of REAL keystroke logs
 // produced by driving @hd2d/sim (human-like jittered IKIs, a few typos).
 import { CONTENT_VERSION, contentBundle } from "@hd2d/content";
+import { encodeLogWire } from "@hd2d/shared";
 import {
   createTrial,
   encodeLog,
@@ -51,7 +52,9 @@ export type Client = ReturnType<typeof makeClient>;
 export async function signup(
   api: Client,
 ): Promise<{ token: string; refresh: string; userId: string }> {
-  const r = await api("POST", "/auth/anon", { body: { deviceId: crypto.randomUUID() } });
+  const r = await api("POST", "/auth/anon", {
+    body: { deviceId: crypto.randomUUID(), deviceSecret: newDeviceSecret() },
+  });
   if (r.status !== 200) throw new Error(`signup failed ${r.status} ${r.raw}`);
   return { token: r.body.accessToken, refresh: r.body.refreshToken, userId: r.body.userId };
 }
@@ -126,16 +129,13 @@ export function constantKeys(passage: string, ikiMs: number, maxKeys = 1500): Lo
   return out;
 }
 
-export async function deflateRawB64(bytes: Uint8Array): Promise<string> {
-  const cs = new CompressionStream("deflate-raw");
-  const w = cs.writable.getWriter();
-  w.write(bytes as BufferSource);
-  w.close();
-  const buf = new Uint8Array(await new Response(cs.readable).arrayBuffer());
-  let s = "";
-  for (const b of buf) s += String.fromCharCode(b);
-  return btoa(s);
-}
+export const deflateRawB64 = encodeLogWire;
+
+export const newDeviceSecret = (): string =>
+  btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
 
 export interface Submission {
   runId: string;
