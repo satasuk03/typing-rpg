@@ -6,7 +6,7 @@
 import { easeOutCubic, POOL_CAP, STREAK_STYLE, TIER_UP } from "../../../level/typingFxParams";
 import type { PlateTint } from "../../fx";
 import { perimPoint } from "../../plates";
-import type { GlowSprites } from "./glowSprites";
+import { drawHalo, type GlowSprites } from "./glowSprites";
 import { blendTints, FILL, hueBucket, I_BUCKET, TINT_KINDS, tintFor } from "./palette";
 import { HudPool } from "./pool";
 import { K_NOTE, K_RING, L_ABOVE, type RectLike, type SparkEnv, type SparkField } from "./sparks";
@@ -32,11 +32,11 @@ const RLW1 = 7;
 const RALPHA = 8;
 
 const PT = { x: 0, y: 0 };
-/** Back-glow tuned up from the spec (see the tuning log): wider pad and stronger alpha. */
 /** Embers 1.5x the spec rate (tuning log). */
 const EMBER_BOOST = 1.5;
-const BACKGLOW_PADS = [34, 22, 10];
-const BACKGLOW_STEP = [0.4, 0.65, 1.0];
+/** Halo reach (CSS px at scale 1) and alpha gain over the spec's backGlowAlpha (soft falloff needs more). */
+const HALO_EXT = 48;
+const HALO_ALPHA_GAIN = 3.6;
 
 export class StreakTierFx {
   /** Tier the visuals converge to. */
@@ -53,6 +53,8 @@ export class StreakTierFx {
   /** Plate the embers / back-glow hug, and its rect (CSS px). */
   readonly rect: RectLike = { x: 0, y: 0, w: 0, h: 0 };
   hasRect = false;
+  /** The plate the halo hugs still exists (the halo vanishes with a completed plate; embers linger). */
+  plateAlive = true;
 
   get fading(): boolean {
     return this.fadeAge < TIER_UP.fadeMs / 1000;
@@ -142,6 +144,33 @@ export class StreakTierFx {
     }
   }
 
+  /** Shockwave ring (behind layer). `delaySec` > 0 starts it later (negative age). */
+  addRing(
+    cx: number,
+    cy: number,
+    r0: number,
+    r1: number,
+    delaySec: number,
+    lifeSec: number,
+    lw0: number,
+    lw1: number,
+    alpha: number,
+    col: number,
+  ): void {
+    const rg = this.rings;
+    const ri = rg.spawn();
+    (rg.f[RCX] as Float32Array)[ri] = cx;
+    (rg.f[RCY] as Float32Array)[ri] = cy;
+    (rg.f[RR0] as Float32Array)[ri] = r0;
+    (rg.f[RR1] as Float32Array)[ri] = r1;
+    (rg.f[RAGE] as Float32Array)[ri] = -delaySec;
+    (rg.f[RLIFE] as Float32Array)[ri] = lifeSec;
+    (rg.f[RLW0] as Float32Array)[ri] = lw0;
+    (rg.f[RLW1] as Float32Array)[ri] = lw1;
+    (rg.f[RALPHA] as Float32Array)[ri] = alpha;
+    (rg.b[0] as Uint8Array)[ri] = col;
+  }
+
   private spawnEmber(env: SparkEnv): void {
     const r = this.rect;
     const rng = env.rng;
@@ -178,24 +207,40 @@ export class StreakTierFx {
     S: number,
     time: number,
     sprites: GlowSprites,
+    halos: GlowSprites,
     breathe: boolean,
     rmotion: boolean,
   ): void {
+    void sprites;
     c.globalCompositeOperation = "source-over";
-    if (this.bgA > 0.002 && this.hasRect) {
+    if (this.bgA > 0.002 && this.hasRect && this.plateAlive) {
+      // Soft 9-slice halo (pre-rendered sprites, no banding, no shadowBlur). Tier 4 adds a gentle
+      // prismatic shimmer: a second halo in a hue 120 degrees away breathes in and out, drifting.
       const r = this.rect;
       const br = breathe ? 1 + 0.2 * Math.sin(time * Math.PI * 2 * 0.8) : 1;
-      const idx = this.tier >= 4 && !rmotion ? I_BUCKET + hueBucket(time, 0) : this.tier;
-      // Three stepped, rounded halo layers (pixel-art banding) instead of one stretched radial sprite:
-      // the sprite's falloff was nearly invisible at the plate edge on bright worlds.
-      c.fillStyle = FILL[idx] as string;
-      const al = this.bgA * br;
-      for (let j = 0; j < 3; j++) {
-        const pad = (BACKGLOW_PADS[j] as number) * S;
-        c.globalAlpha = Math.min(1, al * (BACKGLOW_STEP[j] as number));
-        c.beginPath();
-        c.roundRect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad, pad * 0.9);
-        c.fill();
+      const al = Math.min(0.92, this.bgA * HALO_ALPHA_GAIN) * br;
+      const ext = HALO_EXT * S * (this.tier >= 4 ? 1.15 : 1);
+      if (this.tier >= 4 && !rmotion) {
+        const b0 = hueBucket(time, 0);
+        const b1 = hueBucket(time, 120);
+        drawHalo(c, halos, I_BUCKET + b0, r.x, r.y, r.w, r.h, ext, al);
+        const sh = 0.5 + 0.5 * Math.sin(time * 2.1);
+        const drift = Math.sin(time * 1.3) * 4 * S;
+        if (al * (0.35 + 0.5 * sh) > 0.1)
+          drawHalo(
+            c,
+            halos,
+            I_BUCKET + b1,
+            r.x + drift,
+            r.y,
+            r.w,
+            r.h,
+            ext * (0.78 + 0.18 * sh),
+            al * (0.35 + 0.5 * sh),
+          );
+      } else {
+        const idx = this.tier >= 4 ? I_BUCKET + 11 : this.tier;
+        drawHalo(c, halos, idx, r.x, r.y, r.w, r.h, ext, al);
       }
     }
     // rings

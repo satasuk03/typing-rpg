@@ -113,6 +113,8 @@ export const SPEED = {
 /** §6 typo. */
 export const TYPO = {
   red: "#ff5a4a",
+  /** Guard plates are red: their typo cue is white-cyan. */
+  guardCue: "#e6fbff",
   amber: "#ffb347",
   holdMs: 120,
   fadeMs: 180,
@@ -154,8 +156,33 @@ export function applyIntensity(base: number, k: number, rule: IntensityRule = "l
 
 /** Weapon socket offsets per archetype (Chunk B uses them; kept here so the table is single-sourced). */
 export const WEAPON_ANCHOR_OFFSET: Record<string, { x: number; y: number }> = {
-  sword: { x: 0.45, y: 0.95 },
+  sword: { x: 0.55, y: 0.65 },
   dagger: { x: 0.35, y: 0.8 },
   staff: { x: 0.3, y: 1.55 },
   hammer: { x: 0.4, y: 1.25 },
 };
+
+/**
+ * §5.1 word-complete timeline (ms from `WordCompleted`). The HUD shatter and the world blade charge share
+ * it, so the fragments arrive at the weapon exactly when the blade glow fills.
+ */
+export const WORD = {
+  /** Burst phase: fragments jump out. */
+  burstMs: 70,
+  /** Converge phase length per fragment. */
+  convergeMs: 140,
+  /** Per-fragment stagger and its cap (fragments beyond 48 do not stagger further). */
+  staggerMs: 8,
+  staggerMax: 48,
+  /** Sentence plates sample at most this many letters. */
+  maxFragments: 24,
+  /** Strike beam after the last arrival. */
+  strikeMs: 80,
+  /** Presentation delay of `Hit{chip}` (spec §5.4). */
+  chipDelayMs: 380,
+} as const;
+
+/** Arrival time (s) of fragment `i` (0-based) at the weapon. */
+export function fragmentArrivalSec(i: number): number {
+  return (WORD.burstMs + WORD.convergeMs + WORD.staggerMs * Math.min(i, WORD.staggerMax)) / 1000;
+}

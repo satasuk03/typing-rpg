@@ -8,6 +8,7 @@ import {
   tintFor,
   typoColorFor,
 } from "../../src/hud/fx/typing/palette";
+import { GUARD_TYPO } from "../../src/hud/plates";
 import { contrastRatio, PLATE_PALETTES } from "../../src/hud/theme";
 import { PRISM_BUCKETS, TIER_ACCENT_HEX, TIER_TYPED_HEX } from "../../src/level/typingFxParams";
 
@@ -51,6 +52,14 @@ describe("tier tint contrast (R5)", () => {
     // word plates keep the (lightened, see the tuning log) base red
     const word = PLATE_PALETTES.word as { bg0: string; bg1: string };
     expect(typoColorFor(word.bg0, word.bg1, false)).toBe("#ff8878");
+  });
+  it("the guard typo cue is white-cyan (not red) and keeps >= 4.5 on the guard plate", () => {
+    const g = PLATE_PALETTES.guard as { bg0: string; bg1: string };
+    expect(contrastRatio(GUARD_TYPO, g.bg0)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(GUARD_TYPO, g.bg1)).toBeGreaterThanOrEqual(4.5);
+    // blue channel dominates red: it reads as cyan-white on a red plate
+    const n = Number.parseInt(GUARD_TYPO.slice(1), 16);
+    expect(n & 255).toBeGreaterThan((n >> 16) & 255);
   });
   it("the prismatic per-letter colour is always a pre-built bucket (or the fixed pink)", () => {
     for (let i = 0; i < 40; i++)

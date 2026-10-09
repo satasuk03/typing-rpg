@@ -9,7 +9,7 @@ import { FIXED_PRISM_HEX, PRISM_BUCKETS } from "../level/typingFxParams";
 import type { Ctx } from "./draw";
 import { frame, glowOnly, setFont, txt } from "./draw";
 import type { PlateFx } from "./fx";
-import { hueBucket, mixHex, prismLetter, TINT_KINDS, typoColorFor } from "./fx/typing/palette";
+import { hueBucket, prismLetter, TINT_KINDS, typoColorFor } from "./fx/typing/palette";
 import type { Rect } from "./layout";
 import type { HudSettings } from "./settings";
 import type { TextLayout } from "./textLayout";
@@ -146,6 +146,8 @@ export function perimPoint(
 }
 
 const CRACK_DX = [0, 3, -2, 2, 0];
+/** Guard plates are red, so their typo cue is white-cyan (distinct from the plate, contrast >= 4.5 on its bg). */
+export const GUARD_TYPO = "#d6f6ff";
 
 function frameShape(c: Ctx, kind: string, x: number, y: number, w: number, h: number): void {
   c.beginPath();
@@ -212,6 +214,21 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
       c.shadowBlur = (10 + pulseOn * 14) * inten;
       c.stroke();
       c.shadowBlur = 0;
+    }
+    // border flash on the jagged / chamfered frames (guard typo: white-cyan, readable on the red plate)
+    const gflash = d.fx.borderFlash(p.id);
+    if (gflash > 0.01) {
+      c.save();
+      c.globalAlpha = d.alpha * gflash;
+      frameShape(c, p.kind, x, y, fw, fh);
+      c.lineJoin = "round";
+      c.strokeStyle = "rgba(8,5,12,0.9)";
+      c.lineWidth = 7;
+      c.stroke();
+      c.strokeStyle = d.fx.borderFlashColor(p.id);
+      c.lineWidth = 4;
+      c.stroke();
+      c.restore();
     }
     if (p.kind === "doom") {
       c.save();
@@ -431,7 +448,11 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
         cy -= lf.liftPx;
       }
       if (lf.glitch > 0) {
-        col = mix(col, typoColorFor(pal.bg0, pal.bg1, lf.amber), lf.glitch);
+        col = mix(
+          col,
+          g.isGuard && !lf.amber ? GUARD_TYPO : typoColorFor(pal.bg0, pal.bg1, lf.amber),
+          lf.glitch,
+        );
         // a cream glow behind a red glyph would eat its contrast: the glitch glyph sits on its dark outline
         if (lf.glitch > 0.5) glow = null;
       }
@@ -476,7 +497,7 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
     if (!cr || !rc) continue;
     const cx = rc.x + rc.w / 2;
     c.save();
-    c.strokeStyle = "rgba(255,90,70,0.9)";
+    c.strokeStyle = g.isGuard ? "rgba(214,246,255,0.95)" : "rgba(255,90,70,0.9)";
     c.globalAlpha = d.alpha * cr.a;
     c.lineWidth = 1.5;
     c.lineJoin = "miter";
@@ -490,7 +511,7 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
       c.strokeStyle = "rgba(10,4,6,0.8)";
       c.lineWidth = 3.5;
       c.stroke();
-      c.strokeStyle = "rgba(255,90,70,0.95)";
+      c.strokeStyle = g.isGuard ? "rgba(236,252,255,0.98)" : "rgba(255,90,70,0.95)";
       c.lineWidth = 2;
       c.stroke();
     }

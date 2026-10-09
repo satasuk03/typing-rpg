@@ -99,6 +99,18 @@ export interface WorldBackdrop {
   /** Project an enemy/hero anchor through the REAL camera of a level built from layout data. */
   projector: HudProjector;
   frame(dt: number): void;
+  /** Advance the level and the world by dt (no GPU render): lets a caller step many fixed substeps. */
+  advance(dt: number): void;
+  /** The real render world (the typing VFX attach their meshes, lights and post flash to it). */
+  world: import("../render").RenderWorld;
+  /** Hero placement and sprite actor (for the actor flash hook). */
+  hero: { x: number; z: number; actor: import("../render/materials/sprite").SpriteActor };
+  /** World-space centre of an enemy slot's body. False when the slot does not exist. */
+  slotBody(slot: number, out: { x: number; y: number; z: number }): boolean;
+  /** Sprite actor of an enemy slot (stand-in for the T2.3 hit flash). */
+  slotActor(slot: number): import("../render/materials/sprite").SpriteActor | null;
+  /** Project a world point to CSS px through the real camera. */
+  project(x: number, y: number, z: number): { x: number; y: number };
 }
 
 /**
@@ -154,7 +166,7 @@ export async function makeWorldBackdrop(
     const a = world.addActor(k.key, "idle", { scale: k.scale, rim: 1.4, blobW: k.scale * 1.1 });
     a.place(sl.x, k.flyY, sl.z);
     world.shadowFor(a, sl.x, sl.z);
-    return { x: sl.x, z: sl.z, scale: k.scale, flyY: k.flyY };
+    return { x: sl.x, z: sl.z, scale: k.scale, flyY: k.flyY, actor: a };
   });
 
   handle.setLetterbox(boss);
@@ -172,6 +184,7 @@ export async function makeWorldBackdrop(
   return {
     projector(a) {
       if (a.kind === "hero") {
+        if (a.part === "weapon") return toPx(enc.hero.x + 0.45, 0.95, enc.hero.z);
         const y = a.part === "head" ? 2.2 : a.part === "feet" ? 0 : 1.1;
         return toPx(enc.hero.x, y, enc.hero.z);
       }
@@ -186,6 +199,24 @@ export async function makeWorldBackdrop(
       world.update(dt, 0);
       world.render();
     },
+    advance(dt) {
+      handle.update(dt, world.camera.pose.x);
+      world.update(dt, 0);
+    },
+    world,
+    hero: { x: enc.hero.x, z: enc.hero.z, actor: hero },
+    slotBody(slot, out) {
+      const sl = slots[slot % Math.max(1, slots.length)];
+      if (!sl) return false;
+      out.x = sl.x;
+      out.y = sl.flyY + sl.scale;
+      out.z = sl.z;
+      return true;
+    },
+    slotActor(slot) {
+      return slots[slot % Math.max(1, slots.length)]?.actor ?? null;
+    },
+    project: toPx,
   };
 }
 

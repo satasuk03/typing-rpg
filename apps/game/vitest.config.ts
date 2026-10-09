@@ -8,6 +8,7 @@ export default defineConfig({
       "tests/unit/**/*.test.ts",
       "tests/audio/**/*.test.ts",
       "tests/hud/**/*.test.ts",
+      "tests/vfx/**/*.test.ts",
       "tests/net/**/*.test.ts",
     ],
   },
