@@ -107,6 +107,12 @@ export interface AppDebug {
   lastRun(): LastRun | null;
 }
 
+/** Per-screen hero nudge on the menu backdrop (world dx, dz): title clears the CONTINUE cursor, map keeps the legs above the info panel. */
+const HERO_OFFSET: Partial<Record<ScreenName, readonly [number, number]>> = {
+  title: [-1.1, 0],
+  map: [0, -3.8],
+};
+
 export class App {
   readonly root: HTMLDivElement;
   readonly nav = new KeyNav();
@@ -229,6 +235,11 @@ export class App {
     if (this.route !== "play") this.ensureBackdrop();
   }
 
+  /** PNG data URL of the procedural chest sprite (via the backdrop's RenderWorld), or "" when unavailable. */
+  chestUrl(open: boolean): string {
+    return this.backdrop?.chestUrl(open) ?? "";
+  }
+
   get backdropFrames(): number {
     return this.backdrop?.frames ?? 0;
   }
@@ -247,6 +258,8 @@ export class App {
     this.screen?.root.remove();
     this.route = name;
     this.ensureBackdrop();
+    const ho = HERO_OFFSET[name];
+    this.backdrop?.setHeroOffset(ho ? ho[0] : 0, ho ? ho[1] : 0);
     this.root.style.display = "";
     const factory = this.deps.factories[name];
     const s = factory(this, arg);

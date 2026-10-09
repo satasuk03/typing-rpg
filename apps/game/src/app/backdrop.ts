@@ -22,6 +22,7 @@ export class Backdrop {
   private disposed = false;
   private actor: ReturnType<RenderWorld["addActor"]> | null = null;
   private readonly baseX: number;
+  private readonly heroX: number;
   private readonly camPose: ReturnType<WorldHandle["cameraPose"]>;
   reducedMotion: boolean;
   /** Frames rendered so far (test hook). */
@@ -46,11 +47,35 @@ export class Backdrop {
     a.place(hx, 0, z);
     this.world.shadowFor(a, hx, z);
     this.actor = a;
+    this.heroX = hx;
     this.world.camera.setTarget({ ...this.camPose });
     this.world.camera.snap();
     this.handle.update(1 / 60, this.camPose.x);
     this.world.update(1 / 60);
     this.handle.warmUp(3, this.camPose.x);
+  }
+
+  /** Nudge the idle hero (world units: dx along the road, dz toward/away from the camera) so screen UI never covers it. */
+  setHeroOffset(dx: number, dz = 0): void {
+    if (!this.actor) return;
+    const x = this.heroX + dx;
+    const z = this.handle.walkPath.zAtX(x) + dz;
+    this.actor.place(x, 0, z);
+    this.world.shadowFor(this.actor, x, z);
+  }
+
+  chestUrl(open: boolean): string {
+    try {
+      const f = this.world.source.frames("chest", open ? "open" : "closed")[0];
+      if (!f) return "";
+      const cv = document.createElement("canvas");
+      cv.width = f.img.width;
+      cv.height = f.img.height;
+      cv.getContext("2d")?.drawImage(f.img as CanvasImageSource, 0, 0);
+      return cv.toDataURL("image/png");
+    } catch {
+      return "";
+    }
   }
 
   start(): void {

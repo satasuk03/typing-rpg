@@ -30,7 +30,7 @@ export const APP_CSS = `
 .logo-main{font:900 148px/1 var(--f-disp);letter-spacing:.12em;margin:6px 0 0 .12em;color:#ffe9a8;
   background:linear-gradient(180deg,#fff6d0 0%,#f2c866 48%,#b9791f 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
   filter:drop-shadow(0 4px 0 #3a2208) drop-shadow(0 0 28px rgba(255,170,70,.45))}
-.logo-sub{font:20px var(--f-pix);letter-spacing:.7em;margin:6px 0 0 .7em;color:#ffd9b0;text-shadow:0 2px 0 #2a1406,0 0 14px rgba(255,140,60,.6)}
+.logo-sub{font:20px var(--f-pix);letter-spacing:.7em;margin:6px 0 0 .7em;color:#ffd9b0;-webkit-text-stroke:2px #1a0c04;paint-order:stroke fill;text-shadow:0 2px 0 #2a1406,0 0 14px rgba(255,140,60,.6)}
 .logo-orn{display:flex;align-items:center;justify-content:center;gap:10px;margin:16px 0 12px}
 .logo-orn i{display:block;width:220px;height:2px;background:linear-gradient(90deg,transparent,var(--edge))}
 .logo-orn i:last-child{background:linear-gradient(270deg,transparent,var(--edge))}
@@ -70,6 +70,7 @@ export const APP_CSS = `
 /* ---------------------------------------------------------------- map */
 .map-body{position:relative;flex:1}
 .road-wrap{position:absolute;left:2%;right:2%;top:0;height:270px}
+.road-wrap::before{content:"";position:absolute;left:-2.1%;right:-2.1%;top:6px;height:244px;background:linear-gradient(180deg,rgba(5,6,10,0) 0,rgba(5,6,10,.35) 14%,rgba(5,6,10,.35) 86%,rgba(5,6,10,0) 100%);pointer-events:none;-webkit-mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
 .road-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .road{stroke:rgba(233,196,106,.35);stroke-width:3;stroke-dasharray:3 6;vector-effect:non-scaling-stroke;fill:none}
 .road.done{stroke:#ffd25a;stroke-dasharray:none;stroke-width:4;filter:drop-shadow(0 0 5px rgba(255,200,80,.7))}
@@ -156,17 +157,19 @@ export const APP_CSS = `
 .cache-body{flex:1;display:grid;grid-template-columns:1fr 360px;gap:26px;min-height:0}
 .cache-stage{position:relative;overflow:hidden;border:2px solid var(--edge);box-shadow:0 0 0 3px #000,inset 0 0 60px rgba(0,0,0,.7);
   background:radial-gradient(ellipse at 50% 70%,#2a2038 0%,#0c0914 70%);--rar:#b9b4a6}
-.cache-stage .rays{position:absolute;left:50%;top:60%;width:900px;height:900px;margin:-450px 0 0 -450px;opacity:0;pointer-events:none;
+.cache-stage .rays{position:absolute;left:50%;top:36%;width:900px;height:900px;margin:-450px 0 0 -450px;opacity:0;pointer-events:none;
   background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--rar) 55%,transparent) 0 6deg,transparent 6deg 24deg);
   -webkit-mask:radial-gradient(circle,#000 0,transparent 60%);mask:radial-gradient(circle,#000 0,transparent 60%)}
-.cache-stage .beam{position:absolute;left:50%;bottom:36%;width:150px;height:0;margin-left:-75px;opacity:0;pointer-events:none;
-  background:linear-gradient(0deg,#fff 0%,var(--rar) 30%,transparent 100%);mix-blend-mode:screen;filter:blur(1px)}
+.cache-stage .beam{position:absolute;left:50%;bottom:62%;width:120px;height:0;margin-left:-60px;opacity:0;pointer-events:none;
+  background:linear-gradient(90deg,transparent 0,var(--rar) 22%,#fff 50%,var(--rar) 78%,transparent 100%);-webkit-mask:linear-gradient(0deg,#000 0,#000 40%,transparent 100%);mask:linear-gradient(0deg,#000 0,#000 40%,transparent 100%);mix-blend-mode:screen;filter:blur(2px)}
+.cache-stage .chest-glow{position:absolute;left:50%;top:36%;width:260px;height:120px;margin:-30px 0 0 -130px;pointer-events:none;opacity:.35;background:radial-gradient(ellipse,color-mix(in srgb,var(--rar) 70%,transparent) 0,transparent 70%)}
+.cache-stage[data-phase=burst] .chest-glow,.cache-stage[data-phase=revealed] .chest-glow{opacity:.95}
+.chest .chest-img{display:block;width:54px;height:auto;image-rendering:pixelated;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--rar) 60%,transparent)) drop-shadow(0 2px 0 #000)}
 .cache-stage .burst{position:absolute;left:50%;top:0;transform:translateX(-50%);pointer-events:none}
-.cache-stage .chest{position:absolute;left:50%;top:60%;transform:translate(-50%,-50%) scale(2.2);transform-origin:center;text-align:center;image-rendering:pixelated}
-.cache-stage .chest-count{position:absolute;left:50%;top:calc(100% + 14px);transform:translateX(-50%) scale(.45);white-space:nowrap;font:18px var(--f-pix);color:var(--gold-hi)}
+.cache-stage .chest{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) scale(2.2);transform-origin:center;text-align:center;image-rendering:pixelated}
 .cache-stage .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;mix-blend-mode:screen}
 .cache-stage .cache-msg{position:absolute;left:0;right:0;bottom:14px;text-align:center;padding:0 20px}
-.cache-stage .reveal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.cache-stage .reveal{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:26px}
 .cache-stage .reveal[hidden]{display:none}
 .rv-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 30px;text-align:center;background:rgba(10,8,16,.9);
   border:2px solid var(--rar);box-shadow:0 0 0 3px #000,0 0 40px color-mix(in srgb,var(--rar) 55%,transparent);animation:cardpop .38s cubic-bezier(.2,1.4,.4,1) both}
@@ -179,10 +182,10 @@ export const APP_CSS = `
 .cache-stage[data-phase=burst] .beam,.cache-stage[data-phase=revealed] .beam{animation:beamup .9s ease-out both}
 .cache-stage[data-phase=burst] .flash{animation:flashy .3s ease-out}
 .cache-stage[data-phase=burst] .chest{animation:chestpop .35s ease-out both}
-.cache-stage[data-phase=revealed] .chest{opacity:.25;filter:blur(1px)}
+.cache-stage[data-phase=revealed] .chest{opacity:1}
 .cache-stage.noflash .flash{display:none}
 .cache-stage.reduced .chest,.cache-stage.reduced .rays,.cache-stage.reduced .beam{animation:none!important}
-.cache-stage.reduced[data-phase=burst] .beam,.cache-stage.reduced[data-phase=revealed] .beam{height:70%;opacity:.55}
+.cache-stage.reduced[data-phase=burst] .beam,.cache-stage.reduced[data-phase=revealed] .beam{height:60%;opacity:.7}
 .cache-stage.reduced .rv-card{animation:none}
 .cache-side{display:flex;flex-direction:column;gap:16px}
 .cache-btns{display:flex;flex-direction:column;gap:12px;padding-left:14px}
@@ -194,7 +197,7 @@ export const APP_CSS = `
   30%{transform:translate(-53%,-51%) scale(2.3) rotate(-4deg)}40%{transform:translate(-47%,-50%) scale(2.3) rotate(4deg)}55%{transform:translate(-54%,-52%) scale(2.4) rotate(-5deg)}
   70%{transform:translate(-46%,-51%) scale(2.45) rotate(5deg)}85%{transform:translate(-52%,-53%) scale(2.55) rotate(-4deg)}100%{transform:translate(-50%,-50%) scale(2.6)}}
 @keyframes chestpop{from{transform:translate(-50%,-50%) scale(2.6)}to{transform:translate(-50%,-50%) scale(2.2)}}
-@keyframes beamup{0%{height:0;opacity:0}30%{opacity:1}100%{height:86%;opacity:.7}}
+@keyframes beamup{0%{height:0;opacity:0}30%{opacity:1}100%{height:60%;opacity:.85}}
 @keyframes flashy{0%{opacity:.85}100%{opacity:0}}
 @keyframes cardpop{from{transform:translateY(24px) scale(.8);opacity:0}to{transform:none;opacity:1}}
 @keyframes spin{to{transform:rotate(360deg)}}
