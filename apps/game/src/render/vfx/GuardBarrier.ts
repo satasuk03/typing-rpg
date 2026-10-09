@@ -8,7 +8,7 @@
  *    star on top (the shape cue) and a faster spin. A held light stays on until impact.
  *  - `block()`: the barrier takes the hit (rim flash 120 ms), 12 hex shards, shake, azure flash, push-back.
  *  - `parry()`: 70 ms hit-stop; a 140 ms flash disc (core #7fe8ff, rim #3ab8ff, radius 0.9 u) at the contact point
- *    where the blade meets the barrier (NOT on the hero's body), 6 hex shards, a thin cyan ring, camera punch.
+ *    where the blade meets the barrier (NOT on the hero's body), 8 hex shards, a thin cyan ring, camera punch.
  *    (T6.3 #14: the old gold-white 3 u disc blew out and read near-white.)
  *  - `fade(ms)`: ignored word, the preview fades.
  *  - `shimmer()`: guard typo, the preview flickers red for 150 ms.
@@ -25,7 +25,7 @@ import {
   newSpec,
   type ParticleSpec,
   PK_GLOW,
-  PK_HEX,
+  PK_HEXR,
   PK_STREAK,
   type PooledParticles,
   resetSpec,
@@ -39,20 +39,21 @@ const GOLD: Rgb = [1.0, 0.9, 0.55];
 /** The held / bursting parry barrier: amber, not gold-white (the rim saturated to white under the bloom). */
 const PARRY_BARRIER: Rgb = [0.8, 0.58, 0.2];
 const RED: Rgb = [1.6, 0.3, 0.2];
-/** Parry flash (T6.3 #14): core #7fe8ff, rim #3ab8ff, 140 ms, radius 0.9 u, 6 hex shards. */
+/** Parry flash (T6.3 #14): core #7fe8ff, rim #3ab8ff, 140 ms, radius 0.9 u, 8 hex shards. */
 export const PARRY_FLASH = {
   coreHex: "#7fe8ff",
   rimHex: "#3ab8ff",
   ms: 140,
   radius: 0.9,
-  shards: 6,
+  shards: 8,
   /** HDR gain over the linear hex colours (a touch above 1 so the bloom catches the rim). */
-  coreGain: 1.5,
-  rimGain: 1.7,
+  coreGain: 1.0,
+  rimGain: 1.2,
 } as const;
 const PARRY_CORE: Rgb = hexLinear(PARRY_FLASH.coreHex).map((v) => v * PARRY_FLASH.coreGain) as Rgb;
 const PARRY_RIM: Rgb = hexLinear(PARRY_FLASH.rimHex).map((v) => v * PARRY_FLASH.rimGain) as Rgb;
-const PARRY_SHARD: Rgb = [0.35, 1.25, 1.9];
+// solid (normal-blend) shards: core #7fe8ff with the shader's dark blue rim, sitting on the focus plane
+const PARRY_SHARD: Rgb = hexLinear(PARRY_FLASH.coreHex);
 const PARRY_DISC_SEC = PARRY_FLASH.ms / 1000;
 const PARRY_RADIUS = PARRY_FLASH.radius;
 const PARRY_SHARDS = PARRY_FLASH.shards;
@@ -64,6 +65,8 @@ const OFF_Y = 1.2;
 const OFF_Z = 0.35;
 const SIZE = 2.2;
 
+/** A held barrier with no impact event fades itself after this long (an attack that never arrives, a missed binding). */
+export const HELD_MAX_SEC = 2.5;
 const M_NONE = 0;
 const M_PREVIEW = 1;
 const M_HELD = 2;
@@ -84,6 +87,8 @@ export class GuardBarrier {
   /** Snap clock (s), -1 when idle. Phase A (wait) is 0.1 s, phase B (scale) 0.14 s, both x `snapScale`. */
   private snapT = -1;
   private snapScale = 1;
+  /** Seconds spent in M_HELD with no impact: a fail-safe fades the barrier after `HELD_MAX_SEC`. */
+  private heldT = 0;
   private t = 0;
   private spin = 0;
   private rimT = -1;
@@ -97,6 +102,7 @@ export class GuardBarrier {
   constructor(
     private readonly world: RenderWorld,
     private readonly pool: PooledParticles,
+    private readonly poolB: PooledParticles,
     private readonly lights: LightSlots,
     private readonly td: TimeDilation,
     private readonly cb: TypingFxCallbacks,
@@ -138,6 +144,7 @@ export class GuardBarrier {
     this.snapT = 0;
     this.snapScale = Math.min(1, Math.max(0.2, scale));
     this.level = 1;
+    this.heldT = 0;
   }
 
   /** `GuardBlocked`: impact on the barrier. */
@@ -199,7 +206,7 @@ export class GuardBarrier {
     this.td.hitStop(70 * Math.max(0.5, k));
     this.discT = 0;
     const cx = this.hx + OFF_X + CONTACT_DX;
-    // 6 hex shards fly off the contact point (a fixed fan, flipping as they go)
+    // 8 hex shards fly off the contact point (a fixed fan, flipping as they go)
     for (let i = 0; i < PARRY_SHARDS; i++) {
       const a = (i / PARRY_SHARDS) * Math.PI * 2 + 0.4;
       resetSpec(SPEC);
@@ -211,15 +218,16 @@ export class GuardBarrier {
       SPEC.vy = Math.sin(a) * sp * 0.8;
       SPEC.drag = 2.2;
       SPEC.grav = 3;
-      SPEC.size = 0.26;
-      SPEC.size1 = 0.12;
-      SPEC.life = 0.55;
+      SPEC.size = 0.34;
+      SPEC.size1 = 0.2;
+      SPEC.life = 0.7;
       SPEC.spin = 9 + i;
       SPEC.r = PARRY_SHARD[0];
       SPEC.g = PARRY_SHARD[1];
       SPEC.b = PARRY_SHARD[2];
-      SPEC.kind = PK_HEX;
-      this.pool.emit(SPEC);
+      SPEC.kind = PK_HEXR;
+      SPEC.a = 1;
+      this.poolB.emit(SPEC);
     }
     // a few thin streaks for energy
     const n = Math.max(3, Math.round(8 * k));
@@ -300,6 +308,10 @@ export class GuardBarrier {
       return;
     }
     this.t += dt;
+    if (this.mode === M_HELD) {
+      this.heldT += dt;
+      if (this.heldT > HELD_MAX_SEC) this.fade(300);
+    }
     const rm = set.reducedMotion;
     let size = SIZE;
     let I = 0;

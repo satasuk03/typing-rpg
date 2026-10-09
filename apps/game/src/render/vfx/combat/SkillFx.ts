@@ -118,7 +118,17 @@ export class SkillFx {
       case "fireball": {
         const tid = e.targetIds[0] ?? -1;
         const delay = Math.min(0.15, total * 0.35);
-        this.proj.launch(P_FIRE, hx, hy, hz, tid, delay, total - delay - 0.02, 1.6, kit.warm(st.core));
+        this.proj.launch(
+          P_FIRE,
+          hx,
+          hy,
+          hz,
+          tid,
+          delay,
+          total - delay - 0.02,
+          1.6,
+          kit.warm(st.core),
+        );
         break;
       }
       case "slashWave": {

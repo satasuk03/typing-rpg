@@ -65,6 +65,11 @@ const EN = { x: 0, y: 0, z: 0 };
 const V3 = new Vector3();
 const RGB: Rgb = [0, 0, 0];
 
+/** An enemy attack ends the held guard barrier unless it was blocked / parried (those play their own exit). */
+export function outcomeEndsBarrier(outcome: "hit" | "blocked" | "parried" | "barrier"): boolean {
+  return outcome === "hit" || outcome === "barrier";
+}
+
 export class TypingWorldFx {
   readonly poolA: PooledParticles;
   readonly poolB: PooledParticles;
@@ -114,7 +119,7 @@ export class TypingWorldFx {
     this.lights = new LightSlots(world.lights);
     this.aura = new HeroAura(world, this.poolA, this.poolB, this.lights);
     this.blade = new BladeGlow(world, this.poolA);
-    this.barrier = new GuardBarrier(world, this.poolA, this.lights, td, cb);
+    this.barrier = new GuardBarrier(world, this.poolA, this.poolB, this.lights, td, cb);
     this.bolts = new SentenceBolts(world, this.poolA, this.lights);
     this.bolts.onImpact = (doomFinal) => {
       if (doomFinal) this.punch(0.4, 0.0009, 0.01);
@@ -218,7 +223,12 @@ export class TypingWorldFx {
         this.barrier.parry(this.settings);
         break;
       case "EnemyAttack":
-        if (e.outcome === "hit") this.barrier.fade(200);
+        // a hit AND an Aegis-absorbed attack both end the held barrier (it used to float on after "barrier")
+        if (outcomeEndsBarrier(e.outcome)) this.barrier.fade(200);
+        break;
+      case "WalkStarted":
+      case "HeroDowned":
+        this.barrier.fade(200);
         break;
       case "PlateRemoved":
         if (e.reason === "expired" || e.reason === "ownerDied" || e.reason === "phaseEnded")
@@ -241,6 +251,7 @@ export class TypingWorldFx {
       case "EncounterCleared":
       case "LevelCleared":
       case "LevelFailed":
+        this.barrier.fade(200);
         this.aura.setStreakTier(0, false);
         break;
       case "LevelStarted":

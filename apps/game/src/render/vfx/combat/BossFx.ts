@@ -104,13 +104,13 @@ export class BossFx {
     const cy = INFO.y + INFO.height * 0.55;
     kit.ring(INFO.x, 0.06, INFO.z, 0.5, 12, 0.7, [2.2, 2.6, 3.2], [0.6, 1, 1.6], 1.4, true);
     kit.ring(INFO.x, cy, INFO.z + 0.6, 0.8, 9, 0.55, [3, 2.4, 1.6], [1, 0.5, 0.2], 1.3);
-    kit.star(INFO.x, cy, INFO.z + 1, 7, 0.5, 0.35, [3, 2.8, 2.4], 1.6, 0.785);
-    kit.flash(INFO.x, cy, INFO.z + 1.4, [1, 0.8, 0.6], 6, 9, 0.7);
+    kit.star(INFO.x, cy, INFO.z + 1, 3.5, 0.5, 0.35, [1.6, 1.3, 1.0], 1.6, 0.785);
+    kit.flash(INFO.x, cy, INFO.z + 1.4, [1, 0.8, 0.6], 1.5, 5, 0.5);
     kit.sparks(INFO.x, cy, INFO.z, kit.n(50), [3.4, 1.6, 0.5], 8, { life: 0.9, grav: 3 });
     kit.puffs(INFO.x, 0.2, INFO.z, kit.n(14), DUST, 0.9, 1, 1);
     kit.crack(INFO.x, INFO.z, 8, 1.4, [0.9, 0.7, 0.5]);
-    kit.postFlash(0.14, [1, 0.9, 0.8], 160, 0.16);
-    this.rim(e.enemyId, 0.9, [3, 2.6, 2], 0.3);
+    kit.postFlash(0.06, [1, 0.9, 0.8], 160, 0.08);
+    this.rim(e.enemyId, 0.9, [1.6, 1.4, 1.1], 0.3);
   }
 
   doomStarted(e: EventOf<"DoomSpellStarted">): void {

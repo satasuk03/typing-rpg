@@ -89,12 +89,12 @@ describe("tier-4 prismatic drift (T6.3 #17)", () => {
 });
 
 describe("parry flash (T6.3 #14)", () => {
-  it("core #7fe8ff, rim #3ab8ff, 140 ms, r 0.9 u, 6 hex shards", () => {
+  it("core #7fe8ff, rim #3ab8ff, 140 ms, r 0.9 u, 8 hex shards", () => {
     expect(PARRY_FLASH.coreHex).toBe("#7fe8ff");
     expect(PARRY_FLASH.rimHex).toBe("#3ab8ff");
     expect(PARRY_FLASH.ms).toBe(140);
     expect(PARRY_FLASH.radius).toBe(0.9);
-    expect(PARRY_FLASH.shards).toBe(6);
+    expect(PARRY_FLASH.shards).toBe(8);
     // cyan, not near-white: the red channel stays well under green and blue
     const core = hexLinear(PARRY_FLASH.coreHex);
     expect(core[0]).toBeLessThan(core[1] * 0.45);

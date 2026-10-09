@@ -28,6 +28,8 @@ export const PK_PIXEL = 1;
 export const PK_STREAK = 2;
 /** A hard-edged hexagon with a bright rim (flat shard; `spin` flips it). */
 export const PK_HEX = 3;
+/** T6.3 W3: a solid hex with a dark blue rim (normal-blend pool B). */
+export const PK_HEXR = 4;
 
 /** Reusable spawn description. Create one per owner and fill it per spawn (`resetSpec` first). */
 export interface ParticleSpec {

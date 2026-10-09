@@ -614,8 +614,14 @@ export class LevelStage {
       }
       if (e.hurtT < 0.2) dx += 0.25 * (1 - e.hurtT / 0.2);
       if (ev.pose === "broken") {
-        flash = Math.max(flash, 0.28 + 0.1 * Math.sin(this.time * 10));
-        flashCol = [0.45, 0.75, 1];
+        // a pale boss (the Golem) washes out under the full tint for the whole break: 0.10-0.14, a bluer colour
+        if (e.isBoss) {
+          flash = Math.max(flash, 0.12 + 0.02 * Math.sin(this.time * 10));
+          flashCol = [0.35, 0.55, 1];
+        } else {
+          flash = Math.max(flash, 0.28 + 0.1 * Math.sin(this.time * 10));
+          flashCol = [0.45, 0.75, 1];
+        }
         dz += 0;
       }
     }

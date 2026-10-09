@@ -23,14 +23,17 @@ export const PARTICLE_VS = `attribute vec3 iPos, iVel; attribute vec4 iCol, iSz;
           vec2 perp = vec2(-dir.y, dir.x); vp.xy += dir * position.x * sx + perp * position.y * sy;
           gl_Position = projectionMatrix * vp; vUv = position.xy + 0.5; vCol = iCol; vKind = iSz.z; }`;
 export const PARTICLE_FS = `uniform float uAdd; varying vec4 vCol; varying vec2 vUv; varying float vKind;
-        void main(){ vec2 p = vUv - 0.5; float a;
+        void main(){ vec2 p = vUv - 0.5; float a; vec3 rc = vCol.rgb;
           if (vKind < 0.5) { a = smoothstep(0.5, 0.0, length(p)); a *= a; }
           else if (vKind < 1.5) { a = 1.0; }
           else if (vKind < 2.5) { a = smoothstep(0.5, 0.0, abs(p.y)) * smoothstep(0.5, 0.15, abs(p.x)); }
-          else { vec2 q = abs(p) * 2.0; float h = max(q.x * 0.8660254 + q.y * 0.5, q.y);
+          else if (vKind < 3.5) { vec2 q = abs(p) * 2.0; float h = max(q.x * 0.8660254 + q.y * 0.5, q.y);
             a = step(h, 0.8660254) * (0.55 + 0.9 * smoothstep(0.58, 0.8660254, h)); }
-          if (uAdd > 0.5) gl_FragColor = vec4(vCol.rgb * vCol.a * a, 1.0);
-          else { if (vCol.a * a < 0.02) discard; gl_FragColor = vec4(vCol.rgb, vCol.a * a); } }`;
+          else { // T6.3 W3: a solid hex with a dark blue rim (reads on bright bokeh; use the normal-blend pool)
+            vec2 q = abs(p) * 2.0; float h = max(q.x * 0.8660254 + q.y * 0.5, q.y);
+            a = step(h, 0.8660254); rc = h > 0.66 ? vec3(0.04, 0.16, 0.33) : vCol.rgb; }
+          if (uAdd > 0.5) gl_FragColor = vec4(rc * vCol.a * a, 1.0);
+          else { if (vCol.a * a < 0.02) discard; gl_FragColor = vec4(rc, vCol.a * a); } }`;
 
 export interface ParticleSpawn {
   x: number;

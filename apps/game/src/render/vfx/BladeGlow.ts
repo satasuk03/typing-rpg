@@ -168,7 +168,7 @@ export class BladeGlow {
     }
     // bright worlds (forest): the flare / strike impact stack with the backdrop and clip to a white blob, so the
     // additive stars are scaled by biome brightness (1 in the cave, 0.4 on the forest)
-    const gl = 0.4 + 0.6 * Math.min(1, Math.max(0, this.world.currentMood.caveK));
+    const gl = 0.4 + 0.6 * Math.min(1, Math.max(0, this.world.currentMood?.caveK ?? 1));
     const k = k0;
     // charge decays when no fragment arrives for a moment (after the flare, quickly)
     if (this.hold > 0) this.hold -= dt;

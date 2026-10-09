@@ -29,6 +29,8 @@ export const FxKind = {
   Hex: 9,
   /** T6.3: a flash disc with a crisp rim (parry flash). `uColor` core, `uColor2` rim, `uP` 0..1 over its life. */
   Disc: 10,
+  /** T6.3 W3: a crisp thin outline ring (BREAK): `uColor` -> `uColor2` over `uP`, a ~3 px line at 250 px. */
+  Line: 11,
 } as const;
 export type FxKindId = (typeof FxKind)[keyof typeof FxKind];
 
@@ -128,6 +130,10 @@ void main(){
     float body = smoothstep(1.0, 0.0, r); body *= body;
     float rim = smoothstep(0.72, 0.9, r) * smoothstep(1.0, 0.92, r);
     col = (uColor * body * 1.4 + uColor2 * rim * 1.6) * step(r, 1.0);
+  } else if (uKind == 11) {
+    float line = smoothstep(0.05, 0.022, abs(r - 0.92));
+    float glow = smoothstep(0.2, 0.0, abs(r - 0.92)) * 0.18;
+    col = mix(uColor, uColor2, uP) * (line + glow) * (1.0 - uP * 0.5);
   }
   col *= 1.0 - (1.0 - uDamp) * heroInside(vNdc);
   gl_FragColor = vec4(col * uI, 1.0);
