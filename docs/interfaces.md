@@ -2,70 +2,101 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.0** (2026-10-09) — first cut, pending orchestrator/PO review |
-| **SIM_VERSION** | `1` |
-| **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6; where brainstorm docs were ambiguous, the choice made is listed in §12 "Decisions taken (review me)". |
+| **Doc version** | **1.1** (2026-10-09) |
+| **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
+| **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
-Packages (internal packages are consumed as TS source; imports use `.ts` extensions as in the M0 scaffold):
+**Changelog**
+- **1.1** (2026-10-09): applies the PO decisions and the reviewer findings.
+  - **PO decisions:**
+    - Hybrid combo: the mechanical combo counts perfect words (tiers 5/15/30/50); the VFX colour tiers count a per-key streak (10/25/50/100), exposed as `keyStreak`, `keyStreakTier` and the `KeyStreakTierChanged` event.
+    - Cache weapon odds favour the equipped archetype (40%, the other three 20% each), and the odds are published.
+    - The Trial requires typed spaces.
+    - Break stays; encounter HP is retuned in T6.1.
+  - **Reviewer B1:** Escape keeps `perfect` and has no combo effect; an imperfect completion leaves the combo unchanged.
+  - **Reviewer M1–M10:**
+    - `parHpM`, plus `parLoadout` and `buildLoadout` in sim/meta.
+    - `canonicalContentJson`, and `deepClone` in place of `structuredClone`.
+    - Client lag ticks; the stall time goes to pause.
+    - Replay is terminal-safe, the Trial end tick is defined, and the decoder has limits.
+    - The server infers the timer grain.
+    - The AC is restated, and the submit idempotency is now race-safe.
+    - Three-way save merge.
+    - Content text regex built from `TYPABLE_CHARS`.
+  - **Minor fixes:**
+    - Banned `localeCompare`; `%` only on non-negative operands; a normative damage chain; `chance()` always draws.
+    - `Resolved*` types defined; zod 4 idioms; `Record<never, never>` in `Ev`.
+    - `Hit.origin` + `skillId`; chip VFX comes only from `Hit`; `lane` added to `PlateView` and `kind` to `Typo`.
+    - Trial: a pool of ≥ 30 passages and one open ticket per user.
+    - Cache pity ownership stated; a requirement to extend the purity guard.
+- **1.0** (2026-10-09): initial contract.
 
-```
-@hd2d/content  (packages/content)  zod schemas + data. Depends on: zod.
-@hd2d/sim      (packages/sim)      pure deterministic TS. Depends on: @hd2d/content (TYPES ONLY, `import type`).
-@hd2d/shared   (packages/shared)   zod API + save schemas, compression helpers. Depends on: zod, @hd2d/sim (types + log codec), @hd2d/content (types).
+### Packages
+Internal packages are consumed as TS source; imports use `.ts` extensions, as in the M0 scaffold.
+```text
+@hd2d/content  (packages/content)  zod schemas + data + the TYPABLE_CHARS constant. Depends on: zod.
+@hd2d/sim      (packages/sim)      pure deterministic TS. Depends on @hd2d/content: `import type` for schema types,
+                                   plus the pure constant TYPABLE_CHARS. It never imports the data bundle itself
+                                   (bundles are passed in as arguments). package.json: "@hd2d/content": "workspace:*".
+@hd2d/shared   (packages/shared)   zod API + save schemas, compression. Depends on: zod, @hd2d/sim (types + log codec), @hd2d/content (types).
 apps/game      client              depends on all three.
 workers/api    Hono Worker         depends on shared + sim + content.
 ```
-No cycles: `sim` never imports `shared`; `content` imports nothing internal.
-
-File map for the contracts below:
+There are no cycles: `sim` never imports `shared`, and `content` imports nothing internal.
 
 | File | Contents | Owner |
 |---|---|---|
-| `packages/sim/src/time.ts` | `TICK_HZ`, `msToTick`, `tickStartMs` | Sim |
+| `packages/sim/src/time.ts` | `TICK_HZ`, `msToTick`, `tickStartMs`, client lag constants | Sim |
 | `packages/sim/src/fixed.ts` | fixed-point helpers | Sim |
 | `packages/sim/src/rng.ts` | sfc32 + stream derivation (replaces the M0 placeholder) | Sim |
-| `packages/sim/src/hash.ts` | canonical JSON, FNV-1a, `hash` | Sim |
+| `packages/sim/src/hash.ts` | `canonicalJson`, `canonicalContentJson`, `fnv1a32`, `hash`, `deepClone` | Sim |
 | `packages/sim/src/input.ts` | `SimInput`, `normalizeKey` | Sim |
-| `packages/sim/src/logcodec.ts` | `hdk1` binary keystroke log encode/decode (no compression) | Sim |
+| `packages/sim/src/logcodec.ts` | `hdk1` keystroke log encode/decode (no compression) | Sim |
 | `packages/sim/src/events.ts` | `SimEvent`, `ALL_EVENT_TYPES`, `MetaEvent` | Sim (publish **before batch 3**) |
 | `packages/sim/src/view.ts` | `LevelView`, `TrialView` | Sim |
 | `packages/sim/src/index.ts` | public API (§3) | Sim |
 | `packages/sim/src/balance.ts`, `tables.generated.ts`, `scripts/gen-tables.ts` | §7 | Sim |
-| `packages/sim/src/resolve.ts` | `resolveLevel`, `resolveTrial` (content bundle → sim input) | Sim |
-| `packages/sim/src/meta/*.ts` | §8 pure meta/reward functions | Sim |
+| `packages/sim/src/resolve.ts` | `resolveLevel`, `resolveTrial` | Sim |
+| `packages/sim/src/meta/*.ts` | §8 meta/reward functions, `buildLoadout`, `parLoadout` | Sim |
 | `packages/content/src/schemas.ts` | §6 | Content |
 | `packages/shared/src/{api,save,errors,compress}.ts` | §9 | Backend |
+
+Code-block tags: blocks tagged `ts sim`, `ts content` or `ts shared` are normative and typecheck together (strict, tsc 7, zod 4.6). Blocks tagged `ts client` are illustrative.
 
 ---
 
 ## 1. Sim invariants
 
 ### 1.1 Time
-```ts
+```ts sim
 // packages/sim/src/time.ts
 export const TICK_HZ = 60;
 /** Integer >= 0. The ONLY time unit inside the sim. Tick 0 = createLevel/createTrial. */
 export type Tick = number;
-/** Shared by client and Worker so both derive identical ticks from logged milliseconds. ms is an integer. */
+/** Shared by client and Worker so both derive identical ticks from logged milliseconds. ms is an integer >= 0. */
 export const msToTick = (ms: number): Tick => Math.floor((ms * 3) / 50);
 /** First integer ms that maps to tick t (msToTick(tickStartMs(t)) === t). */
 export const tickStartMs = (t: Tick): number => Math.ceil((t * 50) / 3);
+/** Client frame stepping trails the clock by this many ticks (§2). Keys still step immediately. */
+export const CLIENT_LAG_TICKS = 3;
+/** A frame that would need more catch-up than this is treated as a stall: auto-pause instead (§2). */
+export const MAX_CATCHUP_TICKS = 600;
 ```
-- The sim never sees milliseconds, frames, or wall-clock time. Seconds in `BALANCE`/content are converted to ticks once at module init or at `resolveLevel` (`Math.round(s * 60)`).
-- **Hit-stop, slow-mo, the 0.1 s "time-slow before the dash", camera punches: render-only.** They dilate animation time, never the sim clock, and never block input.
-- **Pause is a client concern**: the sim simply isn't stepped. There is no pause state in the sim.
+- The sim never sees milliseconds, frames or wall-clock time. Seconds in `BALANCE`/content are converted to ticks (`Math.round(s * 60)`), either once at module init or in `resolveLevel`.
+- **Hit-stop, slow-mo, the 0.1 s "time-slow before the dash", and camera punches are render-only.** They dilate animation time, never the sim clock, and never block input.
+- **Pause is a client concern:** the sim simply isn't stepped. There is no pause state in the sim.
 
-### 1.2 Numeric policy (decision D1)
-All **hashed state is integers** (`Number.isSafeInteger`). No floats in state, ever.
+### 1.2 Numeric policy (D1)
+All **hashed state is integers** (`Number.isSafeInteger`). There are never floats in state.
 
 | Kind | Unit | Example |
 |---|---|---|
-| Quantities: HP, ATK, damage, heal, ATB, shield-free amounts | **milli-points** (`MILLI = 1000`) | 100 HP → `100_000`; ATB full → `100_000` |
+| Quantities (HP, ATK, damage, heal, ATB) | **milli-points** (`MILLI = 1000`) | 100 HP → `100_000`; full ATB → `100_000` |
 | Ratios, multipliers, probabilities | **basis points** (`BP = 10_000`) | ×1.25 → `12_500`; 30% → `3_000` |
 | Gold, gems, counts, ticks, chars | plain integers | — |
 
-```ts
+```ts sim
 // packages/sim/src/fixed.ts
 export const BP = 10_000;
 export const MILLI = 1_000;
@@ -81,17 +112,31 @@ export const bp = (x: number): Bp => Math.round(x * BP);
 export const milli = (x: number): Milli => Math.round(x * MILLI);
 /** Display rounding for events/view: positive amounts never show as 0. */
 export const toDisplay = (m: Milli): number => (m <= 0 ? 0 : Math.max(1, Math.round(m / MILLI)));
+/** Code-unit string order. The ONLY string comparison logic may use (no localeCompare). */
+export const cmpStr = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 ```
-Why it's deterministic: IEEE-754 `+ - * /` and `Math.floor/ceil/round/trunc/imul` are exactly specified in ECMAScript, so V8 (Chrome, Workers, Node) and JSC/SpiderMonkey agree bit-for-bit. `Math.pow/exp/log/sin/cos/tan/sqrt/cbrt/hypot/atan*` and `**` are "implementation-approximated", so they are **banned in `packages/sim/src`** (add to the Biome override + `check.sh` grep: `Math\.(pow|exp|log|sin|cos|tan|sqrt|cbrt|hypot|atan)|\*\*`).
-- `(35/Pace)^0.7` (clamped 0.6–1.8) → **precomputed table** `PACE_FACTOR_BP[pace]` for integer pace 15..120 in `tables.generated.ts`.
-- All other curves (`TIER_GROWTH^(t-1)`, `PRICE_GROWTH^(t-1)`, `UPG_COST_GROWTH^lvl`, `GOLD_GROWTH_CH^(c-1)`) → generated integer tables too.
-- `tables.generated.ts` is produced by `packages/sim/scripts/gen-tables.ts` (may use `Math.pow`; it is a script, not sim runtime). A unit test regenerates and diffs it.
-- Gotcha: `check.sh` greps the bare words `Date`, `window`, `document`, `performance.` in `packages/sim/src` **including comments**. Say "span"/"interval", not "window".
+**Why this is deterministic.** ECMAScript specifies these operations exactly, so V8 (Chrome, Workers, Node), JSC and SpiderMonkey agree bit-for-bit:
+- IEEE-754 `+ - * /`
+- `Math.floor/ceil/round/trunc/imul/max/min`
+- `Number#toString`
+- the `<` comparison on strings (UTF-16 code units)
 
-### 1.3 RNG — sfc32 with explicit streams (decision D2)
-The M0 placeholder (`sfc32(seed)` returning closures) is replaced: RNG state must be plain data so it can live in state and be hashed. The algorithm (splitmix32 → 4×u32 → sfc32, 12 warm-up draws) is unchanged.
+What is **banned in `packages/sim/src`**, and why:
+- `Math.pow/exp/expm1/log*/sin/cos/tan/asin/acos/atan*/sinh/cosh/tanh/sqrt/cbrt/hypot` and `**`: they are implementation-approximated.
+- `localeCompare` and `Intl`: their results depend on locale and ICU version.
 
-```ts
+Also, `%` may only be used with **non-negative** operands. The sim never relies on the sign of a negative remainder.
+
+**Curves become tables.** `(35/Pace)^0.7` (clamped 0.6–1.8) is the table `PACE_FACTOR_BP[pace]` for integer pace 15..120. All other curves are generated integer tables in `tables.generated.ts`, produced by `packages/sim/scripts/gen-tables.ts`. That script may use `Math.pow`, because it is not sim runtime. A unit test regenerates the tables and diffs them.
+
+**Purity-guard requirement (Sim engineer implements it in T1.1):**
+- Extend the `packages/sim/**` Biome override and the `scripts/check.sh` grep to reject the banned `Math.*` members, the `**` operator (`\*\*` outside comments), `localeCompare`, `Intl.` and `structuredClone`.
+- The grep must **ignore comments**: strip `//…` and `/*…*/` before matching, for example by running the regex over a comment-stripped copy. Comments in the sim can then say "window" or "Date" freely.
+- The existing `Date`/`performance`/`window`/`document`/timer bans stay.
+
+### 1.3 RNG: sfc32 with explicit streams (D2)
+The M0 placeholder (closures) is replaced: RNG state must be plain data so that it can live in state and be hashed. The algorithm stays the same: splitmix32 → 4×u32 → sfc32 with 12 warm-up draws.
+```ts sim
 // packages/sim/src/rng.ts
 export type RngState = [a: number, b: number, c: number, d: number]; // uint32 each
 export const RNG_STREAMS = ["words", "combat", "enemyAi", "gimmick", "boss", "loot", "trial", "meta"] as const;
@@ -102,50 +147,62 @@ export declare function deriveRng(seed: number, stream: RngStream, index?: numbe
 export declare function nextU32(s: RngState): number;
 /** Unbiased integer in [0, n) via rejection sampling. 1 <= n <= 2^32. */
 export declare function below(s: RngState, n: number): number;
+/** ALWAYS consumes exactly one below(s, BP) draw, even when p <= 0 or p >= BP (keeps streams aligned). */
 export const chance = (s: RngState, p: Bp): boolean => below(s, BP) < p;
-/** Weighted pick; iteration order is the explicit `order` array, never object-key order. */
+/** Weighted pick, one below() draw; iteration order is the explicit `order` array, never object-key order. */
 export declare function pickWeighted<K extends string>(s: RngState, w: Readonly<Record<K, number>>, order: readonly K[]): K;
 ```
-No float draws (`next()` is removed from the sim API).
+There are no float draws.
 
 **Stream rules**
-- Each encounter (index `e`) gets fresh streams at `EncounterStarted`: `words`, `combat`, `enemyAi`, `gimmick`, and `boss` for the boss encounter, all with `index = e`. A change in encounter 1 never shifts rolls in encounter 2.
-- `loot` is derived **at roll time** with `index = e` (`deriveRng(seed, "loot", e)`). Loot is independent of how the fight went, and adding combat features never shifts loot.
-- `trial` is for the Typing Trial. `meta` is not used in-level; the save's `metaRng` (§9.1) drives cache rolls and story seeds.
-- Adding a new randomness consumer means **adding a new stream name**, never borrowing an existing one. Removing or reordering draws inside a stream bumps `SIM_VERSION`.
+- **Per encounter:** each encounter `e` gets fresh `words`, `combat`, `enemyAi` and `gimmick` streams (`index = e`) at `EncounterStarted`; a boss encounter also gets `boss`. A change in encounter 1 never shifts rolls in encounter 2.
+- **Loot:** `loot` is derived **at roll time** (`deriveRng(seed, "loot", e)`). Loot is therefore independent of how the fight went.
+- **Trial and meta:** `trial` serves the Typing Trial. `meta` is never used in a level; the save's `metaRng` (§9.1) drives cache rolls and story attempt seeds.
+- **Adding or changing consumers:** a new randomness consumer gets a **new stream name**. Removing or reordering draws inside a stream bumps `SIM_VERSION`.
 
-### 1.4 State, snapshot, hash (decision D3)
-- All sim state (`LevelState`, `TrialState`) is **plain JSON data**: safe integers, strings, booleans, `null`, arrays, plain objects. There are no classes, `Map`/`Set`, `undefined` (use `null`), closures or floats. Content defs are referenced by id, not embedded.
-- The sim **mutates state in place** (60 Hz, per-key cost < 0.3 ms). "Pure" means no I/O, no ambient time or randomness, and same inputs → same outputs.
-```ts
+### 1.4 State, clone, snapshot, hash (D3)
+- **Plain data only.** All sim state (`LevelState`, `TrialState`) is plain JSON: safe integers, strings, booleans, `null`, arrays and plain objects. There are no classes, `Map`/`Set`, `undefined` (use `null`), closures or floats. Content defs are referenced by id.
+- **Mutated in place.** The sim mutates state in place to stay within the per-key budget. "Pure" means no I/O, no ambient time or randomness, and the same inputs always give the same outputs.
+- **Cloning.** The sim uses `deepClone`, never `structuredClone`. `structuredClone` is unavailable or behaves differently in some runtimes, and it would silently accept non-plain data.
+```ts sim
 // packages/sim/src/hash.ts
-/** Sorted keys, no whitespace. Throws on non-safe-integer numbers, NaN, undefined, functions, non-plain objects. */
+/** Sorted keys (cmpStr), no whitespace. Throws on non-safe-integer numbers, NaN, undefined, functions, non-plain objects. */
 export declare function canonicalJson(v: unknown): string;
+/** Same, but finite non-integer numbers are allowed and printed with Number#toString. For CONTENT_VERSION only (content has decimals). */
+export declare function canonicalContentJson(v: unknown): string;
+/** Plain-JSON deep copy. Asserts plain data exactly as canonicalJson does (throws on violations). */
+export declare function deepClone<T>(v: T): T;
 /** FNV-1a 32 over UTF-16 code units, low byte then high byte of each unit. Offset 0x811c9dc5, prime 0x01000193 via Math.imul. */
 export declare function fnv1a32(s: string): number;
 /** 8 lowercase hex chars of fnv1a32(canonicalJson(state)). */
 export declare function hash(state: LevelState | TrialState): string;
 ```
-32 bits is enough: the hash is for regression and client↔Worker parity tests. Anti-cheat compares re-simulated **outcomes** directly (§10), so it never trusts a hash for security.
+32 bits is enough. The hash is for regression and client↔Worker parity, and anti-cheat compares the re-simulated **outcomes** directly (§10).
 
 ### 1.5 Purity checklist (Reviewer enforces)
-No DOM, no three.js, no `Math.random`, no wall-clock time, no banned `Math.*`/`**`, no floats in state, no `async`, no module-level mutable state (everything lives in the state object), no iteration over object keys for logic order (use arrays).
+- No DOM and no three.js.
+- No `Math.random` and no wall-clock time.
+- No banned `Math.*`, `**`, `localeCompare` or `Intl`.
+- No `%` on possibly-negative operands.
+- No floats in state.
+- No `async`.
+- No module-level mutable state.
+- No logic ordered by object-key iteration; use arrays, and sort with `cmpStr`.
 
 ---
 
 ## 2. Input format and client clock protocol
 
-```ts
+```ts sim
 // packages/sim/src/input.ts
-/** Printable ASCII the content may use. */
-export const TYPABLE_CHARS =
-  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,'-?!;:\"()";
+import { TYPABLE_CHARS } from "@hd2d/content"; // single source of truth (also builds the content text regex, §6)
 export type SimKey = "Escape" | string; // string = exactly one char of TYPABLE_CHARS
 export type KeyInput = { tick: Tick; key: SimKey };
 export type CommandInput =
   | { tick: Tick; cmd: "abandon" }                                  // quit from pause menu -> LevelFailed{abandoned}
-  | { tick: Tick; cmd: "revive"; source: "gem" | "feather" };      // hook; rejected unless options.allowExternalRevive
+  | { tick: Tick; cmd: "revive"; source: "gem" | "feather" };      // hook; ignored unless options.allowExternalRevive
 export type SimInput = KeyInput | CommandInput;
+export const isTypable = (k: string): boolean => k.length === 1 && TYPABLE_CHARS.includes(k);
 
 /** Pure mapping from a keydown-like record. Returns null = ignore (not logged, not sent). */
 export declare function normalizeKey(e: {
@@ -154,54 +211,62 @@ export declare function normalizeKey(e: {
 }): SimKey | null;
 ```
 `normalizeKey` rules:
-1. `repeat` → null (auto-repeat is ignored). `isComposing` or `key === "Dead"` or `"Process"` → null.
+1. `repeat` → null; key auto-repeat is ignored. `isComposing`, `"Dead"` and `"Process"` → null.
 2. `ctrlKey || metaKey` → null, **except** `ctrlKey && altKey` (Windows AltGr produces characters).
-3. `"Escape"` → `"Escape"`. `"Tab"` → `"Escape"` (the client must `preventDefault`).
+3. `"Escape"` → `"Escape"`. `"Tab"` → `"Escape"`; the client must `preventDefault`.
 4. Typographic normalization: `’ ‘` → `'`, `“ ”` → `"`, `–` → `-`, NBSP → space.
-5. A single char in `TYPABLE_CHARS` → itself (**case preserved**). Anything else → null.
+5. A single char that is in `TYPABLE_CHARS` → itself, **case preserved**. Anything else → null.
 
-**Case (D5):** `LevelOptions.caseMode = "auto"` (default) compares case-insensitively when the plate text contains no uppercase letters (all of Ch1), and case-sensitively otherwise (T5+ capitals). `"strict"` always compares exactly. Logged keys keep their real case.
+**Case (D5).** `caseMode: "auto"` (the default) compares case-insensitively when the plate text has no uppercase letters, which covers all of Ch1, and case-sensitively otherwise. `"strict"` always compares exactly. Logged keys keep their real case.
 
-**Escape vs pause (D6):** this is a client rule. Escape while the view has a locked target is sent to the sim (drop). Escape with no target opens the pause menu and is not sent. Tab always drops. In the Trial, Escape opens "abandon run?".
+**Escape vs. pause (D6, a client rule).**
+- Escape while the view has a locked target is sent to the sim, which drops the target.
+- Escape with no target opens the pause menu and is not sent.
+- Tab always drops the target.
+- In the Trial, Escape opens "abandon run?".
 
-**Client clock protocol** (apps/game `level/runner.ts`, illustrative but normative for tick derivation):
-```ts
-// clockOriginMs = performance.now() at createLevel (story) or at the first keydown (Trial).
-// pausedTotalMs accumulates while paused. Inputs are applied in the keydown handler (not on the next
-// frame) so the key click and letter pop fire with < 10 ms latency.
+**Client clock protocol.** This is apps/game `level/runner.ts`. It is illustrative except for how ticks are derived and stepped, which is normative.
+```ts client
+// clockOriginMs = performance.now() at createLevel (story) or at the first accepted keydown (Trial).
+// pausedTotalMs accumulates while paused (including auto-pauses for stalls and hidden tabs).
 function onKeyDown(e: KeyboardEvent) {
   const key = normalizeKey(e);
   if (key === null || paused) return;
   let ms = Math.round(e.timeStamp - clockOriginMs - pausedTotalMs);
-  ms = Math.max(ms, tickStartMs(state.tick), lastLoggedMs); // never earlier than what is already simulated
+  ms = Math.max(ms, tickStartMs(state.tick), lastLoggedMs);  // never earlier than what is already simulated
   const tick = msToTick(ms);
-  dispatch(step(state, tick - state.tick));
+  dispatch(step(state, tick - state.tick));                    // keys step the sim immediately (lag does not apply)
   dispatch(applyInput(state, { tick, key }));
-  log.push({ ms, key }); lastLoggedMs = ms;
+  log.push({ ms, input: { tick, key } }); lastLoggedMs = ms;
 }
 function onFrame(now: number) {
+  if (paused) return render(getView(state), 0);
   const ms = now - clockOriginMs - pausedTotalMs;
-  const target = msToTick(Math.floor(ms));
-  dispatch(step(state, Math.min(target - state.tick, 600))); // > 10 s stall: auto-pause instead of catching up
-  render(getView(state), /* alpha */ Math.min(1, Math.max(0, ms * 0.06 - state.tick)));
+  const target = msToTick(Math.max(0, Math.floor(ms))) - CLIENT_LAG_TICKS;
+  if (target - state.tick > MAX_CATCHUP_TICKS) {               // tab stall / debugger / sleep
+    pausedTotalMs += ms - tickStartMs(state.tick + CLIENT_LAG_TICKS); // the stall becomes paused time
+    return pause("stall");
+  }
+  if (target > state.tick) dispatch(step(state, target - state.tick));
+  render(getView(state), Math.min(1, Math.max(0, ms * 0.06 - CLIENT_LAG_TICKS - state.tick)));
 }
 ```
-- The **log stores integer ms** (game-time, pauses excluded); ticks are always re-derived with `msToTick`. This keeps sub-tick timing for the anti-cheat heuristics while the sim stays tick-based (D4).
-- Same-tick inputs are applied in log order. `applyInput` requires `input.tick === state.tick` (it throws otherwise; that is a programming error).
-- `visibilitychange → hidden` auto-pauses story levels and aborts the Trial.
+- **Ticks come from logged ms (D4).** The log stores integer game-time ms (pauses excluded), and ticks are always re-derived with `msToTick`.
+  - Frames trail the clock by `CLIENT_LAG_TICKS` (about 50 ms). Most keydown events, whose OS timestamps precede the frame, therefore land at their true tick instead of being clamped forward.
+  - Keys are still applied in the handler, so the click and the letter pop happen within 10 ms.
+- **Same-tick inputs** are applied in log order. `applyInput` requires `input.tick === state.tick` and throws otherwise; a mismatch is a programming error.
+- **Auto-pause:** `visibilitychange → hidden` auto-pauses story levels and aborts the Trial.
 
 ---
 
 ## 3. Public sim API
 
-```ts
+```ts sim
 // packages/sim/src/index.ts
 export const SIM_VERSION = 1 as const;
+// Shared vocabulary comes from content (single source): DamageType, Rarity, GearSlot, WeaponArchetype.
+import type { DamageType, Rarity, GearSlot, WeaponArchetype, ContentBundle, StarChallenge } from "@hd2d/content";
 
-export type WeaponArchetype = "sword" | "dagger" | "staff" | "hammer";
-export type DamageType = "slash" | "pierce" | "blunt" | "arcane" | "fire" | "ice" | "light";
-export type Rarity = "C" | "U" | "R" | "E" | "L";
-export type GearSlot = "weapon" | "armor" | "charm";
 export type ActiveSkillId = "slashWave" | "piercingThrust" | "fireball" | "frostLock" | "mendingLight" | "aegis";
 export type PassiveId =
   | "cleanCut" | "bulwarkStreak" | "steadyHands" | "riposte"
@@ -209,9 +274,10 @@ export type PassiveId =
 export type CastMode = "smart" | "asap";
 export type ComboMode = "gentle" | "strict" | "zen";
 export type Difficulty = "story" | "standard" | "hard" | "zen"; // zen: enemies never attack
+export type Gimmick = "fading" | "scrambled";
 
 export interface GearStats { tier: number; rarity: Rarity; upgrade: number }
-/** Flattened, sim-ready loadout. The client builds it from save + content (`buildLoadout` in apps/game/meta). */
+/** Flattened, sim-ready loadout. Built by buildLoadout (§8) or parLoadout (tools). */
 export interface Loadout {
   weapon: GearStats & { archetype: WeaponArchetype };
   armor: GearStats;
@@ -222,36 +288,63 @@ export interface Loadout {
 }
 
 export interface LevelOptions {
-  pace: number;                 // integer net WPM; createLevel clamps it to 15..120. Locked for the level.
+  pace: number;                 // integer net WPM; createLevel clamps to 15..120. Locked for the level.
   difficulty: Difficulty;
   comboMode: ComboMode;
   caseMode: "auto" | "strict";
-  autoUnlockAfterTypos: 0 | 3;  // beginner "auto-unlock" (doc 01 §1.2); 0 = off
+  autoUnlockAfterTypos: 0 | 3;  // beginner auto-unlock (doc 01 §1.2); 0 = off
   firstClear: boolean;          // chest odds 30% vs 15%, boss chest 100% vs 50%
   frontierChapter: number;      // chest gear tier
-  goldMultBp: Bp;               // replay / stale / soft-cap multiplier from meta; 10_000 on first clear
+  goldMultBp: Bp;               // replay/stale/soft-cap multiplier from meta; 10_000 on first clear
   allowExternalRevive: boolean; // slice: false (gem revive hook)
-  tutorial: boolean;            // L1-1: emits TutorialCue, gentler first guard (BALANCE.TUTORIAL_*)
+  tutorial: boolean;            // L1-1: TutorialCue events, gentler first guard (BALANCE.TUTORIAL_*)
 }
 
-/** Produced by resolveLevel(bundle, levelId, ctx). Everything the sim needs; strings only for words. */
+// ---- Resolved (sim-input) data: integers only, produced by resolveLevel/resolveTrial ----
+export interface ResolvedEnemyRef { enemyId: string; gimmick: Gimmick | null }
+export type ResolvedSegment =
+  | { kind: "walk"; ticks: number; heal: boolean }
+  | { kind: "encounter"; name: string; hpPoolM: Milli; gruntHitM: Milli; waves: ResolvedEnemyRef[][] }
+  | { kind: "boss"; bossId: string };
+export interface ResolvedEnemy {
+  id: string; archetype: "grunt" | "brute" | "speedster" | "boss";
+  baseIntervalTicks: number; heavy: boolean;
+  plateLength: [min: number, max: number];
+  weaknesses: DamageType[]; shield: number;
+  hpWeightBp: Bp; hitWeightBp: Bp;      // enemy HP = hpPoolM * hpWeightBp / Σ weights in its wave; hit = gruntHitM * hitWeightBp / BP
+}
+export interface ResolvedBoss {
+  id: string; name: string; title: string; enemyId: string;
+  hpM: Milli; hitM: Milli; plateLength: [min: number, max: number];
+  phase1: { endAtHpBp: Bp; adds: ResolvedEnemyRef[] };
+  phase2: { endAtHpBp: Bp; doomEveryTicks: number; minDoomSpells: number };
+  phase3: {
+    minigame: { kind: "fallingRubble"; lanes: number; spawnEveryTicks: number; fallTicks: number; clearAtkMultBp: Bp; missHitM: Milli };
+    finisherText: string;
+  };
+  breatherTicks: number; introTicks: number;
+}
 export interface ResolvedLevel {
   levelId: string; chapter: number; index: number; isBoss: boolean; contentVersion: string;
-  segments: ResolvedSegment[];          // walk | encounter (1..n waves) | boss; seconds already converted to ticks
-  enemies: Record<string, ResolvedEnemy>; // by EnemyDef.id; hp/hit in Milli, intervals in ticks
+  segments: ResolvedSegment[];
+  enemies: Record<string, ResolvedEnemy>;   // by EnemyDef.id (lookup only; never iterated for logic)
   boss: ResolvedBoss | null;
   words: {
     current: string[]; review: string[]; biome: string[]; weak: string[]; // weak = SRS due list for this attempt
     guard: string[]; doom: string[]; finisher: string[]; secondWind: string[]; minigame: string[];
   };
-  tierMixBp: { current: Bp; review: Bp; biome: Bp; weak: Bp };  // 6000/2000/1500/500; an empty pool's weight goes to current
+  tierMixBp: { current: Bp; review: Bp; biome: Bp; weak: Bp }; // 6000/2000/1500/500; an empty pool's weight goes to current
   plateLength: [min: number, max: number];
-  goldTotal: number;                    // levelGold(chapter, index); options.goldMultBp is applied on top
+  goldTotal: number;                        // levelGold(chapter, index); options.goldMultBp applies on top
+  parHpM: Milli;                            // computeHeroStats(parLoadout(chapter)).maxHp (Doom Spell damage base)
+  star3: StarChallenge; parRefTicks: number;
+  tutorial: boolean;
 }
+/** Deterministic given (bundle contents, levelId, ctx). Fixtures are keyed on (contentVersion, levelId, ctx). */
 export declare function resolveLevel(bundle: ContentBundle, levelId: string, ctx: { dueWeakWords: string[] }): ResolvedLevel;
 
 export declare function createLevel(def: ResolvedLevel, loadout: Loadout, seed: number, options: LevelOptions): LevelState;
-/** Precondition: input.tick === state.tick. Applied before that tick's step processing. */
+/** Precondition: input.tick === state.tick. Applied before that tick's step processing. No-op (returns []) on a terminal state. */
 export declare function applyInput(state: LevelState, input: SimInput): SimEvent[];
 /** Advance n >= 0 ticks. A terminal state ('cleared' | 'failed') does not advance and returns []. */
 export declare function step(state: LevelState, n?: number): SimEvent[];
@@ -260,12 +353,15 @@ export declare function getResult(state: Readonly<LevelState>): LevelResult | nu
 export declare function computeHeroStats(loadout: Loadout): { atk: Milli; maxHp: Milli };
 
 export interface Snapshot<S> { simVersion: typeof SIM_VERSION; state: S }
-export declare function snapshot<S extends LevelState | TrialState>(state: S): Snapshot<S>; // structuredClone
-export declare function restore<S extends LevelState | TrialState>(snap: Snapshot<S>): S;   // throws on version mismatch
-export { hash } from "./hash.ts";
+export declare function snapshot<S extends LevelState | TrialState>(state: S): Snapshot<S>; // deepClone
+export declare function restore<S extends LevelState | TrialState>(snap: Snapshot<S>): S;   // deepClone; throws on version mismatch
 
 export interface ReplayResult<S, R> { finalState: S; events: SimEvent[]; hash: string; result: R | null }
-/** Applies inputs in order, then keeps stepping until terminal, `untilTick`, or BALANCE.MAX_LEVEL_S (-> LevelFailed timeout). */
+/**
+ * Steps to each input's tick and applies it; STOPS consuming inputs once the state is terminal (later inputs are
+ * ignored, not errors). After the last input keeps stepping until terminal, `untilTick`, or BALANCE.MAX_LEVEL_S
+ * (-> LevelFailed{timeout}). Throws on non-monotonic ticks.
+ */
 export declare function replay(
   def: ResolvedLevel, loadout: Loadout, seed: number, options: LevelOptions,
   inputs: readonly SimInput[], opts?: { untilTick?: Tick; collectEvents?: boolean },
@@ -274,23 +370,26 @@ export declare function replay(
 // ---- Typing Trial (the slice's only leaderboard) ----
 export interface ResolvedTrial { trialId: string; durationTicks: number; passages: string[]; contentVersion: string }
 export declare function resolveTrial(bundle: ContentBundle, trialId: string): ResolvedTrial;
-export declare function createTrial(def: ResolvedTrial, seed: number): TrialState; // passage = passages[below(trialRng, n)]
+/** passage = passages[below(deriveRng(seed, "trial"), passages.length)]. Tick 0 = the first key. */
+export declare function createTrial(def: ResolvedTrial, seed: number): TrialState;
+/** Inputs with tick >= durationTicks never count: the trial is terminal once state.tick === durationTicks. */
 export declare function applyTrialInput(state: TrialState, input: SimInput): SimEvent[];
 export declare function stepTrial(state: TrialState, n?: number): SimEvent[];
 export declare function getTrialView(state: Readonly<TrialState>): TrialView;
 export declare function getTrialResult(state: Readonly<TrialState>): TrialResult | null;
+/** Same terminal rule as replay(); always steps to durationTicks. */
 export declare function replayTrial(def: ResolvedTrial, seed: number, inputs: readonly SimInput[]): ReplayResult<TrialState, TrialResult>;
 export interface TrialResult {
-  correctChars: number; typos: number;
+  correctChars: number; typos: number;     // spaces count as chars (D25)
   wpmX100: number;      // floor(correctChars * 60 * 100 * TICK_HZ / (5 * durationTicks)) = correctChars*20 for 60 s
   accuracyBp: Bp;       // floor(correct * BP / (correct + typos)); BP if no keys
   durationTicks: number;
 }
 ```
 
-### 3.1 State shape (run-level vs encounter-level)
-Internals belong to the Sim engineer; this shape is the agreed split. Everything outside the sim reads **`LevelView` only**.
-```ts
+### 3.1 State shape (run-level vs. encounter-level)
+The internals belong to the Sim engineer. This shape is the agreed split. Everything outside the sim reads **`LevelView` only**.
+```ts sim
 export type LevelPhase =
   | "walk"            // auto-walk segment; keys ignored
   | "encounterIntro"  // enemies enter, "Ready… Type!"; keys ignored until typingFromTick
@@ -306,104 +405,162 @@ export interface LevelState {
   kind: "level"; simVersion: 1; tick: Tick; seed: number;
   phase: LevelPhase; phaseUntil: Tick | null; segmentIndex: number;
   nextId: number;                      // id allocator for enemies (>= 1) and plates
-  run: RunState;                       // whole level: hero HP, combo, skill charge, stats, gold, chests, word results
+  run: RunState;                       // whole level: hero HP, combo + latch, keyStreak, skill charge, stats, gold, chests, word results
   enc: EncounterState | null;          // current encounter: enemies, plates, target, focus, ATB, encounter rng streams, boss script
-  // ...plus def/options copies needed for logic (ids and integers only)
 }
+export interface TrialState { kind: "trial"; simVersion: 1; tick: Tick; seed: number /* ...sim-internal */ }
+/** Sim-internal shapes (plain data); not part of the contract beyond "plain JSON". */
+export interface RunState { readonly _run?: never }
+export interface EncounterState { readonly _enc?: never }
 ```
-Persistence rules (D18):
-- **Across the whole level:** hero HP, Second Wind used, combo (plus its penalty latch), skill charge, stats, gold collected, chests.
-- **Per encounter:** hero ATB resets to 0 at `EncounterStarted` (Opening Gambit sets it to 50). Also per encounter: target, focus, plates, statuses and enemy timers.
+**Persistence rules (D18):**
+- **Across the whole level:** hero HP, Second Wind used, combo with its penalty latch, keyStreak, skill charge, stats, gold collected, chests.
+- **Per encounter:** hero ATB resets to 0 at `EncounterStarted` (Opening Gambit sets it to 50). Target, focus, plates, statuses and enemy timers are also per encounter.
 
 ### 3.2 Tick processing order (normative)
-For tick `t`, the client applies all inputs with `tick === t` in order, then `step` processes `t` and finally sets `state.tick = t + 1`. Every event carries `tick: t`. Within `step`:
-1. Expire statuses and timers (break, stagger, freeze, burn/bleed ticks).
-2. Resolve scheduled hero impacts (auto-attack hits, skill impacts).
-3. Enemy timers: windup start → `EnemyAttackWindup` + `GuardWordShown`; impact → `EnemyAttack`.
-4. Gimmick timers (fade, scramble).
-5. Boss script (doom deadline, minigame spawns/landings, phase gates).
-6. Smart/ASAP skill auto-cast checks.
-7. Deaths, focus re-pick, encounter/wave/phase/segment transitions.
+For tick `t`, the client applies all inputs with `tick === t` in order. `step` then processes `t` and sets `state.tick = t + 1`. Events carry `tick: t`. Inside `step`:
+1. Expire statuses and timers.
+2. Resolve scheduled hero impacts (auto-attack hits, skill impacts, DoT ticks).
+3. Run enemy timers: a windup start emits `EnemyAttackWindup` + `GuardWordShown`; an impact emits `EnemyAttack`.
+4. Run gimmick timers.
+5. Run the boss script: doom deadline, minigame spawns and landings, phase gates.
+6. Check skills for auto-cast.
+7. Handle deaths, re-pick the focus, then run encounter, wave, phase and segment transitions.
 
-### 3.3 Typing rules (normative summary of doc 01 §1 + decisions)
-- **Targeting:** with no target, the first key must equal the (case-folded) first char of a targetable plate, which gives `TargetAcquired` + `CharCorrect(index 0)`. All targetable plates have **distinct first letters** (enemy words, guard words, doom, minigame words). Second Wind and Finisher plates are exclusive and auto-targeted.
-- **No target + space:** ignored. **No target + a key that matches no plate:** stray `Typo` (plateId null).
-- **Locked:** the right char advances. A wrong char is a `Typo` with no advance. Other plates' letters do not switch target; the player must press Escape/Tab first.
-- **Escape (D9):** `TargetDropped{escape}`. The plate's typed progress resets to 0 and the attempt is no longer perfect. Chars at indices that already paid ATB on this plate pay no ATB again (`maxPaidIndex`), so drop/re-type farming gives nothing.
-- **Combo (D7, D8):** combo = consecutive Perfect words. +1 on a Perfect `WordCompleted`, and a Sword Perfect Parry adds +1 more.
-  - Typo penalty by mode: gentle = halve (floor), strict = reset to 0 and −5 ATB, zen = none.
-  - The penalty applies **at most once per plate attempt**, and stray typos share one latch that clears on the next correct char.
-  - `ComboMult = 1 + COMBO_PER × min(combo, COMBO_CAP)` (Momentum not in the slice).
-  - Tiers: 0 below 5; 1 Bronze ≥ 5; 2 Silver ≥ 15; 3 Gold ≥ 30; 4 Radiant ≥ 50.
-  - `streak` = consecutive correct chars (resets on any typo). It is for audio pitch and trails only and has no mechanical effect.
-- **ATB:**
-  - Per correct char: `char_charge × ComboMult × passive mods`.
-  - On completion: `+ word_bonus × (perfect ? 1.25 : 1) + (perfect ? 0.25 × Σchars paid on this plate : 0) + (swift ? SWIFT_ATB : 0)`.
-  - Full at 100. On full: auto-attack, and the ATB keeps the overflow up to a cap of 30.
-- **Swift (D30):** Perfect and `wordWpm × BP ≥ pace × SWIFT_THRESHOLD_BP` (1.3×), where `wordWpm = floor((L-1) × 720 / max(1, tLast − tFirst))`.
-- **Word Strike (chip):** at completion, `CHIP_NORMAL`/`CHIP_PERFECT` × ATK to the plate's owner. It cannot push a boss past a phase gate. Chips never remove shield points.
-- **Focus:** the owner of the last completed enemy plate. If the focus dies, focus moves to the lowest-slot living enemy.
-- **Crit (D10):** an auto-attack crits with chance `BASE_CRIT + PERFECT_CRIT_BONUS × perfectWords / wordsCompleted` (both counted since the previous auto-attack). Clean Cut adds +10% if the last word was perfect. Crit damage ×`CRIT_MULT`.
-- **Auto-attack (D12):** `AtbFilled` → `AutoAttack{impactTick = t + ATTACK_IMPACT_TICKS}` → `Hit` × weapon hits at impact. Typing continues during the dash.
-- **Damage:** `ATK × mult(source) × (crit ? 1.5) × (weak ? WEAK_MULT) × (broken ? BREAK_DMG_MULT) × (staggered ? DOOM_STAGGER_DMG_MULT)`. There is no random variance (`DMG_VARIANCE = 0`, D31).
-- **Weakness / shield / Break (D11, Octopath-style as in the POC):**
-  - Every auto, skill or counter hit whose `DamageType` is in the enemy's weaknesses removes 1 shield point (+1 if crit). The first such hit emits `WeaknessRevealed`.
-  - At 0 shield the enemy gets `Break` for `BREAK_S`: its attack timer resets and pauses, any windup or guard is cancelled, and it takes ×`BREAK_DMG_MULT` damage.
-  - The shield refills when the break ends.
-- **Guard (D13):**
-  - At `impactTick − guardTicks` the enemy's plate is **replaced** by a guard word. `guardTicks = max(1.5 s, 2.5 s × paceFactor)`, plus 1 s on the story preset and plus Calm Mind (not in slice). If that plate was the target, `TargetDropped{plateChanged}` fires.
-  - Typing the guard word → `GuardWordTyped{block|parry}`. The normal word returns as a fresh plate, and the result is held until impact.
-  - At impact: parry → 0 damage, counter Hit at `PARRY_COUNTER` × ATK (Riposte 150%), +10 ATB. Block → `BLOCK_MULT` (Iron Will 0.1). Ignored → full damage, and the plate reverts after the hit.
-  - The director keeps impacts of different enemies ≥ `TELEGRAPH_STAGGER_S` (0.8 s) apart.
-- **Enemy timers:** `interval = baseInterval × PACE_FACTOR_BP[pace] × PRESET_INTERVAL_MULT[difficulty]`. Initial progress is random in 0–30% from the `enemyAi` stream.
-- **Second Wind (D17):**
-  - The first time hero HP ≤ 0 in a level → `HeroDowned` + `SecondWindStarted`. The encounter freezes (no timers, no impacts). One sentence plate is shown with a deadline of `SECOND_WIND_S` (8 s).
-  - Complete it → `SecondWindSucceeded`, HP = 30% max, and combat resumes.
-  - Deadline missed → `SecondWindFailed`. Then `LevelFailed{defeated}`, or `phase = 'downed'` if `allowExternalRevive` (a `revive` command → `Revived`, HP = 50%).
-  - A second death in the same level → `LevelFailed` directly.
-- **Fail:** `goldKept = floor(goldCollected × FAIL_GOLD_KEEP)`. Word-learning progress (`LevelResult.words`) is always reported.
-- **Walk:** walk segments with `heal: true` emit `HeroHealed{walk}` (+25% max HP) at `WalkStarted`.
-- **Gold:** `goldTotal × goldMultBp` is split evenly across encounters (the remainder goes to the last). It is paid at `EncounterCleared` as `GoldGained`.
-- **Chests:** each normal encounter rolls a chest (`loot` stream); the boss encounter always drops one on first clear. Contents are rolled at drop and reported in `LevelResult.chests`.
+### 3.3 Typing rules (normative)
+
+**Targeting.**
+- With no target, the first key must equal the case-folded first char of a targetable plate. That emits `TargetAcquired` + `CharCorrect(index 0)`.
+- Targetable plates (enemy words, guard words, doom, minigame words) have **distinct first letters**.
+- Second Wind and Finisher plates are exclusive and auto-targeted.
+- With no target, a space is ignored. Any other key that matches no plate is a stray `Typo` (`plateId: null`).
+
+**While a target is locked.**
+- The right char advances. A wrong char is a `Typo` with no advance.
+- Other plates' letters do not switch the target; Escape/Tab does.
+
+**Escape (B1).**
+- Escape emits `TargetDropped{escape}` and resets that plate's typed progress to 0.
+- It **keeps** the plate's `perfect` flag (still true unless a typo already happened) and has **no combo effect**.
+- Anti-farm rule: chars at indices `< maxPaidIndex` on that plate pay no ATB again.
+
+**Combo, mechanical (D7, PO hybrid).**
+- The combo counts consecutive Perfect words. A Perfect `WordCompleted` gives +1, and a Sword Perfect Parry gives +1 more. An **imperfect completion leaves the combo unchanged** (no +1 and no extra penalty).
+- Typo penalties by mode: gentle halves the combo (floor); strict resets it to 0 and costs −5 ATB; zen has no penalty.
+- The penalty applies **at most once per plate attempt**, and stray typos share one latch that clears on the next correct char (D8).
+- `ComboMult = 1 + COMBO_PER × min(combo, COMBO_CAP)`.
+- `comboTier`: 0 below 5; Bronze 1 at ≥ 5; Silver 2 at ≥ 15; Gold 3 at ≥ 30; Radiant 4 at ≥ 50. The tier shows in the HUD combo counter and the hero aura.
+
+**Key streak, VFX only (PO hybrid).**
+- `keyStreak` counts consecutive correct keys. It resets to 0 on **any** typo, stray ones included, in every combo mode, and it persists across plates and encounters within a level.
+- `keyStreakTier` (`KEY_STREAK_TIERS = [10, 25, 50, 100]`): 0 white; 1 gold at ≥ 10; 2 ember at ≥ 25; 3 azure at ≥ 50; 4 prismatic at ≥ 100. It drives plate/letter colour, trails, embers and the click pitch.
+- It has no mechanical effect. The sim computes it so that the HUD and VFX never derive it themselves.
+
+**ATB.**
+- Per correct char: `char_charge × ComboMult × passive mods`.
+- On completion: `word_bonus × (perfect ? 1.25 : 1)`, plus `0.25 × Σ chars paid on this plate` if perfect, plus `SWIFT_ATB` if swift.
+- Full at 100. On full: auto-attack, keeping the overflow up to a cap of 30.
+
+**Swift (D30).** A word is swift when it is Perfect and `wordWpm × BP ≥ pace × SWIFT_THRESHOLD_BP`, with `wordWpm = floor((L-1) × 720 / max(1, tLast − tFirst))`.
+
+**Word Strike (chip).**
+- At completion, `CHIP_NORMAL` or `CHIP_PERFECT` × ATK hits the plate's owner.
+- It emits **`Hit{kind:"chip"}`**, and the VFX for chip damage binds to that `Hit` only. `WordCompleted` carries no damage, so there is no double pop.
+- A chip cannot push a boss past a phase gate, and chips never remove shield points.
+
+**Focus.** The focus is the owner of the last completed enemy plate. If the focus dies, it moves to the lowest-slot living enemy.
+
+**Crit (D10).**
+- Auto-attack crit chance = `BASE_CRIT + PERFECT_CRIT_BONUS × perfectWords / wordsCompleted`, counted since the previous auto-attack.
+- If `wordsCompleted = 0` the share is 0 and the chance is `BASE_CRIT`.
+- Clean Cut adds +10% if the last word was perfect.
+- The roll always draws from the `combat` stream.
+
+**Auto-attack (D12).** `AtbFilled` → `AutoAttack{impactTick = t + ATTACK_IMPACT_T}` → `Hit` × the weapon's hits at impact. Typing continues during the dash.
+
+**Damage chain (normative order; every step is `mulBp` with floor):**
+```text
+dmgM = mulBp(atkM, sourceMultBp)       // weapon atk_mult per hit | skill mult | chip 15/25% | counter 50/150% | minigame clear mult
+if crit:      dmgM = mulBp(dmgM, CRIT_MULT_BP)
+if weak:      dmgM = mulBp(dmgM, WEAK_MULT_BP)
+if broken:    dmgM = mulBp(dmgM, BREAK_DMG_MULT_BP)
+if staggered: dmgM = mulBp(dmgM, DOOM_STAGGER_DMG_MULT_BP)
+for each equipped passive damage mod, in loadout slot order 0..2: dmgM = mulBp(dmgM, modBp)
+dmgM = max(dmgM, 1); then clamp so the target's HP does not cross an active phase gate
+incoming: hitM -> mulBp(hitM, BLOCK_MULT_BP | IRON_WILL_BLOCK_MULT_BP) if blocked; 0 if parried or absorbed by barrier
+```
+There is no random variance (`DMG_VARIANCE = 0`, D31).
+
+**Weakness, shield and Break (D11; kept by the PO).**
+- Each `auto`, `skill` or `counter` hit whose `DamageType` is in the enemy's weaknesses removes 1 shield point, and a crit removes 1 more. The first such hit emits `WeaknessRevealed`.
+- At 0 shield the enemy gets `Break` for `BREAK_S`: its attack timer resets and pauses, any windup or guard is cancelled, and it takes ×`BREAK_DMG_MULT` damage. The shield refills when the Break ends.
+- **Encounter HP is retuned for this added DPS in T6.1.**
+
+**Guard (D13).**
+- At `impactTick − guardTicks` the enemy's plate is **replaced** by a guard word. `guardTicks = max(1.5 s, 2.5 s × paceFactor)`, plus 1 s on the story preset. If that plate was the target, `TargetDropped{plateChanged}` fires.
+- Typing the guard word emits `GuardWordTyped{block|parry}`, and the normal word returns as a fresh plate.
+- At impact:
+  - Parry → 0 damage, a counter `Hit` (`PARRY_COUNTER`, or 1.5 with Riposte) and +10 ATB.
+  - Block → `BLOCK_MULT` (0.1 with Iron Will).
+  - Ignored → full damage, and the plate reverts after the hit.
+- Impacts from different enemies are kept ≥ `TELEGRAPH_STAGGER_S` (0.8 s) apart.
+
+**Enemy timers.** `interval = baseInterval × PACE_FACTOR_BP[pace] × PRESET_INTERVAL_MULT[difficulty]`. Each enemy starts at a random progress of 0–30% (`enemyAi` stream).
+
+**Second Wind (D17).**
+- The first time hero HP drops to 0 or below in a level, the sim emits `HeroDowned` + `SecondWindStarted`. The encounter freezes, and one sentence plate is shown with a deadline of `SECOND_WIND_S` (8 s).
+- Success emits `SecondWindSucceeded` and restores HP to 30% of max.
+- If the deadline passes, `SecondWindFailed` is followed by `LevelFailed{defeated}`, or by `phase = "downed"` when `allowExternalRevive` is set; a `revive` command then emits `Revived` and restores 50% HP.
+- A second death in the same level is always `LevelFailed`.
+
+**Fail.** `goldKept = floor(goldCollected × FAIL_GOLD_KEEP)`. `LevelResult.words` is always reported.
+
+**Walk.** A walk with `heal: true` emits `HeroHealed{walk}` for +25% max HP at `WalkStarted`.
+
+**Gold.** `mulBp(goldTotal, goldMultBp)` is split evenly across encounters, with the remainder going to the last one. Each share is paid at `EncounterCleared` as `GoldGained`.
+
+**Chests.** Each normal encounter rolls for a chest on the `loot` stream. The boss always drops one on first clear, and has a 50% chance on replay. Contents are rolled at drop and reported in `LevelResult.chests`.
 
 ### 3.4 Boss (Ruin Golem) flow
-- **Phase 1 (100–66%):** the boss has normal word plates (`plateLength` from the BossDef), and the adds spawn.
-- **Phase 2 (66–33%), "Incantation":**
-  - The boss casts a Doom Spell every `doomEveryS`. It is a sentence plate with deadline `ceil(chars × 900 / pace) + 120` ticks (that is `chars/(pace_cps × 0.8) + 2 s`).
-  - Success: stagger the boss for 4 s at ×1.5 damage.
-  - Fail: `DOOM_DMG × parHp`, **non-lethal** (it clamps the hero at 1 HP, D14).
-  - HP clamps at the 33% gate until `minDoomSpells` have resolved (D16).
-- **Phase 3 (< 33%), signature "Falling Rubble":**
-  - Words fall in lanes; each cleared word deals a Word-Strike-class hit to the boss, and each missed word hits the hero for `missHit`.
+- **Phase 1 (100–66%):** the boss has word plates and the adds spawn.
+- **Phase 2, "Incantation" (66–33%):**
+  - Every `doomEveryTicks` the boss casts a Doom Spell. Its deadline is `ceil(chars × 900 / pace) + 120` ticks.
+  - Success: the boss is staggered for 4 s and takes ×1.5 damage.
+  - Failure: the hero takes `mulBp(parHpM, DOOM_DMG_BP)`. It is **non-lethal**: HP is clamped at 1 (D14).
+  - The boss's HP clamps at the 33% gate until `minDoomSpells` have resolved (D16).
+- **Phase 3, "Falling Rubble" (below 33%):**
+  - Words fall in lanes. A cleared word deals a minigame hit to the boss; a missed word deals `missHitM` to the hero.
   - Auto-attacks and skills keep hitting the boss. The boss's own attacks are suspended.
-  - The boss's HP clamps at 1 milli until the minigame wave in progress ends. Once HP sits at that floor → `FinisherShown`.
-  - The Finisher sentence has **no timer**. Completing it → `FinisherCompleted` → `EnemyDeath{byKind: finisher}` (D15).
-- **Each transition:** `BossPhaseChanged`, a breather of `breatherS`, and `HeroHealed{phase}` for `PHASE_HEAL`.
+  - The boss's HP clamps at 1 milli; when the wave in progress ends with HP at 1 milli, `FinisherShown` fires.
+  - The Finisher has no timer. Completing it emits `FinisherCompleted`, then `EnemyDeath{byKind: "finisher"}` (D15).
+- **Between phases:** `BossPhaseChanged`, a breather of `breatherTicks`, and `HeroHealed{phase}` for `PHASE_HEAL`.
 
 ---
 
-## 4. Events — `packages/sim/src/events.ts`
+## 4. Events: `packages/sim/src/events.ts`
 
 Conventions:
-- Every event has `type` and `tick`. Ids: `EntityId` (hero = 0, enemies ≥ 1), `PlateId` (unique per level).
-- **Amounts in events are display integers** (`toDisplay`), except fields suffixed `M` (milli).
-- Events are emitted at sim time. Presentation may stagger them (hit-stop etc.) but must not reorder causally related events.
+- Every event has `type` and `tick`.
+- `EntityId`: the hero is 0 and enemies are ≥ 1. `PlateId` is unique per level.
+- **Amounts in events are display integers** (`toDisplay`), except fields suffixed `M`, which are milli.
+- Presentation may stagger events (hit-stop and so on) but never reorders causally related ones.
 
-```ts
-import type { Tick } from "./time.ts";
-import type { ActiveSkillId, DamageType, PassiveId, Rarity, GearSlot, WeaponArchetype, TrialResult } from "./index.ts";
-import type { CachePity } from "./meta/cache.ts";
+```ts sim
+import type { DamageType, Rarity, GearSlot, WeaponArchetype } from "@hd2d/content";
 
 export type EntityId = number;
 export type PlateId = number;
 export type PlateKind = "word" | "guard" | "doom" | "minigame" | "finisher" | "secondWind" | "trial";
-export type ComboTier = 0 | 1 | 2 | 3 | 4; // none, bronze 5, silver 15, gold 30, radiant 50
+export type ComboTier = 0 | 1 | 2 | 3 | 4;     // mechanical: none, bronze 5, silver 15, gold 30, radiant 50 (perfect words)
+export type KeyStreakTier = 0 | 1 | 2 | 3 | 4; // VFX: white, gold 10, ember 25, azure 50, prismatic 100 (correct keys)
 export type HitKind = "auto" | "chip" | "skill" | "counter" | "dot" | "minigame" | "finisher";
+/** What a damage instance is attributed to (skill-share metric). DoT inherits its applier: bleed -> weapon, burn -> skill. */
+export type HitOrigin = "weapon" | "chip" | "skill" | "counter" | "minigame" | "finisher";
 export type StatusId = "burn" | "bleed" | "freeze" | "stagger" | "barrier";
 export type ChestTier = "Wooden" | "Iron" | "Gold" | "Mythic";
 export type TargetDropReason = "escape" | "autoUnlock" | "plateChanged" | "ownerDied" | "phaseChanged";
 
-type Ev<T extends string, P extends object = {}> = { type: T; tick: Tick } & P;
+type Ev<T extends string, P extends object = Record<never, never>> = { type: T; tick: Tick } & P;
 
 export type SimEvent =
   // ---- flow ----
@@ -417,32 +574,33 @@ export type SimEvent =
   | Ev<"LevelCleared", { levelId: string; durationTicks: number; gold: number }>
   | Ev<"LevelFailed", { reason: "defeated" | "abandoned" | "timeout"; goldKept: number }>
   | Ev<"TutorialCue", { cue: "target" | "atb" | "guard" | "skill" | "combo" }>
-  // ---- plates & typing (HUD: plateId + index locate the letter; VFX: comboTier/streak drive colour/pitch) ----
-  | Ev<"PlateShown", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; text: string; display: string; replacesPlateId: PlateId | null }>
+  // ---- plates & typing (plateId + index locate the letter; keyStreakTier drives colour, combo drives aura) ----
+  | Ev<"PlateShown", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; text: string; display: string; lane: number | null; replacesPlateId: PlateId | null }>
   | Ev<"PlateRemoved", { plateId: PlateId; reason: "completed" | "replaced" | "ownerDied" | "expired" | "phaseEnded" }>
   | Ev<"TargetAcquired", { plateId: PlateId; ownerId: EntityId | null }>
   | Ev<"TargetDropped", { plateId: PlateId; ownerId: EntityId | null; reason: TargetDropReason }>
-  | Ev<"CharCorrect", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; index: number; char: string; isLast: boolean; combo: number; comboTier: ComboTier; streak: number; atbGainM: number }>
-  | Ev<"Typo", { plateId: PlateId | null; ownerId: EntityId | null; index: number; expected: string | null; got: string; comboBefore: number; combo: number; penalty: "halved" | "reset" | "none" | "latched" | "forgiven" }>
-  | Ev<"WordCompleted", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; text: string; wordKey: string; perfect: boolean; swift: boolean; chipDamage: number; atbGainM: number; combo: number }>
+  | Ev<"CharCorrect", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; index: number; char: string; isLast: boolean; combo: number; comboTier: ComboTier; keyStreak: number; keyStreakTier: KeyStreakTier; atbGainM: number }>
+  | Ev<"Typo", { plateId: PlateId | null; ownerId: EntityId | null; kind: PlateKind | null; index: number; expected: string | null; got: string; comboBefore: number; combo: number; keyStreakBefore: number; penalty: "halved" | "reset" | "none" | "latched" | "forgiven" }>
+  | Ev<"WordCompleted", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; text: string; wordKey: string; perfect: boolean; swift: boolean; atbGainM: number; combo: number }>
   | Ev<"SentenceWordDone", { plateId: PlateId; kind: PlateKind; wordIndex: number; wordCount: number }> // projectile per word (T2.6)
   | Ev<"ComboTierChanged", { from: ComboTier; to: ComboTier; combo: number }>
+  | Ev<"KeyStreakTierChanged", { from: KeyStreakTier; to: KeyStreakTier; keyStreak: number }>
   | Ev<"BurstWpm", { wpm: number; band: "swift" | "blazing" }>
   // ---- defense ----
   | Ev<"EnemyAttackWindup", { enemyId: EntityId; impactTick: Tick; heavy: boolean }>
   | Ev<"GuardWordShown", { enemyId: EntityId; plateId: PlateId; text: string; impactTick: Tick; spanTicks: number }>
   | Ev<"GuardWordTyped", { enemyId: EntityId; plateId: PlateId; perfect: boolean; result: "block" | "parry" }>
   | Ev<"GuardBlocked", { enemyId: EntityId; damage: number }>
-  | Ev<"GuardParried", { enemyId: EntityId; counterDamage: number }> // the counter also emits Hit{kind:"counter"}
+  | Ev<"GuardParried", { enemyId: EntityId; counterDamage: number }> // the counter itself is Hit{kind:"counter"}
   // ---- ATB & hero offense ----
   | Ev<"AtbFilled", { overflowM: number }>
   | Ev<"AutoAttack", { targetId: EntityId; archetype: WeaponArchetype; hits: number; impactTick: Tick; crit: boolean }>
-  | Ev<"Hit", { sourceId: EntityId; targetId: EntityId; kind: HitKind; damageType: DamageType | null; damage: number; hpAfter: number; maxHp: number; crit: boolean; weak: boolean; broken: boolean; atbKnockback: boolean; hitIndex: number; hitCount: number; killed: boolean }>
+  | Ev<"Hit", { sourceId: EntityId; targetId: EntityId; kind: HitKind; origin: HitOrigin; skillId: ActiveSkillId | null; damageType: DamageType | null; damage: number; damageM: number; hpAfter: number; maxHp: number; crit: boolean; weak: boolean; broken: boolean; atbKnockback: boolean; hitIndex: number; hitCount: number; killed: boolean }>
   | Ev<"WeaknessRevealed", { enemyId: EntityId; damageType: DamageType }>
   | Ev<"ShieldDamaged", { enemyId: EntityId; shield: number; shieldMax: number }>
   | Ev<"Break", { enemyId: EntityId; untilTick: Tick }>
   | Ev<"BreakEnded", { enemyId: EntityId }>
-  | Ev<"StatusApplied", { targetId: EntityId; status: StatusId; untilTick: Tick | null; stacks: number }>
+  | Ev<"StatusApplied", { targetId: EntityId; status: StatusId; untilTick: Tick | null; stacks: number; origin: HitOrigin | null; skillId: ActiveSkillId | null }>
   | Ev<"StatusEnded", { targetId: EntityId; status: StatusId }>
   | Ev<"FocusChanged", { enemyId: EntityId | null }>
   // ---- enemy offense & hero state ----
@@ -453,7 +611,7 @@ export type SimEvent =
   | Ev<"HeroDowned", { secondWindAvailable: boolean }>
   | Ev<"SecondWindStarted", { plateId: PlateId; text: string; deadlineTick: Tick }>
   | Ev<"SecondWindSucceeded", { hpAfter: number; maxHp: number }>
-  | Ev<"SecondWindFailed", {}>
+  | Ev<"SecondWindFailed">
   | Ev<"Revived", { source: "gem" | "feather"; hpAfter: number }> // hook; never emitted in the slice
   // ---- skills ----
   | Ev<"SkillCharged", { slot: 0 | 1; skillId: ActiveSkillId }>
@@ -487,7 +645,7 @@ export const ALL_EVENT_TYPES = [
   "LevelStarted", "WalkStarted", "WalkEnded", "EncounterStarted", "WaveStarted", "EnemySpawned",
   "EncounterCleared", "LevelCleared", "LevelFailed", "TutorialCue",
   "PlateShown", "PlateRemoved", "TargetAcquired", "TargetDropped", "CharCorrect", "Typo",
-  "WordCompleted", "SentenceWordDone", "ComboTierChanged", "BurstWpm",
+  "WordCompleted", "SentenceWordDone", "ComboTierChanged", "KeyStreakTierChanged", "BurstWpm",
   "EnemyAttackWindup", "GuardWordShown", "GuardWordTyped", "GuardBlocked", "GuardParried",
   "AtbFilled", "AutoAttack", "Hit", "WeaknessRevealed", "ShieldDamaged", "Break", "BreakEnded",
   "StatusApplied", "StatusEnded", "FocusChanged",
@@ -505,8 +663,8 @@ export const ALL_EVENT_TYPES = [
 export type SimEventType = (typeof ALL_EVENT_TYPES)[number];
 export type EventOf<T extends SimEventType> = Extract<SimEvent, { type: T }>;
 // Compile-time exhaustiveness: fails to typecheck if the union gains a type the array lacks.
-type _Missing = Exclude<SimEvent["type"], SimEventType>;
-export const _eventTypesExhaustive: [_Missing] extends [never] ? true : _Missing = true;
+type MissingEventTypes = Exclude<SimEvent["type"], SimEventType>;
+export const EVENT_TYPES_EXHAUSTIVE: [MissingEventTypes] extends [never] ? true : MissingEventTypes = true;
 
 /** T2.3: level/eventBindings.ts must provide a full map (missing keys = type error). */
 export type EventHandlers = { [K in SimEventType]: (e: EventOf<K>) => void };
@@ -518,18 +676,22 @@ export type MetaEvent =
   | { type: "GearUpgraded"; gearUid: number; upgrade: number; cost: number };
 export const ALL_META_EVENT_TYPES = ["CacheRolled", "ChestOpened", "GearUpgraded"] as const satisfies readonly MetaEvent["type"][];
 ```
-Crit and weakness are **flags on `Hit`** (`crit`, `weak`). The VFX binding branches on them, so one hit never gets double VFX. `WeaknessRevealed` is a separate one-shot (it unveils the weakness icon).
+- **Crit and weakness** are flags on `Hit`, not separate events. `WeaknessRevealed` is a one-shot that unveils the weakness icon.
+- **Chip damage** is only ever `Hit{kind:"chip"}`.
+- **Skill-share metric:** sum `Hit.damageM` by `origin`; `LevelResult.stats.damageByOriginM` already does this.
 
 ---
 
-## 5. Read-only view — `packages/sim/src/view.ts`
+## 5. Read-only view: `packages/sim/src/view.ts`
 
-Rules:
-- The renderer, HUD and audio read `getView(state)` once per frame plus the event stream. They **never mutate sim state** and never compute game logic.
-- **Interpolation:** keep the previous frame's view, and lerp bar values and positions with `alpha = clamp(simMs × 0.06 − view.tick, 0, 1)`. Discrete facts (typedIndex, plate text, alive) are never interpolated.
-- View values are floats (UI-friendly) and are never hashed or fed back.
+**Rules.**
+- The renderer, HUD and audio read `getView(state)` once per frame, together with the event stream.
+- They **never mutate sim state** and never derive game logic. That includes combo or streak tiers, which the view and events already provide.
+- **Interpolation:** keep the previous frame's view, and lerp bar values and positions with the frame's `alpha` (§2).
+- Discrete facts (typedIndex, text, alive) are never interpolated.
+- View values may be floats; they are never hashed.
 
-```ts
+```ts sim
 export type DeepReadonly<T> = { readonly [K in keyof T]: DeepReadonly<T[K]> };
 export type HeroPose = "walk" | "idle" | "attack" | "cast" | "hurt" | "guard" | "downed" | "victory";
 export type EnemyPose = "enter" | "idle" | "windup" | "attack" | "hurt" | "broken" | "dead";
@@ -540,12 +702,14 @@ export interface PlateView {
   display: string;         // what to draw (== text unless scrambled and not yet unlocked)
   typedIndex: number;      // chars [0, typedIndex) are typed (gold); text[typedIndex] is the next letter
   isTarget: boolean;
-  faded: boolean;          // fading gimmick: draw only typed chars + blanks (gimmick overrides the next-letter rule)
+  faded: boolean;          // fading gimmick: draw only typed chars + blanks (the gimmick overrides the next-letter rule)
   hadTypo: boolean;        // current attempt is not perfect
   lastTypoTick: Tick | null;
+  lane: number | null;     // minigame lane; null for other plates
   expiresAtTick: Tick | null; // guard impact / doom deadline / minigame landing / second wind deadline
   totalTicks: number | null;  // for timer strips
 }
+export interface StatusView { id: StatusId; ticksLeft: number | null; stacks: number }
 export interface EnemyView {
   id: EntityId; defId: string; slot: number; isBoss: boolean; alive: boolean;
   hp: number; maxHp: number; hpFrac: number;
@@ -556,14 +720,14 @@ export interface EnemyView {
   shield: number; shieldMax: number;
   weaknesses: { type: DamageType; revealed: boolean }[];
   brokenTicksLeft: number;
-  statuses: { id: StatusId; ticksLeft: number | null; stacks: number }[];
+  statuses: StatusView[];
   isFocus: boolean;
   pose: EnemyPose; poseSinceTick: Tick;
 }
 export interface HeroView {
   hp: number; maxHp: number; hpFrac: number;
   atbFrac: number; archetype: WeaponArchetype; weaponDamageType: DamageType;
-  barrierCharges: number; statuses: EnemyView["statuses"];
+  barrierCharges: number; statuses: StatusView[];
   secondWindAvailable: boolean;
   pose: HeroPose; poseSinceTick: Tick;
 }
@@ -576,7 +740,8 @@ export interface LevelView {
   enemies: EnemyView[];                // current encounter, stable slot order, dead ones kept with alive=false
   plates: PlateView[];                 // every visible plate incl. doom/minigame/finisher/second wind
   targetPlateId: PlateId | null; focusEnemyId: EntityId | null;
-  combo: number; comboTier: ComboTier; comboMult: number; streak: number; comboMode: ComboMode;
+  combo: number; comboTier: ComboTier; comboMult: number; comboMode: ComboMode; // mechanical
+  keyStreak: number; keyStreakTier: KeyStreakTier;                              // VFX colour tiers
   skills: SkillView[]; passives: PassiveId[];
   boss: { enemyId: EntityId; name: string; title: string; phase: 1 | 2 | 3; gateHpFrac: number | null } | null;
   doom: { plateId: PlateId; ticksLeft: number; totalTicks: number } | null;
@@ -587,29 +752,43 @@ export interface LevelView {
 }
 export interface TrialView {
   tick: Tick; started: boolean; ticksLeft: number; passage: string; typedIndex: number;
+  keyStreak: number; keyStreakTier: KeyStreakTier;
   lastTypoTick: Tick | null; netWpm: number; accuracy: number; done: boolean;
 }
 ```
 
 ---
 
-## 6. Content data types — `packages/content/src/schemas.ts` (zod 4)
+## 6. Content data types: `packages/content/src/schemas.ts` (zod 4)
 
-Numbers in content are human units (seconds, whole HP points, decimals OK). `resolveLevel` converts them to ticks/milli. **Skill and passive numbers live in `BALANCE`, not in content** (D19); content holds names, text templates and art ids.
+**Content conventions.**
+- Numbers are in human units: seconds and whole HP points, with decimals allowed. `resolveLevel` converts them to ticks and milli.
+- **Skill and passive numbers live in `BALANCE`** (D19). Content holds names, text templates and art ids.
+- Every schema `X` also exports `type X = z.infer<typeof X>` under the same name.
 
-```ts
+```ts content
 import { z } from "zod";
 
+/** Every char content may contain and the sim accepts as a key (single source of truth). */
+export const TYPABLE_CHARS =
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,'-?!;:\"()";
+const escapeForCharClass = (s: string): string => s.replace(/[\\\]^-]/g, "\\$&");
+export const TypableText = z.string().regex(new RegExp(`^[${escapeForCharClass(TYPABLE_CHARS)}]+$`));
+
 export const Biome = z.enum(["forest", "ruins", "cave", "hollow"]);
+export type Biome = z.infer<typeof Biome>;
 export const WordTier = z.number().int().min(1).max(10);
 export const DamageType = z.enum(["slash", "pierce", "blunt", "arcane", "fire", "ice", "light"]);
+export type DamageType = z.infer<typeof DamageType>;
 export const Rarity = z.enum(["C", "U", "R", "E", "L"]);
+export type Rarity = z.infer<typeof Rarity>;
 export const GearSlot = z.enum(["weapon", "armor", "charm"]);
+export type GearSlot = z.infer<typeof GearSlot>;
 export const WeaponArchetype = z.enum(["sword", "dagger", "staff", "hammer"]);
-const Ascii = z.string().regex(/^[\x20-\x7E]+$/);
+export type WeaponArchetype = z.infer<typeof WeaponArchetype>;
 
 export const WordEntry = z.object({
-  text: Ascii.min(1).max(120),
+  text: TypableText.max(120),
   key: z.string().min(1),                    // SRS/journal key; = text.toLowerCase() for single words
   kind: z.enum(["word", "collocation", "sentence"]),
   tier: WordTier,
@@ -619,8 +798,9 @@ export const WordEntry = z.object({
   uses: z.array(z.enum(["plate", "guard", "doom", "finisher", "secondWind", "minigame", "trial"])).min(1),
   definition: z.string().min(1).max(140),     // simple English
   example: z.string().min(1).max(160),
-  translations: z.record(z.string(), z.string()).default({}), // BCP-47 -> text (optional, Journal only)
+  translations: z.record(z.string(), z.string()).default({}), // BCP-47 tag -> text (optional, Journal only)
 });
+export type WordEntry = z.infer<typeof WordEntry>;
 
 export const Gimmick = z.enum(["fading", "scrambled"]);
 export const EnemyDef = z.object({
@@ -628,39 +808,41 @@ export const EnemyDef = z.object({
   archetype: z.enum(["grunt", "brute", "speedster", "boss"]),
   spriteId: z.string(), scale: z.number().positive().default(1), flying: z.boolean().default(false),
   baseIntervalS: z.number().positive(),       // grunt 9, brute 12, speedster 5 (scaled by pace factor)
-  heavy: z.boolean().default(false),          // brute-style heavy attack (guard worth it)
+  heavy: z.boolean().default(false),
   plateLength: z.tuple([z.number().int().min(2), z.number().int().max(14)]),
   weaknesses: z.array(DamageType).min(1),
   shield: z.number().int().min(1).max(9),
-  hpWeight: z.number().positive().default(1), // share of the encounter HP pool
+  hpWeight: z.number().positive().default(1), // share of the wave's HP pool
   hitWeight: z.number().positive().default(1),// x encounter gruntHit
 });
+export type EnemyDef = z.infer<typeof EnemyDef>;
 
 export const EnemyRef = z.object({ enemy: z.string(), gimmick: Gimmick.optional() });
 export const EncounterDef = z.object({
   name: z.string(),
-  hp: z.number().positive(),                  // total HP pool of the encounter (generated by tools/balance, D32)
-  gruntHit: z.number().positive(),            // hit of a hitWeight=1 enemy
+  hp: z.number().positive(),                  // HP pool per wave (generated by tools/balance, D32)
+  gruntHit: z.number().positive(),
   waves: z.array(z.array(EnemyRef).min(1).max(4)).min(1), // >1 wave -> WaveStarted
-}).refine(e => new Set(e.waves.flat().map(r => r.gimmick).filter(Boolean)).size <= 2, "max 2 gimmicks/encounter");
+}).refine((e) => new Set(e.waves.flat().flatMap((r) => (r.gimmick ? [r.gimmick] : []))).size <= 2, "max 2 gimmicks/encounter");
 
 export const MinigameDef = z.object({
   kind: z.literal("fallingRubble"),
   lanes: z.number().int().min(2).max(4),
   spawnEveryS: z.number().positive(), fallS: z.number().positive(),
-  clearAtkMult: z.number().positive(),        // damage to boss per cleared word, x ATK
-  missHit: z.number().positive(),             // hero damage per miss (points)
+  clearAtkMult: z.number().positive(),
+  missHit: z.number().positive(),
 });
 export const BossDef = z.object({
-  id: z.string(), name: z.string(), title: z.string(), enemyId: z.string(), // sprite/weakness/shield/interval base
+  id: z.string(), name: z.string(), title: z.string(), enemyId: z.string(),
   hp: z.number().positive(), hit: z.number().positive(),
   plateLength: z.tuple([z.number().int(), z.number().int()]),
   phase1: z.object({ endAtHpPct: z.number().default(66), adds: z.array(EnemyRef).max(2) }),
   phase2: z.object({ endAtHpPct: z.number().default(33), doomEveryS: z.number().positive(), minDoomSpells: z.number().int().min(1) }),
-  phase3: z.object({ minigame: MinigameDef, finisherText: Ascii }),
+  phase3: z.object({ minigame: MinigameDef, finisherText: TypableText }),
   breatherS: z.number().default(2),
   introS: z.number().default(4),
 });
+export type BossDef = z.infer<typeof BossDef>;
 
 export const StarChallenge = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("untouched"), maxHits: z.number().int().min(0) }),
@@ -669,6 +851,7 @@ export const StarChallenge = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("guardian"), parries: z.number().int().positive() }),
   z.object({ kind: z.literal("noSkills") }),
 ]);
+export type StarChallenge = z.infer<typeof StarChallenge>;
 export const Segment = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("walk"), seconds: z.number().positive(), heal: z.boolean() }),
   z.object({ kind: z.literal("encounter"), encounter: EncounterDef }),
@@ -680,20 +863,22 @@ export const LevelDef = z.object({
   kind: z.enum(["normal", "boss"]),
   wordTier: WordTier,
   tierMix: z.object({ current: z.number(), review: z.number(), biome: z.number(), weak: z.number() })
-    .refine(m => m.current + m.review + m.biome + m.weak === 100).default({ current: 60, review: 20, biome: 15, weak: 5 }),
+    .refine((m) => m.current + m.review + m.biome + m.weak === 100).default({ current: 60, review: 20, biome: 15, weak: 5 }),
   plateLength: z.tuple([z.number().int(), z.number().int()]),
   segments: z.array(Segment).min(2),
   star3: StarChallenge,
   parRefS: z.number().positive(),             // active time of the 35-WPM reference typist
   tutorial: z.boolean().default(false),
 });
+export type LevelDef = z.infer<typeof LevelDef>;
 
 export const GearDef = z.object({
   id: z.string(), slot: GearSlot, archetype: WeaponArchetype.optional(), // required iff slot === "weapon"
   tier: z.number().int().min(1).max(10), name: z.string(), spriteId: z.string(), flavor: z.string().optional(),
   // Stats are derived (BALANCE): score = TIER_GROWTH^(tier-1) * RARITY_MULT[rarity] * (1 + UPG_STEP*upgrade).
   // weapon -> ATK, armor -> HP, charm -> sqrt into both. Rarity/upgrade are per instance (save GearInstance).
-}).refine(g => (g.slot === "weapon") === (g.archetype !== undefined));
+}).refine((g) => (g.slot === "weapon") === (g.archetype !== undefined));
+export type GearDef = z.infer<typeof GearDef>;
 
 export const ActiveSkillDef = z.object({
   id: z.enum(["slashWave", "piercingThrust", "fireball", "frostLock", "mendingLight", "aegis"]),
@@ -708,33 +893,39 @@ export const PassiveDef = z.object({
 });
 export const TrialDef = z.object({
   id: z.string(), name: z.string(), durationS: z.literal(60),
-  passages: z.array(Ascii.min(1200)).min(1).max(7), // standardized; seed picks one (D25)
+  // Standardized pool (same for everyone); the run seed picks one. >= 1600 chars covers 60 s at 300+ WPM.
+  passages: z.array(TypableText.min(1600)).min(30),
 });
 
-export const ContentBundle = z.object({
+export const ContentBundle = z.strictObject({
   words: z.array(WordEntry), enemies: z.array(EnemyDef), bosses: z.array(BossDef), levels: z.array(LevelDef),
   gear: z.array(GearDef), actives: z.array(ActiveSkillDef), passives: z.array(PassiveDef), trials: z.array(TrialDef),
 });
 export type ContentBundle = z.infer<typeof ContentBundle>;
-// ...and `export type X = z.infer<typeof X>` for every schema above.
-/** fnv1a32(canonicalJson(bundle)) as 8 hex chars, emitted by tools/content at build time. */
+/** fnv1a32(canonicalContentJson(bundle)) as 8 hex chars; emitted by tools/content at build time. */
 export declare const CONTENT_VERSION: string;
 ```
-Validators in `tools/content` cover:
-- distinct first letters achievable for every encounter (pool letters ≥ visible plates + 1)
-- plate length bands, ASCII only, and the profanity/sensitive filter
-- each guard word ≤ 5 chars, tier 1
-- level segments start with a walk.
+`tools/content` validators check:
+- every encounter can produce distinct first letters (the pool has more distinct initials than the encounter has visible plates)
+- plate length bands
+- the profanity/sensitive filter
+- guard words are ≤ 5 chars and tier 1
+- every level's segments start with a walk
+- passages contain no double spaces.
 
 ---
 
-## 7. Balance table — `packages/sim/src/balance.ts`
+## 7. Balance table: `packages/sim/src/balance.ts`
 
-One `as const` object. **Keys copy `economy_sim.py` names exactly** (including snake_case inner keys) so diffs against the Python sim are mechanical. Values are human-readable floats. `deriveConstants()` converts them **once at module init** into integer constants with unit suffixes `_BP`, `_M` (milli), `_T` (ticks): `export const K = deriveConstants(BALANCE)`. Logic uses only `K` and `tables.generated.ts`.
+**Structure.**
+- One `as const` object. **Keys copy the `economy_sim.py` names exactly**, including snake_case inner keys.
+- Values are human-readable floats.
+- `deriveConstants(BALANCE)` converts them **once at module init** into integer constants `K.*`, with unit suffixes `_BP`, `_M` (milli) and `_T` (ticks).
+- Logic uses only `K` and `tables.generated.ts`.
 
-```ts
+```ts sim
 export const BALANCE = {
-  // ---- Structure (economy_sim: Story structure / Non-typing time) -- used by tools/balance level generator
+  // ---- Structure (economy_sim: Story structure / Non-typing time) -- tools/balance level generator
   TWO_ENCOUNTER_LEVELS: 20, ENC_SIZES_EARLY: [[1, 2], [2, 2], [1, 3]],
   LEVEL_INTRO_S: 7, WALK_S: 8, REWARD_S: 5, LEVEL_END_S: 10, BOSS_EXTRA_S: 30,
   // ---- Combat (economy_sim "Combat") ----
@@ -784,6 +975,8 @@ export const BALANCE = {
   CACHE_FROM_CHEST: { Wooden: 0, Iron: 0, Gold: 1, Mythic: 2 }, CACHE_FROM_STAR30: 1, CACHE_FROM_WEEKLY: 2,
 
   // ======== TS-only (NOT in economy_sim; tools/balance parity ignores or models them) ========
+  CACHE_SLOT_ODDS: { weapon: 1, armor: 1, charm: 1 },               // uniform weights (published)
+  CACHE_ARCHETYPE_ODDS: { equipped: 0.40, other_each: 0.20 },       // PO 2026-10-09 (published, fixed)
   WEAPONS: {                                   // doc 01 §2.2
     sword: { char_charge: 8, word_bonus: 10, atk_mult: 1.0, hits: 1, damage_type: "slash" },
     dagger: { char_charge: 11, word_bonus: 6, atk_mult: 0.45, hits: 2, damage_type: "pierce", bleed_every: 3 },
@@ -791,7 +984,8 @@ export const BALANCE = {
     hammer: { char_charge: 5, word_bonus: 14, atk_mult: 2.2, hits: 1, damage_type: "blunt", atb_knockback: 0.30 },
   },
   ATB_OVERFLOW_CAP: 30, STRICT_TYPO_ATB: 5, SWIFT_THRESHOLD: 1.3, BURST_BANDS: { swift: 1.3, blazing: 1.6 }, BURST_CHARS: 16, BURST_COOLDOWN_S: 5,
-  COMBO_TIERS: [5, 15, 30, 50],
+  COMBO_TIERS: [5, 15, 30, 50],                // mechanical (perfect words)
+  KEY_STREAK_TIERS: [10, 25, 50, 100],         // VFX colour tiers (correct keys), PO 2026-10-09
   GUARD_S: 2.5, GUARD_MIN_S: 1.5, STORY_GUARD_BONUS_S: 1.0, TELEGRAPH_STAGGER_S: 0.8, INITIAL_ENEMY_ATB_MAX: 0.30,
   PARRY_COUNTER: 0.5, PARRY_ATB: 10, IRON_WILL_BLOCK_MULT: 0.1, RIPOSTE_COUNTER: 1.5,
   WEAK_MULT: 1.3, BREAK_DMG_MULT: 1.8, BREAK_S: 4.5, DMG_VARIANCE: 0.0,
@@ -815,67 +1009,99 @@ export const BALANCE = {
   MAX_LEVEL_S: 1200, TRIAL_DURATION_S: 60,
 } as const;
 ```
-Python names **deliberately not ported** (they are persona/model abstractions; they live in `tools/balance/src/model.ts`):
-- the persona model: `PERSONAS`, `LEARN_TAU_H`, `ACC_TAU_H`, `GUARD_TAU_H`, `PERF_SD`, `ACC_SD`, `GUARD_SD`, `COMBAT_RNG_SD`
-- typing efficiency: `COMBAT_TYPING_EFF`, `SWIFT_RATE`, `SKILL_DMG_PER_CHARGE`
-- doom fail model: `DOOM_FAIL_*`
-- word-tier difficulty: `WORD_TIERS`, `TIER_MIX_CURRENT`, `*_SPEED_PEN`, `*_ACC_PEN`
-- economy policy and markets: missions/gems/box/pass/survival groups, `SATCHEL_RESERVE_GU`, `MIN_POWER_AS_NEEDED`, `AS_NEEDED_TARGET`, `CACHE_GOLD_EFF_BIAS`
+**Python names deliberately not ported.** These are persona and model abstractions; they live in `tools/balance/src/model.ts`.
+- **Persona learning and noise:** `PERSONAS`, `LEARN_TAU_H`, `ACC_TAU_H`, `GUARD_TAU_H`, `PERF_SD`, `ACC_SD`, `GUARD_SD`, `COMBAT_RNG_SD`.
+- **Typing-efficiency abstractions:** `COMBAT_TYPING_EFF`, `SWIFT_RATE`, `SKILL_DMG_PER_CHARGE`.
+- **Doom and word-tier modelling:** `DOOM_FAIL_*`, `WORD_TIERS`, `TIER_MIX_CURRENT`, `*_SPEED_PEN`, `*_ACC_PEN`.
+- **Economy groups:** missions, gems, boxes, pass and survival.
+- **Spending heuristics:** `SATCHEL_RESERVE_GU`, `MIN_POWER_AS_NEEDED`, `AS_NEEDED_TARGET`, `CACHE_GOLD_EFF_BIAS`.
 
-Generated integer tables (`tables.generated.ts`): `PACE_FACTOR_BP[15..120]`, `TIER_GROWTH_BP[1..10]`, `TIER_PRICE[1..10]`, `UPG_COST[tier][0..14]`, `GOLD_UNIT[1..30]`, `LEVEL_GOLD[ch][1..10]`.
+**Generated integer tables** (`tables.generated.ts`):
+- `PACE_FACTOR_BP[15..120]`
+- `TIER_GROWTH_BP[1..10]`
+- `TIER_PRICE[1..10]`
+- `UPG_COST[tier][0..14]`
+- `GOLD_UNIT[1..30]`
+- `LEVEL_GOLD[ch][1..10]`
 
 ---
 
-## 8. Meta / rewards API (pure, in `@hd2d/sim`, `packages/sim/src/meta/`)
+## 8. Meta / rewards API (pure; `@hd2d/sim`, `packages/sim/src/meta/`)
 
-All functions are deterministic. Functions that take an `RngState` mutate it, and the caller persists it (`save.metaRng`). Gold amounts are integers.
+All functions here are deterministic. Functions that take an `RngState` mutate it, and the caller persists it (`save.metaRng`). Gold amounts are integers.
 
-```ts
+```ts sim
 export interface CachePity { sinceRare: number; sinceEpic: number; sinceLegendary: number }
 export const NEW_PITY: CachePity = { sinceRare: 0, sinceEpic: 0, sinceLegendary: 0 };
 export interface GearRoll { slot: GearSlot; tier: number; rarity: Rarity; archetype: WeaponArchetype | null }
 export interface ChestContents { tier: ChestTier; gold: number; gear: GearRoll | null; caches: number; gemsUncredited: number }
 
+// ---- loadouts (used by the client, tools/balance and tools/bot) ----
+/** Structural subset of the save blob (SaveBlob from @hd2d/shared is assignable to it; shared has a type test). */
+export interface LoadoutSource {
+  inventory: { gear: readonly { uid: number; defId: string; rarity: Rarity; upgrade: number }[] };
+  equipped: { weapon: number; armor: number; charm: number };
+  loadout: {
+    actives: readonly [string | null, string | null];
+    activeModes: readonly [CastMode, CastMode];
+    passives: readonly [string | null, string | null, string | null];
+  };
+}
+/** Throws SimError if an equipped uid/def is missing, a slot mismatches, or a skill/passive id is unknown. */
+export declare function buildLoadout(src: LoadoutSource, bundle: ContentBundle): Loadout;
+/** Par build of chapter c: slotTier(slot, c) at PAR_RARITY_BY_CH/PAR_RARITY, PAR_UPG/PAR_UPG_DEFAULT; sword; no skills/passives. */
+export declare function parLoadout(chapter: number): Loadout;
+
 // ---- chests (used in-level by the sim with the `loot` stream; exported for tests/tools) ----
 export declare function rollEncounterChest(rng: RngState, ctx: { boss: boolean; firstClear: boolean }): ChestTier | null;
 export declare function openChest(rng: RngState, tier: ChestTier, ctx: { chapter: number; frontierChapter: number }): ChestContents;
 
-// ---- caches: fixed odds + published pity, exactly economy_sim.roll_cache_rarity ----
+// ---- Gear Caches: fixed odds + published pity, exactly economy_sim.roll_cache_rarity ----
 // 1) increment all three counters; 2) if sinceLegendary >= 120 -> L;
 // else if sinceEpic >= 30 -> pick from {E,L} by CACHE_ODDS; else if sinceRare >= 8 -> pick from {R,E,L};
 // else pick from CACHE_ODDS; 3) reset sinceRare on R+, sinceEpic on E+, sinceLegendary on L.
-// Slot uniform over SLOTS; weapon archetype uniform over 4 (D23); tier = slotTier(slot, frontierChapter).
-export declare function rollCache(rng: RngState, pity: CachePity, ctx: { frontierChapter: number }): { roll: GearRoll; pity: CachePity; event: MetaEvent };
-export declare function publishedCacheOdds(): { base: Record<Rarity, Bp>; pity: { rare: 8; epic: 30; legendary: 120 } };
+// Draw order (normative): rarity, then slot (uniform), then archetype if weapon
+// (equipped 40%, each other archetype 20%, order sword/dagger/staff/hammer). tier = slotTier(slot, frontierChapter).
+export declare function rollCache(
+  rng: RngState, pity: CachePity, ctx: { frontierChapter: number; equippedArchetype: WeaponArchetype },
+): { roll: GearRoll; pity: CachePity; event: MetaEvent };
+/** Data for the published-odds screen; the UI must render from this, never from hand-written copy. */
+export declare function publishedCacheOdds(): {
+  rarityBp: Record<Rarity, Bp>;
+  pity: { rare: number; epic: number; legendary: number };       // 8 / 30 / 120
+  effectiveRarityBp: Record<Rarity, Bp>;                         // from the 200k-roll sim (02 §6.5), regenerated by tools/balance
+  slotBp: Record<GearSlot, Bp>;                                  // 3334 / 3333 / 3333
+  weaponArchetypeBp: { equipped: Bp; otherEach: Bp };            // 4000 / 2000
+};
 
 // ---- gear & gold ----
 export declare function slotTier(slot: GearSlot, chapter: number): number;        // economy_sim.slot_tier
 export declare function itemScoreBp(tier: number, rarity: Rarity, upgrade: number): Bp;
-export declare function goldUnit(chapter: number): number;                         // GOLD_UNIT table
+export declare function goldUnit(chapter: number): number;
 export declare function levelGold(chapter: number, index: number): number;
 export declare function tierPrice(tier: number): number;
 export declare function shopPrice(tier: number, rarity: "C" | "U" | "R"): number;
 export declare function cacheGoldPrice(frontierChapter: number): number;          // 14 GU
 export declare function upgradeCap(rarity: Rarity): number;
-export declare function upgradeCost(tier: number, fromLevel: number): number;     // 0.25 * price * 1.3^level
-export declare function transferUpgrade(oldUpgrade: number, newRarity: Rarity): number; // min(floor(old*0.5), cap)
+export declare function upgradeCost(tier: number, fromLevel: number): number;     // 0.25 * price * 1.3^level (table)
+export declare function transferUpgrade(oldUpgrade: number, newRarity: Rarity): number; // min(floor(old/2), cap)
 export declare function salvageValue(item: GearStats & { slot: GearSlot }, ctx: { fromChestUnwanted: boolean; nonTransferredUpgradeGold: number }): number;
 export declare function replayGoldMultBp(ctx: { firstClear: boolean; chapter: number; frontierChapter: number; replaysToday: number }): Bp;
 
 // ---- pace & stars ----
-export declare function computePace(lastLevelNetWpm: number[], calibrationWpm: number | null): number; // median of last 10, else calibration, else 35; clamp 15..120
-export declare function median7dAccuracyBp(daily: { day: string; accuracyBp: Bp }[], today: string): Bp | null;
+export declare function computePace(lastLevelNetWpm: readonly number[], calibrationWpm: number | null): number; // median of last 10, else calibration, else 35; clamp 15..120
+export declare function median7dAccuracyBp(daily: readonly { day: string; accuracyBp: Bp }[], today: string): Bp | null;
 export declare function evaluateStars(input: {
-  result: LevelResult; star3: StarChallenge; parRefS: number; pace: number; median7dAccuracyBp: Bp | null;
+  result: LevelResult; star3: StarChallenge; parRefTicks: number; pace: number; median7dAccuracyBp: Bp | null;
 }): [boolean, boolean, boolean];
 // ★ = cleared. ★★ = cleared && accuracyBp >= clamp(median + STAR2_REL_MARGIN, 8800, 9700) (no history -> 8800).
-// ★★★ = cleared && challenge met; parTime: activeTicks <= ceil(parRefS*60 * 35/pace * slack).
+// ★★★ = cleared && challenge met; parTime: activeTicks <= ceil(parRefTicks * 35/pace * slack).
 
 // ---- SRS: Leitner 5 boxes, intervals in levels played [1,2,4,8,16] ----
 export interface SrsEntry { box: 1 | 2 | 3 | 4 | 5; due: number; lapses: number }
 export interface SrsState { levelsPlayed: number; entries: Record<string, SrsEntry>; mastered: string[] }
-export declare function srsDue(srs: SrsState, limit: number): string[]; // due <= levelsPlayed, sort (due, box, key)
-export declare function srsUpdate(srs: SrsState, words: WordResult[], pace: number): SrsState;
+export declare function srsDue(srs: SrsState, limit: number): string[]; // due <= levelsPlayed, sort (due, box, key by cmpStr)
+export declare function srsUpdate(srs: SrsState, words: readonly WordResult[], pace: number): SrsState;
 // typo or wpm < 50% pace: absent -> box 1 (due +1); present -> box = max(1, box-1), lapses++ (D29).
 // perfect && present && due: box 5 -> mastered (Lexicon); else box+1, due = levelsPlayed + interval[box-1].
 // levelsPlayed++ after applying.
@@ -885,80 +1111,130 @@ export interface LevelResult {
   levelId: string; outcome: "cleared" | "failed"; failReason: "defeated" | "abandoned" | "timeout" | null;
   durationTicks: number; activeTicks: number; gold: number; chests: ChestContents[];
   stats: {
-    correctChars: number; typos: number; wordsCompleted: number; perfectWords: number; maxCombo: number;
+    correctChars: number; typos: number; wordsCompleted: number; perfectWords: number; maxCombo: number; maxKeyStreak: number;
     netWpmX100: number; accuracyBp: Bp; hitsTaken: number; blocks: number; perfectParries: number;
     autoAttacks: number; skillsCast: number; secondWindUsed: boolean;
-    damageDealtM: Record<HitKind, number>;   // skill damage share AC (T1.4)
+    damageByOriginM: Record<HitOrigin, number>;   // skill share = skill / Σ (T1.4 AC)
   };
-  words: WordResult[];                         // every completed or typo'd word/guard plate, in order
+  words: WordResult[];                             // every completed or typo'd word/guard plate, in order
 }
 ```
+**Pity ownership.**
+- **Gear-Cache pity (`CachePity`) is client-owned.** It lives in the save blob, like gold and gear, which the client also owns.
+- **Cosmetic-box pity is server-owned** (the D1 `pity` table, doc 03).
+- **Future gem caches (out of the slice):**
+  - The Worker debits gems in the ledger and records a `gem_cache` entitlement.
+  - The client claims it through a later endpoint and increments `save.inventory.unopenedCaches`.
+  - Opening uses `rollCache` with the save's pity and `metaRng`, exactly like any other cache.
+  - The server never rolls gear.
 
 ---
 
 ## 9. `@hd2d/shared`: save blob + HTTP API (zod 4)
 
-### 9.1 Save blob (client-owned; the server stores it opaquely)
-```ts
+### 9.1 Save blob (client-owned; stored opaquely by the server)
+```ts shared
 // packages/shared/src/save.ts
+import { z } from "zod";
+import { Rarity } from "@hd2d/content";
+import type { LoadoutSource } from "@hd2d/sim";
+
 export const SAVE_SCHEMA_VERSION = 1;
 const U32 = z.number().int().min(0).max(0xffffffff);
+const Vol = z.number().min(0).max(1);
+const Mode = z.enum(["smart", "asap"]);
 export const GearInstance = z.object({ uid: z.number().int().positive(), defId: z.string(), rarity: Rarity, upgrade: z.number().int().min(0).max(15) });
+export const SaveSummary = z.object({ schemaVersion: z.number().int(), levelMax: z.number().int().min(0), stars: z.number().int().min(0).max(900), playtimeSec: z.number().int().min(0) });
+export type SaveSummary = z.infer<typeof SaveSummary>;
 export const SaveBlobV1 = z.object({
   schemaVersion: z.literal(1),
   createdAtMs: z.number().int(), updatedAtMs: z.number().int(), playtimeSec: z.number().int().min(0),
   settings: z.object({
     comboMode: z.enum(["gentle", "strict", "zen"]), difficulty: z.enum(["story", "standard", "hard", "zen"]),
     caseMode: z.enum(["auto", "strict"]), autoUnlock: z.boolean(), effectsIntensity: z.number().min(0).max(1),
-    reducedMotion: z.boolean(), reducedFlash: z.boolean(), volumes: z.record(z.enum(["master", "sfx", "ambience", "music", "ui"]), z.number().min(0).max(1)),
+    reducedMotion: z.boolean(), reducedFlash: z.boolean(),
+    volumes: z.object({ master: Vol, sfx: Vol, ambience: Vol, music: Vol, ui: Vol }),
     translationLang: z.string().nullable(),
   }),
   progress: z.object({
     frontierChapter: z.number().int().min(1),
     levels: z.record(z.string(), z.object({ cleared: z.boolean(), stars: z.tuple([z.boolean(), z.boolean(), z.boolean()]), bestTicks: z.number().int().nullable(), attempts: z.number().int() })),
-    starChestsClaimed: z.record(z.string(), z.array(z.number().int())), // chapter -> [10,20,30]
+    starChestsClaimed: z.record(z.string(), z.array(z.number().int())), // chapter -> claimed milestones [10,20,30]
   }),
   pace: z.object({ calibrationWpm: z.number().int().nullable(), recentNetWpm: z.array(z.number().int()).max(10) }),
   accuracyDaily: z.array(z.object({ day: z.string(), accuracyBp: z.number().int() })).max(14),
   wallet: z.object({ gold: z.number().int().min(0) }),
   inventory: z.object({ gear: z.array(GearInstance), nextGearUid: z.number().int().positive(), unopenedCaches: z.number().int().min(0) }),
   equipped: z.object({ weapon: z.number().int(), armor: z.number().int(), charm: z.number().int() }), // gear uids
-  loadout: z.object({ actives: z.tuple([z.string().nullable(), z.string().nullable()]), activeModes: z.tuple([z.enum(["smart", "asap"]), z.enum(["smart", "asap"])]), passives: z.tuple([z.string().nullable(), z.string().nullable(), z.string().nullable()]) }),
+  loadout: z.object({
+    actives: z.tuple([z.string().nullable(), z.string().nullable()]),
+    activeModes: z.tuple([Mode, Mode]),
+    passives: z.tuple([z.string().nullable(), z.string().nullable(), z.string().nullable()]),
+  }),
   unlocks: z.object({ actives: z.array(z.string()), passives: z.array(z.string()) }),
-  cachePity: z.object({ sinceRare: z.number().int(), sinceEpic: z.number().int(), sinceLegendary: z.number().int() }),
+  cachePity: z.object({ sinceRare: z.number().int(), sinceEpic: z.number().int(), sinceLegendary: z.number().int() }), // client-owned
   metaRng: z.tuple([U32, U32, U32, U32]),     // drives cache rolls and per-attempt story seeds
-  srs: z.object({ levelsPlayed: z.number().int(), entries: z.record(z.string(), z.object({ box: z.number().int().min(1).max(5), due: z.number().int(), lapses: z.number().int() })), mastered: z.array(z.string()) }),
+  srs: z.object({
+    levelsPlayed: z.number().int(),
+    entries: z.record(z.string(), z.object({ box: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]), due: z.number().int(), lapses: z.number().int() })),
+    mastered: z.array(z.string()),
+  }),
   journal: z.object({ firstSeen: z.record(z.string(), z.number().int()) }), // wordKey -> levelsPlayed index
   replays: z.object({ day: z.string(), count: z.number().int() }),
   lifetime: z.object({ words: z.number().int(), chars: z.number().int(), typos: z.number().int() }),
 });
-export const SaveBlob = SaveBlobV1;                 // alias to the latest
-export declare function migrateSave(raw: unknown): SaveBlob; // runs MIGRATIONS[v] for v = raw.schemaVersion .. latest-1, then parses
-export declare const MIGRATIONS: Record<number, (old: any) => unknown>; // MIGRATIONS[1] maps v1 -> v2, etc.
+export const SaveBlob = SaveBlobV1;                         // alias to the latest version
+export type SaveBlob = z.infer<typeof SaveBlob>;
+/** Compile-time proof that a save can feed buildLoadout. */
+export const saveIsLoadoutSource = (s: SaveBlob): LoadoutSource => s;
+/** Runs MIGRATIONS[v] for v = raw.schemaVersion .. latest-1, then SaveBlob.parse. */
+export declare function migrateSave(raw: unknown): SaveBlob;
+export declare const MIGRATIONS: Readonly<Record<number, (old: unknown) => unknown>>; // MIGRATIONS[1]: v1 -> v2, ...
 export declare function summarize(save: SaveBlob): SaveSummary;
-export declare function mergeSaves(local: SaveBlob, server: SaveBlob): { merged: SaveBlob; needsUserChoice: boolean };
+/** Three-way merge; `base` = last blob this client synced with the server (null if never synced). */
+export declare function mergeSaves(base: SaveBlob | null, local: SaveBlob, server: SaveBlob): { merged: SaveBlob; needsUserChoice: boolean };
 ```
-Migration rules:
-- Bump `schemaVersion` on any shape change and add `MIGRATIONS[n]` (n → n+1). Never edit or delete old migrations.
-- Keep a fixture blob per version in `packages/shared/tests/fixtures/` (test: fixture → latest parses).
-- A blob with a **newer** version than the client knows → the client goes read-only and never PUTs ("please refresh").
+**Migrations.**
+- Any shape change bumps `schemaVersion` and adds `MIGRATIONS[n]` (n → n+1). Old migrations are never edited or deleted.
+- There is one fixture blob per version in `packages/shared/tests/fixtures/`, with a test that each fixture migrates to the latest version and parses.
+- A blob with a **newer** version than the client knows puts the client in read-only mode: it never PUTs, and it shows "please refresh".
 
-Merge on 409 (doc 03 §5.5):
-- Monotonic fields take the max: cleared, stars (OR), `levelsPlayed`, lifetime, mastered, journal (min firstSeen).
-- Fungible fields come wholesale from the side with the higher `playtimeSec`: wallet, inventory, equipped, pity, metaRng.
-- If both sides are more than 30 min of playtime apart from the common base → `needsUserChoice`.
+**Sync and merge (409).**
+- The client stores the **last-synced server blob** (`base`) in IndexedDB next to its revision.
+- On a 409 it runs `mergeSaves(base, local, server.blob)`, then PUTs the merged blob with `If-Match` set to the server revision.
+- **Monotonic fields, per field:**
+  - `progress.levels`: `cleared` OR, `stars` OR elementwise, `bestTicks` min, `attempts` max.
+  - `frontierChapter`: max.
+  - **`starChestsClaimed`: per-chapter set union** (so no milestone can be claimed twice).
+  - `unlocks`: union.
+  - `journal.firstSeen`: min per key.
+  - `lifetime`, `playtimeSec`: max.
+  - `accuracyDaily`: union by day, keeping the higher accuracy.
+- **SRS:**
+  - Start from the side with the higher `srs.levelsPlayed`.
+  - Add any `entries` keys found only on the other side.
+  - `mastered` = union, with mastered keys removed from `entries`.
+  - `levelsPlayed` = max.
+- **Fungible group** (`wallet`, `inventory`, `equipped`, `loadout`, `cachePity`, `metaRng`, `replays`), merged as a **single unit**:
+  - If only one side changed it relative to `base`, take that side.
+  - If both changed, or `base` is null, take the side with the higher `playtimeSec`.
+  - If both sides gained more than 30 min of `playtimeSec` since `base`, set `needsUserChoice`.
+- **Settings:** take local.
 
-Encoding on the wire: `blob = base64(gzip(utf8(JSON.stringify(save))))` via `CompressionStream("gzip")` (`packages/shared/src/compress.ts`). The decoded size must be ≤ 256 KiB.
+**Wire encoding.** `blob = base64(gzip(utf8(JSON.stringify(save))))` via `CompressionStream("gzip")` (`packages/shared/src/compress.ts`). The decoded blob must be ≤ 256 KiB.
 
 ### 9.2 HTTP API
-General rules:
-- JSON bodies. Auth via `Authorization: Bearer <access JWT>`; the JWT is HS256, 15 min, claims `{sub, ageBand, region, iat, exp}`.
-- The refresh token is opaque, lasts 90 days, is stored hashed, rotates on every use, and a reused token revokes the whole family.
-- `POST /runs/submit` requires `Idempotency-Key: <runId>`.
-- Every non-2xx response uses the error envelope (409 save conflict adds `server`).
 
-```ts
+**General rules.**
+- Bodies are JSON.
+- **Access token:** sent as `Authorization: Bearer <JWT>`. It is HS256, lasts 15 min, and has claims `{sub, ageBand, region, iat, exp}`.
+- **Refresh token:** opaque, valid for 90 days and stored hashed. It rotates on every use, and reusing an old one revokes the whole token family.
+- `POST /runs/submit` requires `Idempotency-Key: <runId>`.
+- Every non-2xx response uses the error envelope. A 409 save conflict also includes `server`.
+
+```ts shared
 // packages/shared/src/errors.ts
+import { z } from "zod";
 export const ErrorCode = z.enum([
   "bad_request", "unauthorized", "token_expired", "refresh_invalid", "refresh_reused", "forbidden", "not_found",
   "save_conflict", "precondition_required", "payload_too_large", "rate_limited",
@@ -982,13 +1258,13 @@ export const AuthRefreshResponse = AuthTokens;
 // GET /save  -> 200 SaveRecord + `ETag: "<revision>"` | 404 not_found
 // PUT /save  -> header `If-Match: "<revision>"` ("0" when no save exists yet; missing -> 428 precondition_required)
 //            -> 200 SavePutResponse | 409 SaveConflictResponse | 413 payload_too_large   (rate 2/min)
-export const SaveSummary = z.object({ schemaVersion: z.number().int(), levelMax: z.number().int().min(0), stars: z.number().int().min(0).max(900), playtimeSec: z.number().int().min(0) });
 export const SaveRecord = z.object({ revision: z.number().int().min(1), updatedAt: z.number().int(), blob: B64, summary: SaveSummary });
 export const SavePutRequest = z.object({ blob: B64, summary: SaveSummary });
 export const SavePutResponse = z.object({ revision: z.number().int(), updatedAt: z.number().int() });
 export const SaveConflictResponse = ErrorEnvelope.extend({ server: SaveRecord });
 
-// POST /runs/start            (rate 10/min)
+// POST /runs/start            (rate 10/min). ONE open trial ticket per user: starting a new run marks any
+// previous 'open' trial run of that user 'abandoned' in the same batch.
 export const RunStartRequest = z.object({ mode: z.literal("trial"), boardId: z.literal("trial_wpm") });
 export const RunTicket = z.object({
   runId: z.string(), mode: z.literal("trial"), boardId: z.literal("trial_wpm"), trialId: z.string(),
@@ -998,18 +1274,19 @@ export const RunTicket = z.object({
 });
 
 // POST /runs/submit           (rate 10/min; Idempotency-Key: runId)
+export const TRIAL_MAX_EVENTS = 3000;
 export const ClaimedTrialResult = z.object({
   correctChars: z.number().int().min(0), typos: z.number().int().min(0),
   wpmX100: z.number().int().min(0), accuracyBp: z.number().int().min(0).max(10000),
-  durationMs: z.number().int().min(0), finalHash: Hex8,
+  finalHash: Hex8,
 });
 export const RunSubmitRequest = z.object({
   runId: z.string(), sig: z.string(),
-  logFormat: z.literal("hdk1"), log: B64.max(174_763), // deflate-raw(hdk1 bytes), <= 128 KiB
-  eventCount: z.number().int().min(1).max(50_000),
+  logFormat: z.literal("hdk1"), log: B64.max(43_692),     // deflate-raw(hdk1 bytes), <= 32 KiB
+  eventCount: z.number().int().min(1).max(TRIAL_MAX_EVENTS),
   claimed: ClaimedTrialResult,
   simVersion: z.number().int(), contentVersion: Hex8, clientVersion: z.string(),
-  timerResolutionMs: z.number().min(0).max(1000), // measured by the client; > 2 disables quantization checks
+  timerResolutionMs: z.number().min(0).max(1000),         // context only (stored with flags); never trusted (M6)
 });
 export const RunSubmitResponse = z.object({
   status: z.literal("accepted"),             // shadow-flagged runs ALSO return "accepted" (D28)
@@ -1017,10 +1294,9 @@ export const RunSubmitResponse = z.object({
   verified: z.object({ wpmX100: z.number().int(), accuracyBp: z.number().int(), score: z.number().int() }),
   pb: z.boolean(), rank: z.number().int().positive().nullable(),
 });
-// Rejections: 4xx ErrorEnvelope with run_not_found | run_expired | bad_signature | version_mismatch |
-// log_invalid | resim_mismatch (422) | timing_impossible (422) | run_already_submitted (409, different log).
+// Rejections: ErrorEnvelope. See §10 for which codes are terminal for the run.
 
-// GET /lb/trial?scope=season|all&around=me    (top-100 from KV, 60 s cron; around = live D1 query)
+// GET /lb/trial?scope=season|all&around=me    (top-100 from KV, 60 s cron; `around` = live D1 query)
 export const LbTrialQuery = z.object({ scope: z.enum(["season", "all"]).default("season"), around: z.literal("me").optional() });
 export const LbEntry = z.object({
   rank: z.number().int().positive(), userId: z.string(), displayName: z.string(),
@@ -1030,104 +1306,126 @@ export const LbTrialResponse = z.object({
   scope: z.enum(["season", "all"]), periodKey: z.string(),   // "S1" | "all"
   updatedAt: z.number().int(),
   top: z.array(LbEntry).max(100),
-  me: LbEntry.nullable(),                                     // owner sees own flagged entry here only
+  me: LbEntry.nullable(),                                     // the owner sees their own flagged entry here only
   around: z.array(LbEntry).max(21).optional(),                // present iff around=me: me ±10
 });
 ```
-The leaderboard `score` column is `wpmX100 * 10_000 + accuracyBp`: higher is better, ties broken by accuracy, then by earlier `achieved_at`.
+The leaderboard `score` column is `wpmX100 * 10_000 + accuracyBp`. Higher wins; ties go to the earlier `achieved_at`.
 
 ### 9.3 Keystroke log format `hdk1`
-Encode and decode live in `packages/sim/src/logcodec.ts` (pure bytes). deflate-raw and base64 live in `packages/shared/src/compress.ts`.
-```
+Encoding and decoding live in `packages/sim/src/logcodec.ts` and work on pure bytes. deflate-raw and base64 are in `packages/shared/src/compress.ts`.
+```text
 bytes  := magic "HDK1" (48 44 4B 31) · varint count · count × record
 record := varint dtMs · varint code
 dtMs   := ms since previous record; first record = ms since clock origin (Trial: always 0)
 code   := 0 Escape | 1..95 printable ASCII (charCode - 31; space = 1) | 200 cmd:abandon | 201 revive:gem | 202 revive:feather
 varint := unsigned LEB128, <= 5 bytes, value < 2^32
-wire   := base64(deflateRaw(bytes))    limits: raw <= 256 KiB, count <= 50_000
+wire   := base64(deflateRaw(bytes))
 ```
-```ts
-export interface LoggedInput { ms: number; input: SimInput }   // input.tick === msToTick(ms)
-export declare function encodeLog(entries: readonly { ms: number; key: SimKey | CommandInput["cmd"] | `revive:${"gem" | "feather"}` }[]): Uint8Array;
-export declare function decodeLog(bytes: Uint8Array): LoggedInput[]; // throws LogError on bad magic/varint/code/non-monotonic
+```ts sim
+export interface LoggedInput { ms: number; input: SimInput }   // invariant: input.tick === msToTick(ms)
+export interface LogLimits { maxEvents: number; maxTotalMs: number }
+export const TRIAL_LOG_LIMITS: LogLimits = { maxEvents: 3000, maxTotalMs: 60_000 };
+export const LEVEL_LOG_LIMITS: LogLimits = { maxEvents: 50_000, maxTotalMs: 1_200_000 };
+/** Throws LogError if ms is non-monotonic or input.tick !== msToTick(ms). */
+export declare function encodeLog(entries: readonly LoggedInput[]): Uint8Array;
+/** Throws LogError: bad magic/varint/code, count > maxEvents, cumulative ms > maxTotalMs, trailing bytes. */
+export declare function decodeLog(bytes: Uint8Array, limits: LogLimits): LoggedInput[];
 ```
 
 ---
 
 ## 10. Anti-cheat re-sim contract (Worker, `POST /runs/submit`)
 
-Steps, in order. The first failure wins.
-1. Validate auth and the zod body. `Idempotency-Key` must equal `runId`.
-2. Load the run row. It must exist, be owned by `sub`, have `mode/board` = trial, and be `status = 'open'`.
-   - Status `accepted`/`flagged` with the **same** `sha256(log)` → return the stored response (idempotent replay).
-   - Status `accepted`/`flagged` with a different log → 409 `run_already_submitted`.
-   - `now > expiresAt` (issuedAt + `AC_RUN_TTL_MS`) → `run_expired`.
-3. Verify the HMAC `sig` over the ticket fields (constant-time) → `bad_signature`.
-4. `simVersion === SIM_VERSION` and `contentVersion === CONTENT_VERSION` of the deployed Worker → `version_mismatch`.
-5. Decode the log → `log_invalid` if any of these fail:
-   - the magic, the varints, the codes, or `count === eventCount`
-   - the first `dtMs === 0`
-   - no commands other than abandon
-6. Timing plausibility → `timing_impossible`:
-   - `lastMs <= (now − issuedAt) + AC_CLOCK_SLACK_MS`
-   - `now − issuedAt >= 60_000 − AC_CLOCK_SLACK_MS`
-   - `claimed.durationMs === min(lastMs, 60_000)`
-7. **Re-simulate:**
-   ```ts
-   replayTrial(resolveTrial(CONTENT, ticket.trialId), ticket.seed, decoded.map(d => d.input))
-   ```
-   The following must **all equal** the claimed values exactly: `correctChars`, `typos`, `wpmX100`, `accuracyBp`, and `finalHash`. Any difference → 422 `resim_mismatch`, run `status = 'rejected'`, nothing is written to the leaderboard.
-8. Heuristics. Any hit → `status = 'flagged'` (a shadow flag: the response is identical to accepted, and the entry is visible only to its owner). Thresholds come from Worker env vars (`wrangler.toml [vars]`, overridable per environment):
+**What the T5.2 AC means (M7):**
 
-| Env var | Default | Rule (over correct + typo key records, Escape excluded; IKI = consecutive dtMs) |
+| Tampering | Expected outcome |
+|---|---|
+| Altered **score or result** (the claim no longer matches the log) | **422 `resim_mismatch`**, and no leaderboard row is written |
+| Altered **timing** (log re-timed, self-consistent claim) | Re-sim matches, so the run is **`flagged`** by the heuristics: a shadow row visible only to its owner. If the timing is physically impossible: **422 `timing_impossible`**. |
+| Replaying the same submission | Returns the stored response (idempotent) |
+
+The integration tests assert exactly these three cases.
+
+**Submit steps, in order.** The first failure wins. In the table, *non-terminal* means the run row is left untouched; *terminal* means the run becomes `rejected` and the error is stored.
+
+| # | Step | Failure → code |
+|---|---|---|
+| 1 | Validate auth and the zod body. `Idempotency-Key` must equal `runId`. | `bad_request` / `unauthorized` — non-terminal |
+| 2 | Load the run. It must exist and be owned by `sub`. | `run_not_found` — non-terminal |
+| 2a | If status ≠ `open`: if the stored `log_sha256` equals `sha256(log)`, return the **stored response** (success or error); otherwise 409 `run_already_submitted`. `rejected`, `accepted`, `flagged`, `abandoned` and `expired` are all terminal states. | — |
+| 2b | If `now > expiresAt`, set status `expired`. | `run_expired` |
+| 3 | Verify the HMAC `sig` (constant time). | `bad_signature` — non-terminal (the request may not come from the ticket holder) |
+| 4 | `simVersion === SIM_VERSION` and `contentVersion === CONTENT_VERSION`. | `version_mismatch` — terminal |
+| 5 | Decode the log with `decodeLog(inflate(b64), TRIAL_LOG_LIMITS)`. Also require `count === eventCount`, first `dtMs === 0`, and no commands other than `abandon`. | `log_invalid` — terminal |
+| 6 | Timing plausibility: `lastMs <= (now − issuedAt) + AC_CLOCK_SLACK_MS` and `now − issuedAt >= 60_000 − AC_CLOCK_SLACK_MS`. | `timing_impossible` (422) — terminal |
+| 7 | **Re-sim.** `replayTrial(resolveTrial(CONTENT, ticket.trialId), ticket.seed, decoded.map(d => d.input))`. `correctChars`, `typos`, `wpmX100`, `accuracyBp` and `finalHash` must **all equal** the claimed values. | `resim_mismatch` (422) — terminal |
+| 8 | Run the heuristics (below). Any hit → status `flagged`; otherwise `accepted`. | — |
+| 9 | Persist (below). | — |
+
+**Race-safe persistence (M8).** Everything goes in one D1 `batch()`, which runs as a single transaction:
+1. `UPDATE runs SET status=?, submitted_at=?, log_sha256=?, submit_nonce=?, response=? WHERE id=? AND status='open'`. `submit_nonce` is a fresh random value per request.
+2. The leaderboard PB upsert, for `period_key ∈ {season, 'all'}`, using the **verified** values. It is guarded by `WHERE EXISTS (SELECT 1 FROM runs WHERE id=? AND submit_nonce=?)`.
+3. The `run_replays` insert (top 1,000 or flagged; 90-day TTL), with the same guard.
+
+After the batch:
+- If the UPDATE changed 0 rows, another request won the race. Re-read the run and answer as in step 2a.
+- Terminal error paths (steps 4–7) use the same conditional UPDATE, with `status='rejected'` and the stored error body.
+- If the score enters the top 100, rebuild the KV top-100.
+
+The claimed numbers are never written.
+
+**Heuristics.** Thresholds are Worker env vars (`wrangler.toml [vars]`). **IKI-based thresholds are provisional:** tune them on real data before the season starts, and log every heuristic value to `flags` for that purpose.
+
+**Preprocessing:**
+- Use key records only (Escape excluded).
+- `IKI` = consecutive `dtMs` values.
+- A run of records with `dtMs = 0` (identical timestamps) counts as **one jank cluster**. It is coalesced into a single interval and excluded from the CV, fast-share and quantization statistics.
+- **Timer grain (M6):** the grain `g` is the GCD of all non-zero IKIs. If `g ≥ 2` the browser timer is coarse, so the quantization rule is skipped and `g` is recorded. The other rules still catch macros.
+
+| Env var | Default | Rule |
 |---|---|---|
 | `AC_RUN_TTL_MS` | 600000 | ticket lifetime |
 | `AC_CLOCK_SLACK_MS` | 5000 | clock slack in step 6 |
 | `AC_MAX_SUSTAINED_WPM` / `AC_SUSTAINED_SPAN_MS` | 220 / 30000 | net WPM over any 30 s span |
 | `AC_MAX_BURST_WPM` / `AC_BURST_SPAN_MS` | 300 / 5000 | net WPM over any 5 s span |
-| `AC_MIN_IKI_CV` | 0.15 | coefficient of variation of IKIs (humans 0.35–0.7) |
-| `AC_FAST_IKI_MS` / `AC_MAX_FAST_IKI_SHARE` | 15 / 0.02 | share of IKIs below 15 ms |
-| `AC_QUANT_MIN_PERIOD_MS` / `AC_QUANT_MAX_SHARE` | 8 / 0.6 | share of IKIs that are exact multiples of one period p in [8, 50] ms; skipped if `timerResolutionMs > 2` |
-| `AC_PERFECT_MIN_KEYS` / `AC_PERFECT_MIN_WPM` | 1500 / 150 | 100% accuracy over ≥ N keys at ≥ W WPM |
-| `AC_PB_JUMP_REVIEW_WPM` | 35 | PB jump vs the previous verified best → insert a `flags` row for **review** only (no shadow flag) |
-| `AC_MIN_KEYS` | 20 | fewer keys → accepted, but not ranked |
+| `AC_MIN_IKI_CV` *(provisional)* | 0.15 | coefficient of variation of the IKIs (humans: 0.35–0.7) |
+| `AC_FAST_IKI_MS` / `AC_MAX_FAST_IKI_SHARE` *(provisional)* | 15 / 0.02 | share of IKIs below 15 ms |
+| `AC_QUANT_MIN_PERIOD_MS` / `AC_QUANT_MAX_SHARE` *(provisional)* | 8 / 0.6 | share of IKIs that are exact multiples of one period p ∈ [8, 50] ms; only when g = 1 |
+| `AC_MAX_JANK_SHARE` *(provisional)* | 0.10 | share of keys inside jank clusters |
+| `AC_PERFECT_MIN_KEYS` / `AC_PERFECT_MIN_WPM` | 400 / 150 | 100% accuracy over ≥ N keys at ≥ W WPM |
+| `AC_PB_JUMP_REVIEW_WPM` | 35 | PB jump vs. the previous verified best → `flags` row for **review** only (no shadow flag) |
+| `AC_MIN_KEYS` | 20 | fewer keys → accepted but not ranked |
 
-9. Write everything in one D1 `batch()`:
-   - the run row (`status`, `submitted_at`, `log_sha256`)
-   - `leaderboard_entries` for `period_key ∈ {season, 'all'}`, using the **verified** values, PB-only upsert
-   - `run_replays` if the entry lands in the top 1,000 or is flagged (90-day TTL)
-   - the stored response for idempotency
+Story levels are not verified in the slice. `replay()` and `LEVEL_LOG_LIMITS` exist so the same contract can extend to Boss of the Week.
 
-   Then, if the new score enters the top 100, rebuild the KV top-100.
-
-The claimed numbers are never written. Story levels are not verified in the slice. `replay()` exists so the same contract can extend to Boss of the Week later.
-
-Parity tests (gate §8.1):
-- Golden fixtures: `(ResolvedTrial, seed, hdk1 log) → TrialResult + hash`, and `(ResolvedLevel, loadout, seed, options, log) → LevelResult + hash`. These run in Node (vitest), in Chromium (Playwright), and in `wrangler dev` (Worker test).
-- Any `SIM_VERSION` bump regenerates them, and the commit says why.
+**Parity tests (gate §8.1).**
+- **Golden fixtures** cover two cases:
+  - Trial: `(contentVersion, trialId, seed, hdk1 log) → TrialResult + hash`.
+  - Level: `(contentVersion, levelId, ctx, loadout, seed, options, log) → LevelResult + hash`.
+- They run in Node (vitest), in Chromium (Playwright) and under `wrangler dev`.
+- A `SIM_VERSION` or `CONTENT_VERSION` change regenerates the affected fixtures, and the commit message says why.
 
 ---
 
 ## 11. Change process
 
-1. This doc is versioned `MAJOR.MINOR`.
-   - **MINOR:** additive changes, such as a new event type, a new optional field, or a new BALANCE key.
-   - **MAJOR:** a rename, removal or semantic change of an existing contract.
-   - Bump `SIM_VERSION` whenever the same inputs could produce a different state, events or result (any rule, number, RNG draw order or stream change, even in BALANCE). Bump `SAVE_SCHEMA_VERSION` for save shape changes.
-2. Agents **do not edit this file**. They put an *Interface Change Proposal* in their task report:
-   ```
+1. **Versioning.** This doc is versioned `MAJOR.MINOR`.
+   - **MINOR** covers additive changes: a new event type, a new optional field or a new BALANCE key.
+   - **MAJOR** covers renaming, removing or changing the meaning of an existing contract.
+   - **`SIM_VERSION`** is bumped whenever the same inputs could produce a different state, event list or result. That includes any rule, number, RNG draw order or stream change, even one made only in BALANCE.
+   - **`SAVE_SCHEMA_VERSION`** is bumped for save shape changes.
+2. **Proposals.** Agents **never edit this file**. They put an *Interface Change Proposal* in their task report:
+   ```text
    ICP: <title>
    Section: §N    Kind: additive | breaking    Bumps: SIM_VERSION? SAVE_SCHEMA_VERSION? doc MINOR/MAJOR
    Change: <exact TS/zod diff>
    Why: <one paragraph>
    Affected owners: <roles / files>
    ```
-3. The orchestrator approves (with an Opus review for MAJOR changes), edits this doc, and appends to the changelog below. The owning agent then implements it. Consumers are told in their next brief.
-4. Until an ICP is approved, implement against the current doc. Local workarounds stay inside your own package.
-5. Adding an event type requires the same commit to update `ALL_EVENT_TYPES` (compile-checked) and add a stub binding in `level/eventBindings.ts` (VFX owner, via orchestrator).
-
-**Changelog**
-- 1.0 (2026-10-09): initial contract.
+3. **Approval.** The orchestrator approves (MAJOR changes also get an Opus review), edits this doc and updates the changelog at the top. The owning agent then implements the change, and consumers are told about it in their next brief.
+4. **While an ICP is pending,** implement against the current doc. Local workarounds stay inside your own package.
+5. **New event types.** Adding an event type requires the same commit to update `ALL_EVENT_TYPES` (compile-checked) and to stub a binding in `level/eventBindings.ts` (VFX owner, via the orchestrator).
 
 ---
 
@@ -1135,42 +1433,42 @@ Parity tests (gate §8.1):
 
 | # | Decision | Why / alternative |
 |---|---|---|
-| D1 | Integer fixed point: quantities in milli, ratios in bp. BALANCE floats are converted once at init. All `pow`-type curves (incl. `(35/Pace)^0.7`) come from generated integer tables. `Math.pow/exp/log/trig/sqrt` and `**` are banned in sim. | Removes every cross-engine float doubt. The alternative (floats plus a determinism argument) is fragile under review. |
-| D2 | sfc32 state is a plain `[u32×4]` in state. Streams are derived from (seed, stream name, encounter index). Loot is derived at roll time, so it is independent of combat. | Satisfies "adding a feature doesn't shift loot". Replaces the M0 closure-based placeholder; the algorithm is the same. |
-| D3 | FNV-1a 32 over sorted-key canonical JSON. State must be plain JSON. | Simple and fast. Security comes from outcome comparison, not the hash. |
-| D4 | The keystroke log stores **integer ms**; ticks = `floor(ms*3/50)`. Late keys are clamped to the current tick's first ms. | Keeps the ms timing that the heuristics need (sub-15 ms, quantization) while the sim stays tick-only. Doc 03 had dt + key; this keeps that. |
-| D5 | `caseMode: "auto"`: case-insensitive for plates without capitals. | Beginners with Shift/Caps aren't punished in T1–T4. T5+ capitals stay strict. |
-| D6 | Escape drops the target if one is locked; otherwise it opens pause (client). Tab always drops. | Doc 01 has both "Esc drops" and "Esc twice pauses"; this merges them. |
-| D7 | Combo = consecutive **Perfect words** (doc 01 + economy sim). Tiers are 5/15/30/50 (doc 01). A separate per-char `streak` drives audio pitch. | Plan T2.6's "10/25/50/100" was an example and looks per-keystroke; the economy parity needs per-word. **PO: confirm the tier numbers for VFX.** |
-| D8 | The combo penalty applies at most once per plate attempt (stray typos share one latch). | Matches the economy sim's "halve per imperfect word". Otherwise two typos would quarter the combo. |
-| D9 | Escape resets the plate's progress, and chars already paid don't pay ATB again. | Prevents drop/re-type ATB farming. |
-| D10 | Crit chance = 5% + 15% × the perfect share of words since the last auto-attack. | Reproduces the economy's `5% + 15%·p_perfect` in expectation and is readable to players. |
-| D11 | **New mechanic vs the economy sim:** weakness ×1.3, shield points, Break 4.5 s ×1.8 (from the POC / Octopath). Chips don't remove shields. | The POC already shows WEAK/BREAK. **T6.1 must retune encounter HP** for the added DPS. |
-| D12 | Auto-attack and skill damage land at a fixed impact delay (0.30/0.40 s). Hit-stop/slow-mo are render-only. | Lets the dash animation connect without ever slowing the sim or blocking input. |
-| D13 | The guard word *replaces* the enemy's plate (and drops the target if it was locked). Block/parry resolve at impact. | Matches the POC and keeps the first-letter uniqueness rule simple. |
-| D14 | A failed Doom Spell does 15% of par HP but is **non-lethal** (clamped to 1 HP). | Combines doc 01's "not lethal" with C4's amount. |
-| D15 | The Ruin Golem's signature is "Falling Rubble" (falling words in lanes); then a Finisher with **no timer**. | The plan names no Ch1 minigame. It reuses the plate system, and the boss's own attacks are suspended in phase 3. |
-| D16 | Phase 2 HP clamps at 33% until 2 Doom Spells have resolved. | Guarantees the ~2.5 doom spells the economy expects. |
-| D17 | Second Wind freezes the encounter, lasts 8 s, and gives 30% HP. The gem revive is a logged `revive` command, disabled in the slice. | The hook exists without building gems. |
-| D18 | Skill charge and combo persist across encounters. ATB resets each encounter. | Opening Gambit (start with 50 ATB) implies the reset. |
-| D19 | Skill and passive **numbers live in BALANCE**; content has text and art only. | One parameter table (plan T1.3). |
-| D20 | Slice set: actives slashWave, piercingThrust, fireball, frostLock, mendingLight, aegis; passives cleanCut, bulwarkStreak, steadyHands, riposte, ironWill, openingGambit, lastStand, comeback. Damage is −40% vs doc 01. | T1.4 may swap ids via an ICP. |
-| D21 | Damage types: Sword = slash, Dagger = pierce, Staff = arcane, Hammer = blunt; skill elements fire/ice/light. | Maps the POC's "sword/fire" weaknesses to slash/fire. |
-| D22 | Gear slots are weapon/armor/**charm** (the plan's "accessory"). | Matches the economy sim. |
-| D23 | A cache rolls slot uniformly, and the weapon archetype uniformly over 4 (published). | **Open:** bias toward the equipped archetype? It's kinder, but must still be published and fixed. |
-| D24 | `CacheRolled` (and other meta outcomes) are a separate `MetaEvent` union with no tick. | Caches open outside levels. `ALL_EVENT_TYPES` stays level/trial-only. |
-| D25 | Trial: the passage includes spaces (counted as chars) and uses stop-on-error. The clock starts at the first key, lasts 60 s, and draws from ≤ 7 fixed standardized passages picked by seed. Score = `wpmX100*10000 + accuracyBp`. | Standard WPM definition; standardized for fairness. |
-| D26 | `PUT /save` uses an `If-Match` header with an ETag'd revision (not `baseRevision` in the body). | As briefed. |
-| D27 | `POST /runs/submit` takes `runId` in the body. Idempotency = runId + sha256(log). | As briefed (doc 03 had `/runs/:id/submit`). |
-| D28 | Shadow-flagged submissions get an identical "accepted" response. | Doc 03: no instant feedback for cheaters. |
-| D29 | SRS: a typo demotes one box (min 1), not straight to box 1. Promotion only when due. | Gentle-failure pillar. |
-| D30 | Swift and BurstWpm thresholds are relative to the player's Pace (1.3× / 1.6×). | Fair at every WPM. |
-| D31 | No damage variance (`DMG_VARIANCE = 0`, tunable). | Cleaner parity with the economy sim. Crits supply the excitement. |
-| D32 | The encounter HP pool and grunt hit are explicit in level data, generated by `tools/balance` from the ported `level_spec`. Enemies split them by weight. | Data stays tunable and reviewable. The sim doesn't run authoring formulas at runtime. |
-| D33 | Chest gems are reported as `gemsUncredited`. | The server owns gems, and gems are out of scope for the slice. |
+| D1 | Integer fixed point: quantities in milli, ratios in bp. Generated tables replace every power curve. The banned set is listed in §1.2. | Removes every cross-engine float question. |
+| D2 | The sfc32 state is plain data. Streams are keyed by (seed, name, encounter index). Loot is derived at roll time. | "Adding a feature doesn't shift loot." |
+| D3 | FNV-1a 32 over sorted canonical JSON. `deepClone`, not `structuredClone`. | Simple and fast. Security comes from comparing outcomes, not from the hash. |
+| D4 | The log stores integer ms, and ticks are derived from it. Frames lag 3 ticks behind the clock, and keys step the sim immediately. | Keeps ms timing for the heuristics without making the sim depend on ms. |
+| D5 | `caseMode: "auto"` is case-insensitive for plates that contain no capitals. | Kind to beginners. T5+ stays strict. |
+| D6 | Escape drops the target, or pauses when nothing is targeted (client side). Tab always drops. | Merges doc 01's two Escape uses. |
+| D7 | **Hybrid combo (PO 2026-10-09).** The mechanical combo counts perfect words, with tiers 5/15/30/50. The VFX colour tiers count the per-key `keyStreak`, with tiers 10/25/50/100. Both are exposed in events and the view. | Keeps economy parity and gives T2.6 its per-keystroke juice. |
+| D8 | The combo penalty applies at most once per plate attempt (stray typos share a latch). | Matches the economy sim's halve-per-imperfect-word. |
+| D9 | **(B1)** Escape resets progress but keeps `perfect` and leaves the combo untouched. Already-paid char indices pay no ATB again. An imperfect completion leaves the combo unchanged. | Escape is free per doc 01. The anti-farm rule closes the exploit. |
+| D10 | Crit = 5% + 15% × the perfect share since the last auto-attack (5% when there were no words). | Equals the economy's expected crit rate. |
+| D11 | Weakness ×1.3, shields, Break 4.5 s at ×1.8. Chips never break shields. **Kept by the PO; encounter HP is retuned in T6.1.** | Already shown in the POC. |
+| D12 | Fixed impact delays. Hit-stop and slow-mo are render-only. | The sim never slows, and input is never blocked. |
+| D13 | The guard word replaces the enemy's plate. Block or parry resolves at impact. | Keeps the first-letter uniqueness rule simple. |
+| D14 | A failed Doom Spell does 15% of par HP but is non-lethal. | Doc 01 + C4. |
+| D15 | The Ruin Golem's signature is Falling Rubble, followed by a finisher with no timer. | Reuses the plate system. |
+| D16 | Phase-2 HP clamps until 2 Doom Spells have resolved. | Delivers the doom count the economy expects. |
+| D17 | Second Wind: 8 s, freezes the encounter, restores 30% HP. Gem revive exists only as a disabled hook command. | The hook is there without building gems. |
+| D18 | Skill charge, combo and keyStreak persist across encounters; ATB resets each encounter. | Opening Gambit implies an ATB reset. |
+| D19 | Skill and passive numbers live in BALANCE; content holds text and art. | One parameter table. |
+| D20 | The slice has 6 actives and 8 passives (ids in §3). | T1.4 may swap ids via an ICP. |
+| D21 | Damage types: Sword slash, Dagger pierce, Staff arcane, Hammer blunt. | Maps the POC's weakness tags. |
+| D22 | Gear slots are weapon / armor / **charm** (the plan's "accessory"). | Matches the economy sim. |
+| D23 | **Cache weapon archetype (PO 2026-10-09):** equipped 40%, each of the other three 20%. Fixed and published via `publishedCacheOdds()`. Slot stays uniform. | Kinder to players while staying transparent. |
+| D24 | Meta outcomes are a separate `MetaEvent` union. | Caches open outside levels. |
+| D25 | **Trial (PO confirmed typed spaces):** stop-on-error, a 60 s clock that starts at the first key, and a standardized pool of ≥ 30 passages (≥ 1600 chars each) picked by the seed. A key at tick ≥ 3600 does not count. One open ticket per user. | Standard WPM, fair and replayable. |
+| D26 | `PUT /save` uses an `If-Match` ETag; the merge is three-way against the last-synced base. | As briefed + reviewer M9. |
+| D27 | `POST /runs/submit` takes `runId` in the body. Idempotency = runId + sha256(log) + a conditional UPDATE. | Race-safe (M8). |
+| D28 | A shadow-flagged run gets an identical "accepted" response. | Doc 03. |
+| D29 | SRS: a typo demotes one box; promotion only when the word is due. | Gentle-failure pillar. |
+| D30 | Swift and BurstWpm thresholds are relative to the player's Pace. | Fair at every WPM. |
+| D31 | No damage variance (it stays a tunable). | Parity with the economy sim. |
+| D32 | Encounter HP pools and grunt hits are explicit in level data, generated by `tools/balance`. | Tunable and reviewable. |
+| D33 | Chest gems are reported as `gemsUncredited`. Gear-cache pity is client-owned. | The server owns gems and cosmetic pity. |
 
-**Open questions for the PO / orchestrator**
-1. Combo tier numbers for VFX (D7): 5/15/30/50 per-word, or a per-keystroke scheme?
-2. Cache weapon archetype (D23): uniform, or weighted toward the equipped archetype?
-3. Should the Trial require typed spaces (D25), or follow the in-game "no space" rule with words shown one at a time?
-4. D11 adds DPS that the economy sim doesn't model. OK to let T6.1 absorb it by raising encounter HP (~+10–15% est.)?
+**Rejected or adjusted reviewer items:** none rejected. Two were adjusted:
+- `buildLoadout` takes a structural `LoadoutSource` rather than `SaveBlob`. The sim cannot import `@hd2d/shared` without creating a cycle; `shared` proves at compile time that a save is assignable to it.
+- The sim imports one pure **value** from content (`TYPABLE_CHARS`) in addition to its types, so that the regex and the key filter share a single source.
+
+**Open questions:** none blocking. Two items will be revisited with real data: the IKI heuristic thresholds (§10) and the T6.1 HP retune for D11.
