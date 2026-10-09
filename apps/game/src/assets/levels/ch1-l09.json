@@ -56,16 +56,17 @@
                   "__identifier": "mood",
                   "__type": "Json",
                   "__value": {
-                    "amb": [0.08, 0.17, 0.16],
+                    "amb": [0.12, 0.22, 0.2],
                     "gamb": [0.04, 0.07, 0.06],
                     "fogCol": [0.012, 0.045, 0.04],
                     "clear": [0.012, 0.045, 0.04],
                     "gain": [0.95, 1.06, 1],
-                    "sh": [0, 0.03, 0.02],
-                    "exposure": 1.45,
+                    "sh": [0.01, 0.02, 0.03],
+                    "exposure": 2.1,
                     "bloom": 0.65,
                     "ambient": "none",
-                    "fog": [0.034, 11, 0.35]
+                    "fog": [0.026, 11, 0.35],
+                    "fill": 0.95
                   }
                 },
                 { "__identifier": "blend", "__type": "Int", "__value": 14 }
@@ -591,21 +592,22 @@
                 { "__identifier": "avoidBattle", "__type": "Float", "__value": 5.8 },
                 { "__identifier": "keys", "__type": "Array<String>", "__value": ["prop.shroom"] },
                 { "__identifier": "spacing", "__type": "Array<Float>", "__value": [8, 14] },
-                { "__identifier": "scale", "__type": "Array<Float>", "__value": [2, 3] },
+                { "__identifier": "scale", "__type": "Array<Float>", "__value": [1.4, 2.1] },
                 { "__identifier": "seed", "__type": "Int", "__value": 188 },
-                { "__identifier": "emis", "__type": "Int", "__value": 2 },
+                { "__identifier": "emis", "__type": "Float", "__value": 0.3 },
                 {
                   "__identifier": "light",
                   "__type": "Json",
                   "__value": {
                     "color": [0.3, 1, 0.85],
-                    "intensity": 0.45,
+                    "intensity": 0.158,
                     "radius": 4,
                     "dy": 0.8,
                     "dz": -1,
                     "scatter": 0
                   }
-                }
+                },
+                { "__identifier": "gap", "__type": "Float", "__value": 0.5 }
               ]
             },
             {
@@ -664,8 +666,8 @@
                 { "__identifier": "dark", "__type": "Float", "__value": 0.45 },
                 { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
                 { "__identifier": "wrap", "__type": "Float", "__value": 0.6 },
-                { "__identifier": "scale", "__type": "Float", "__value": 2.6 },
-                { "__identifier": "emis", "__type": "Int", "__value": 2 }
+                { "__identifier": "scale", "__type": "Float", "__value": 1.82 },
+                { "__identifier": "emis", "__type": "Float", "__value": 0.3 }
               ]
             },
             {
@@ -726,8 +728,8 @@
                 { "__identifier": "dark", "__type": "Float", "__value": 0.45 },
                 { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
                 { "__identifier": "wrap", "__type": "Float", "__value": 0.6 },
-                { "__identifier": "scale", "__type": "Float", "__value": 2.6 },
-                { "__identifier": "emis", "__type": "Int", "__value": 2 }
+                { "__identifier": "scale", "__type": "Float", "__value": 1.82 },
+                { "__identifier": "emis", "__type": "Float", "__value": 0.3 }
               ]
             },
             {
@@ -788,8 +790,8 @@
                 { "__identifier": "dark", "__type": "Float", "__value": 0.45 },
                 { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
                 { "__identifier": "wrap", "__type": "Float", "__value": 0.6 },
-                { "__identifier": "scale", "__type": "Float", "__value": 2.6 },
-                { "__identifier": "emis", "__type": "Int", "__value": 2 }
+                { "__identifier": "scale", "__type": "Float", "__value": 1.82 },
+                { "__identifier": "emis", "__type": "Float", "__value": 0.3 }
               ]
             },
             {
@@ -892,8 +894,8 @@
                 { "__identifier": "dark", "__type": "Float", "__value": 0.45 },
                 { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
                 { "__identifier": "wrap", "__type": "Float", "__value": 0.6 },
-                { "__identifier": "scale", "__type": "Float", "__value": 2.4 },
-                { "__identifier": "emis", "__type": "Int", "__value": 2 }
+                { "__identifier": "scale", "__type": "Float", "__value": 1.68 },
+                { "__identifier": "emis", "__type": "Float", "__value": 0.3 }
               ]
             },
             {

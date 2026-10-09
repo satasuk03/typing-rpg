@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 /**
+ * STALE (2026-10-09): the JSON files are the source of truth. T6.3 polish edited ch1-l04/l08/l09/l10.json
+ * by hand; running this script would overwrite those edits. Do not run it without porting them first.
+ *
  * Authoring script for the Chapter 1 level layouts (ch1-l01 .. ch1-l10).
  *
  * It is a convenience for hand-authoring: it writes the LDtk-compatible JSON subset documented in

@@ -69,3 +69,14 @@ Tier 0/1 at DPR 2 are not asserted and keep the full or 1.5x HUD resolution.
 Audio: the `29669.4 Hz` warning came from high bell partials and tier-up arpeggio notes (`bell` ratios up to 8.93 on notes near MIDI 100+). `Synth.osc`, the noise
 filter ramp and the lowpass corner now clamp through `clampHz` to [20, 20000] Hz at the source. `tests/audio/frequency-range.test.ts` sweeps every Sfx id x streak 0..200 x tier 1..4 x boss/heavy
 against a recording fake AudioContext and fails if any oscillator or filter frequency leaves the range (verified to fail with the clamp removed).
+
+
+## Full Chapter 1 run on main (orchestrator, 2026-10-09)
+
+`tests/perf/full-run.spec.ts`, Metal, 75 WPM bot, L1→L10 in one session, with all typing VFX (T2.6 chunk C) and onboarding merged:
+
+| Level | L1 | L2 | L3 | L4 | L5 | L6 | L7 | L8 | L9 | L10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Result | cleared 57 s | cleared 53 s | cleared 84 s | cleared 95 s | cleared 84 s | cleared 87 s | cleared 87 s | cleared 83 s | cleared 93 s | cleared 162 s |
+
+**Zero console errors and zero unhandled rejections** (1 passed, 15.3 min). DoD line: PASS.
