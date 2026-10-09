@@ -13,6 +13,7 @@ import type { RngState } from "./rng.ts";
 import type { Tick } from "./time.ts";
 import type {
   ActiveSkillId,
+  ChestContents,
   Gimmick,
   LevelOptions,
   Loadout,
@@ -201,7 +202,8 @@ export interface RunState {
   lastStandOn: boolean; // HP below the Last Stand threshold (edge for PassiveTriggered)
   cues: string[]; // TutorialCue ids already emitted (options.tutorial)
   secondWindUsed: boolean;
-  goldCollected: number; // T1.6 pays gold; failLevel keeps FAIL_GOLD_KEEP of it
+  goldCollected: number; // level gold paid so far (per EncounterCleared); failLevel keeps FAIL_GOLD_KEEP of it
+  chests: ChestContents[]; // chests dropped so far, contents rolled at drop on the `loot` stream
   guardsShown: number;
   encountersStarted: number;
   endTick: Tick | null;

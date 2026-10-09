@@ -4,6 +4,7 @@
 // (suffix _BP basis points, _M milli-points, _T ticks). Game logic uses only `K` and tables.generated.ts: never BALANCE.
 // A test diffs every ported key against a dump of the Python module (tests/fixtures/economy-reference.json).
 import type { DamageType, Rarity } from "@hd2d/content";
+import type { ChestTier } from "./events.ts";
 import { type Bp, bp, type Milli, milli } from "./fixed.ts";
 import { TICK_HZ } from "./time.ts";
 import type { ActiveSkillId } from "./types.ts";
@@ -276,6 +277,7 @@ export const BALANCE = {
   TUTORIAL_HOLD_ATTACKS_UNTIL_WORDS: 3,
   MAX_LEVEL_S: 1200,
   TRIAL_DURATION_S: 60,
+  SENTENCE_FOLD_CASE_MAX_CHAPTER: 1, // PO: Ch1 sentence plates fold case (lowercase / Shift+letter both count); later chapters are exact
   // TS-only structure constants (not tunables in the economy sim)
   PACE_MIN: 15, // createLevel clamps pace to PACE_MIN..PACE_MAX (also the PACE_FACTOR_BP table range)
   PACE_MAX: 120,
@@ -339,6 +341,40 @@ const rarityBp = (m: Readonly<Record<Rarity, number>>): Readonly<Record<Rarity, 
   L: bp(m.L),
 });
 
+const RARITY_ORDER = ["C", "U", "R", "E", "L"] as const satisfies readonly Rarity[];
+const CHEST_TIER_ORDER = [
+  "Wooden",
+  "Iron",
+  "Gold",
+  "Mythic",
+] as const satisfies readonly ChestTier[];
+const bpRec = <K extends string>(
+  m: Readonly<Partial<Record<K, number>>>,
+  order: readonly K[],
+): Readonly<Record<K, Bp>> => {
+  const out = {} as Record<K, Bp>;
+  for (const k of order) out[k] = bp(m[k] ?? 0);
+  return out;
+};
+
+export interface ChestSpec {
+  goldBp: Bp; // x Gold Unit of the level's chapter
+  gearBp: Bp; // chance of a gear drop (Wooden / Iron only)
+  rar: Readonly<Record<Rarity, Bp>>;
+  gems: number;
+  caches: number;
+}
+const chestSpec = (
+  c: { gold: number; gear: number; rar: Readonly<Partial<Record<Rarity, number>>>; gems: number },
+  caches: number,
+): ChestSpec => ({
+  goldBp: bp(c.gold),
+  gearBp: bp(c.gear),
+  rar: bpRec(c.rar, RARITY_ORDER),
+  gems: c.gems,
+  caches,
+});
+
 /** Converts the human-readable table into integer constants. Runs once, at module init. */
 function deriveConstants(B: typeof BALANCE) {
   const W = B.WEAPONS;
@@ -354,6 +390,7 @@ function deriveConstants(B: typeof BALANCE) {
     ENCOUNTER_INTRO_T: ticks(B.ENCOUNTER_INTRO_S),
     REWARD_T: ticks(B.REWARD_S),
     LEVEL_TIMEOUT_T: ticks(B.MAX_LEVEL_S), // asserted equal to replay.ts MAX_LEVEL_TICKS in a test
+    SENTENCE_FOLD_CASE_MAX_CHAPTER: B.SENTENCE_FOLD_CASE_MAX_CHAPTER,
     PACE_MIN: B.PACE_MIN,
     PACE_MAX: B.PACE_MAX,
     RECENT_WORDS: B.RECENT_WORDS,
@@ -463,6 +500,44 @@ function deriveConstants(B: typeof BALANCE) {
     SECOND_WIND_HP_BP: bp(B.SECOND_WIND_HP),
     PREMIUM_REVIVE_HP_BP: bp(B.PREMIUM_REVIVE_HP),
     FAIL_GOLD_KEEP_BP: bp(B.FAIL_GOLD_KEEP),
+    // ---- chests, caches, gold, stars (T1.6) ----
+    RARITY_ORDER,
+    CHEST_TIER_ORDER,
+    CHEST_P_ENCOUNTER_BP: bp(B.CHEST_P_ENCOUNTER),
+    CHEST_P_ENCOUNTER_REPLAY_BP: bp(B.CHEST_P_ENCOUNTER_REPLAY),
+    BOSS_CHEST_REPLAY_BP: bp(B.BOSS_CHEST_REPLAY_P),
+    CHEST_TIER_NORMAL_BP: bpRec(B.CHEST_TIER_NORMAL, CHEST_TIER_ORDER),
+    CHEST_TIER_BOSS_BP: bpRec(B.CHEST_TIER_BOSS, CHEST_TIER_ORDER),
+    CHEST_GEAR_TIER_DOWN_BP: bp(B.CHEST_GEAR_TIER_DOWN_P),
+    CHEST: {
+      Wooden: chestSpec(B.CHEST.Wooden, B.CACHE_FROM_CHEST.Wooden),
+      Iron: chestSpec(B.CHEST.Iron, B.CACHE_FROM_CHEST.Iron),
+      Gold: chestSpec(B.CHEST.Gold, B.CACHE_FROM_CHEST.Gold),
+      Mythic: chestSpec(B.CHEST.Mythic, B.CACHE_FROM_CHEST.Mythic),
+    } as Readonly<Record<ChestTier, ChestSpec>>,
+    CACHE_ODDS_BP: bpRec(B.CACHE_ODDS, RARITY_ORDER),
+    CACHE_PITY_RARE: B.CACHE_PITY_RARE,
+    CACHE_PITY_EPIC: B.CACHE_PITY_EPIC,
+    CACHE_PITY_LEG: B.CACHE_PITY_LEG,
+    CACHE_GOLD_GU: B.CACHE_GOLD_GU,
+    /** Slot weights (weapon, armor, charm) as given; the published slot bp is derived from them. */
+    CACHE_SLOT_W: B.CACHE_SLOT_ODDS as Readonly<Record<"weapon" | "armor" | "charm", number>>,
+    CACHE_ARCH_EQUIPPED_BP: bp(B.CACHE_ARCHETYPE_ODDS.equipped),
+    CACHE_ARCH_OTHER_BP: bp(B.CACHE_ARCHETYPE_ODDS.other_each),
+    REPLAY_GOLD_MULT_BP: bp(B.REPLAY_GOLD_MULT),
+    STALE_REPLAY_MULT_BP: bp(B.STALE_REPLAY_MULT),
+    REPLAY_SOFTCAP_PER_DAY: B.REPLAY_SOFTCAP_PER_DAY,
+    REPLAY_SOFTCAP_MULT_BP: bp(B.REPLAY_SOFTCAP_MULT),
+    STAR_GOLD_BP: bp(B.STAR_GOLD),
+    STAR2_REL_MARGIN_BP: bp(B.STAR2_REL_MARGIN),
+    STAR2_CLAMP_LO_BP: bp(B.STAR2_REL_CLAMP[0]),
+    STAR2_CLAMP_HI_BP: bp(B.STAR2_REL_CLAMP[1]),
+    SHOP_RARITY_PRICE_BP: bpRec(B.SHOP_RARITY_PRICE, ["C", "U", "R"] as const),
+    VALUE_RARITY_PRICE_BP: bpRec(B.VALUE_RARITY_PRICE, RARITY_ORDER),
+    SALVAGE_RATE_BP: bp(B.SALVAGE_RATE),
+    DROP_SALVAGE_RATE_BP: bp(B.DROP_SALVAGE_RATE),
+    UPG_TRANSFER_BP: bp(B.UPG_TRANSFER),
+    PACE_DEFAULT: B.PACE_REF,
     // ---- gear ----
     UPG_STEP_BP: bp(B.UPG_STEP),
     RARITY_MULT_BP: rarityBp(B.RARITY_MULT),

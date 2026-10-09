@@ -14,7 +14,7 @@ import { K } from "./balance.ts";
 import { SimError } from "./errors.ts";
 import { bp, milli, mulDiv } from "./fixed.ts";
 import { canonicalContentJson, fnv1a32 } from "./hash.ts";
-import { levelGold, parHpM } from "./meta/index.ts";
+import { levelGold, parHpM, resolveStar3 } from "./meta/index.ts";
 import { TICK_HZ } from "./time.ts";
 import type {
   ResolvedBoss,
@@ -129,12 +129,30 @@ export function resolveLevel(
       waves: s.encounter.waves.map((w) => w.map(resolveRef)),
     };
   });
-  const plateWords = (pred: (w: WordEntry) => boolean): string[] =>
-    textsOf(bundle.words, (w) => w.uses.includes("plate") && pred(w));
+  // T1.6: plate pools keep only words whose length fits the level's plateLength (an all-filtered pool falls back to
+  // the unfiltered one so a mis-tuned range can never leave a tier empty).
+  const [lenLo, lenHi] = lv.plateLength;
+  const fits = (w: WordEntry): boolean => w.text.length >= lenLo && w.text.length <= lenHi;
+  const plateWords = (pred: (w: WordEntry) => boolean): string[] => {
+    const all = textsOf(bundle.words, (w) => w.uses.includes("plate") && pred(w));
+    const ok = textsOf(bundle.words, (w) => w.uses.includes("plate") && pred(w) && fits(w));
+    return ok.length > 0 ? ok : all;
+  };
   const usesWords = (use: WordEntry["uses"][number]): string[] =>
     textsOf(bundle.words, (w) => w.uses.includes(use));
+  // SRS weak words (the 5% weak share): ctx.dueWeakWords are SRS keys in due order (srsDue). Each becomes the authored
+  // plate text of its bundle entry; unknown keys (content changed), non-plate entries and words outside the level's
+  // plateLength are skipped. De-duplicated, due order kept.
   const weak: string[] = [];
-  for (const w of ctx.dueWeakWords) if (!weak.includes(w)) weak.push(w);
+  for (const key of ctx.dueWeakWords) {
+    const entry = bundle.words.find(
+      (w) =>
+        w.kind === "word" &&
+        w.uses.includes("plate") &&
+        (w.key === key || w.key === key.toLowerCase()),
+    );
+    if (entry !== undefined && fits(entry) && !weak.includes(entry.text)) weak.push(entry.text);
+  }
   const boss = seen.boss === null ? null : resolveBoss(seen.boss, seen.gruntHitM);
   return {
     levelId: lv.id,
@@ -167,8 +185,9 @@ export function resolveLevel(
     plateLength: [lv.plateLength[0], lv.plateLength[1]],
     goldTotal: levelGold(lv.chapter, lv.index),
     parHpM: parHpM(lv.chapter),
-    star3: lv.star3,
+    star3: resolveStar3(lv.star3),
     parRefTicks: ticks(lv.parRefS),
     tutorial: lv.tutorial,
+    foldSentences: lv.chapter <= K.SENTENCE_FOLD_CASE_MAX_CHAPTER,
   };
 }

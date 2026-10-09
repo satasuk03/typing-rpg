@@ -33,6 +33,7 @@ import { stepGimmicks } from "./gimmick.ts";
 import { enemyDef, holdAttacks, initAttack, stepEnemyAttacks } from "./guard.ts";
 import { deepClone } from "./hash.ts";
 import type { SimInput } from "./input.ts";
+import { openChest, rollEncounterChest } from "./meta/chests.ts";
 import { computeHeroStats } from "./meta/loadout.ts";
 import { emitPassive, hasPassive, tutorialCue } from "./passives.ts";
 import { below, deriveRng } from "./rng.ts";
@@ -138,6 +139,7 @@ export function createLevel(
     cues: [],
     secondWindUsed: false,
     goldCollected: 0,
+    chests: [],
     guardsShown: 0,
     encountersStarted: 0,
     endTick: null,
@@ -222,6 +224,35 @@ function stepOne(state: LevelState, emit: Emit): void {
   state.tick = t + 1;
 }
 
+/** Pays this encounter's share of the level gold and rolls its chest (T1.6). The `loot` stream is derived here, at roll time. */
+function payEncounter(state: LevelState, enc: EncounterState, emit: Emit): void {
+  const run = state.run;
+  const n = run.def.segments.filter((s) => s.kind !== "walk").length;
+  const total = mulBp(run.def.goldTotal, run.options.goldMultBp);
+  const share = Math.floor(total / n);
+  const amount = enc.index === n - 1 ? total - share * (n - 1) : share;
+  run.goldCollected += amount;
+  emit({
+    type: "GoldGained",
+    tick: state.tick,
+    amount,
+    source: "encounter",
+    total: run.goldCollected,
+  });
+  const loot = deriveRng(state.seed, "loot", enc.index);
+  const tier = rollEncounterChest(loot, { boss: enc.isBoss, firstClear: run.options.firstClear });
+  if (tier === null) return;
+  run.chests.push(
+    openChest(loot, tier, {
+      chapter: run.def.chapter,
+      frontierChapter: run.options.frontierChapter,
+      firstClear: run.options.firstClear,
+      equippedArchetype: run.loadout.weapon.archetype,
+    }),
+  );
+  emit({ type: "ChestDropped", tick: state.tick, tier, encounterIndex: enc.index, enemyId: null });
+}
+
 function transitions(state: LevelState, emit: Emit): void {
   const t = state.tick;
   for (let guard = 0; guard < 16 && !isTerminal(state); guard++) {
@@ -238,6 +269,7 @@ function transitions(state: LevelState, emit: Emit): void {
         encounterIndex: enc.index,
         durationTicks: t - enc.startTick,
       });
+      payEncounter(state, enc, emit);
       setPhase(state, "rewards", t + K.REWARD_T);
       return;
     }
@@ -736,8 +768,9 @@ export function getResult(state: Readonly<LevelState>): LevelResult | null {
     failReason: run.failReason,
     durationTicks: run.endTick ?? state.tick,
     activeTicks: run.activeTicks,
-    gold: run.goldCollected,
-    chests: [],
+    gold:
+      state.phase === "cleared" ? run.goldCollected : mulBp(run.goldCollected, K.FAIL_GOLD_KEEP_BP),
+    chests: run.chests.map((c) => ({ ...c, gear: c.gear === null ? null : { ...c.gear } })),
     stats: {
       correctChars: run.stats.correctChars,
       typos: run.stats.typos,

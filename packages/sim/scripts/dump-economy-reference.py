@@ -101,5 +101,99 @@ for lv in range(1, 11):
     }
 ref["level_specs_ch1"] = specs
 
+# ---- T1.6: chests, caches, shop, transfer, salvage, replay pay ----
+ref["shop_price"] = [
+    {"tier": t, "rarity": r, "price": E.tier_price(t) * m}
+    for t in range(1, 11)
+    for r, m in E.SHOP_RARITY_PRICE.items()
+]
+ref["cache_gold_price"] = [E.CACHE_GOLD_GU * E.gold_unit(c) for c in range(1, 31)]
+ref["chest_gold"] = {k: [v["gold"] * E.gold_unit(c) for c in range(1, 31)] for k, v in E.CHEST.items()}
+# Upgrade Transfer: economy_sim.Player.inherit = min(cap, int(UPG_TRANSFER * old)), static so call it directly
+ref["transfer"] = [
+    {"old": u, "rarity": r, "new": E.Player.inherit({"upg": u}, r)}
+    for u in range(0, 16)
+    for r in E.RARITIES
+]
+ref["salvage"] = [
+    {
+        "tier": t,
+        "rarity": r,
+        "invested": inv,
+        "value": E.SALVAGE_RATE * (E.tier_price(t) * E.VALUE_RARITY_PRICE[r] + inv * (1 - E.UPG_TRANSFER)),
+        "drop": E.DROP_SALVAGE_RATE * E.tier_price(t) * E.VALUE_RARITY_PRICE[r],
+    }
+    for t in (1, 2, 5, 10)
+    for r in E.RARITIES
+    for inv in (0, 1000)
+]
+ref["replay_mult"] = [
+    {
+        "chapter": ch,
+        "frontier": fr,
+        "today": td,
+        "mult": E.REPLAY_GOLD_MULT
+        * (E.STALE_REPLAY_MULT if ch < fr - 1 else 1)
+        * (E.REPLAY_SOFTCAP_MULT if td >= E.REPLAY_SOFTCAP_PER_DAY else 1),
+    }
+    for (ch, fr) in [(1, 1), (1, 2), (1, 3), (5, 5), (5, 9)]
+    for td in (0, 39, 40, 41)
+]
+
+
+def cache_effective():
+    """Exact long-run rarity frequencies of roll_cache_rarity (power iteration on the pity-counter Markov chain)."""
+    O = E.CACHE_ODDS
+
+    def trans(st):
+        r, e, l = st[0] + 1, st[1] + 1, st[2] + 1
+        if l >= E.CACHE_PITY_LEG:
+            pool = ["L"]
+        elif e >= E.CACHE_PITY_EPIC:
+            pool = ["E", "L"]
+        elif r >= E.CACHE_PITY_RARE:
+            pool = ["R", "E", "L"]
+        else:
+            pool = list(O)
+        tot = sum(O[k] for k in pool)
+        return [
+            (k, O[k] / tot, (0 if k in "REL" else r, 0 if k in "EL" else e, 0 if k == "L" else l))
+            for k in pool
+        ]
+
+    states = [(0, 0, 0)]
+    index = {(0, 0, 0): 0}
+    edges = []
+    i = 0
+    while i < len(states):
+        row = []
+        for k, p, nx in trans(states[i]):
+            if nx not in index:
+                index[nx] = len(states)
+                states.append(nx)
+            row.append((k, p, index[nx]))
+        edges.append(row)
+        i += 1
+    v = [0.0] * len(states)
+    v[0] = 1.0
+    for _ in range(100000):
+        nv = [0.0] * len(states)
+        for i, row in enumerate(edges):
+            if v[i]:
+                for _k, p, j in row:
+                    nv[j] += v[i] * p
+        d = sum(abs(a - b) for a, b in zip(nv, v))
+        v = nv
+        if d < 1e-15:
+            break
+    out = {k: 0.0 for k in O}
+    for i, row in enumerate(edges):
+        for k, p, _j in row:
+            out[k] += v[i] * p
+    return out
+
+
+ref["cache_effective"] = cache_effective()
+
 json.dump({"constants": constants, "ref": ref}, open(OUT, "w"), indent=1, sort_keys=True)
 print("wrote", OUT)

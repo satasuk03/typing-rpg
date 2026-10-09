@@ -244,6 +244,7 @@ export function mkDef(over: Partial<ResolvedLevel> = {}): ResolvedLevel {
     star3: { kind: "perfectWords", target: 5 } as unknown as ResolvedLevel["star3"],
     parRefTicks: 9000,
     tutorial: false,
+    foldSentences: false,
     ...over,
   };
 }
@@ -382,12 +383,13 @@ export function scriptedSession(
   seed: number,
   def: ResolvedLevel,
   maxTicks = 20_000,
+  options: Partial<LevelOptions> = {},
 ): {
   inputs: { tick: number; key: string }[];
   driver: Driver;
 } {
   const r = deriveRng(seed, "meta");
-  const d = new Driver(def, seed);
+  const d = new Driver(def, seed, options);
   const inputs: { tick: number; key: string }[] = [];
   const press = (k: string): void => {
     inputs.push({ tick: d.state.tick, key: k });

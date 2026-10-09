@@ -49,7 +49,7 @@ describe("resolveLevel", () => {
       hitWeightBp: 11_000,
       shield: 3,
     });
-    expect(l.words.weak).toEqual(["lantern", "ember"]); // de-duplicated, order kept
+    expect(l.words.weak).toEqual(["ember"]); // de-duplicated, order kept; "lantern" is longer than the level plateLength
     expect(l.words.current.length).toBeGreaterThan(100);
     expect(l.words.guard.length).toBeGreaterThan(20);
     expect(l.tierMixBp).toEqual({ current: 6000, review: 2000, biome: 1500, weak: 500 });

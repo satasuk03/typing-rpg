@@ -21,6 +21,7 @@ import {
   type ResolvedEnemy,
   type ResolvedLevel,
   type ResolvedSegment,
+  resolveStar3,
 } from "../../src/index.ts";
 import reference from "../fixtures/economy-reference.json" with { type: "json" };
 import { mkLoadout } from "../typingHarness.ts";
@@ -117,6 +118,7 @@ function baseDef(
     star3: { kind: "noSkills" },
     parRefTicks: 0,
     tutorial: false,
+    foldSentences: true, // Chapter 1 (BALANCE.SENTENCE_FOLD_CASE_MAX_CHAPTER)
   };
 }
 
@@ -156,7 +158,7 @@ export function contentLevel(id: string): ResolvedLevel {
     };
   });
   const def = baseDef(lv.id, lv.index, segments, enemies, lv.biome, lv.plateLength);
-  def.star3 = lv.star3;
+  def.star3 = resolveStar3(lv.star3);
   def.parRefTicks = ticks(lv.parRefS);
   return def;
 }

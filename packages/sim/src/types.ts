@@ -118,6 +118,11 @@ export interface ResolvedBoss {
   breatherTicks: number;
   introTicks: number;
 }
+/** The third-star challenge as the sim consumes it: the content StarChallenge with parTime.slack as integer bp. */
+export type ResolvedStar =
+  | Exclude<StarChallenge, { kind: "parTime" }>
+  | { kind: "parTime"; slackBp: Bp };
+
 export interface ResolvedLevel {
   levelId: string;
   chapter: number;
@@ -142,9 +147,11 @@ export interface ResolvedLevel {
   plateLength: [min: number, max: number];
   goldTotal: number; // levelGold(chapter, index); options.goldMultBp applies on top
   parHpM: Milli; // computeHeroStats(parLoadout(chapter)).maxHp (Doom Spell damage base)
-  star3: StarChallenge;
+  star3: ResolvedStar; // StarChallenge with parTime.slack converted to integer bp (the sim hashes integers only)
   parRefTicks: number;
   tutorial: boolean;
+  /** PO ruling: sentence plates (doom, finisher, secondWind, minigame) compare case-insensitively when true (chapter <= BALANCE.SENTENCE_FOLD_CASE_MAX_CHAPTER). */
+  foldSentences: boolean;
 }
 
 export interface Snapshot<S> {
