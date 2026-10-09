@@ -12,14 +12,15 @@ import { getView, type LevelResult, type LevelView, type SimEvent } from "@hd2d/
 import { type AudioApi, AudioEngine, type BiomeName } from "../audio";
 import { Hud } from "../hud";
 import { loadHudFonts } from "../hud/fonts";
+import type { HudSettings } from "../hud/settings";
 import { KeyboardCapture, pressKey } from "../input/keyboard";
 import { isQualityTier, type QualityTier, RenderWorld } from "../render";
 import { buildWorld, loadLevel, toRenderBiome } from "../render/world";
 import { WpmBot } from "./bot";
 import { freshSeed, makeRunConfig, type PlayParams } from "./config";
 import { EventRouter } from "./eventBindings";
-import { LevelRunner, type LoggedInput, type PauseReason } from "./runner";
-import { buildResultsModel, Screens } from "./screens";
+import { LevelRunner, type LoggedInput, type PauseReason, type RunConfig } from "./runner";
+import { buildResultsModel, type ResultExtras, Screens } from "./screens";
 import { LevelStage } from "./stage";
 
 export interface SessionOptions extends PlayParams {
@@ -29,6 +30,19 @@ export interface SessionOptions extends PlayParams {
   audio?: boolean;
   fonts?: boolean;
   bot?: { wpm: number; accuracy?: number; seed?: number };
+  /** App mode (T3.2): a prebuilt run config (equipped gear, settings, SRS words, replay pay). */
+  runConfig?: RunConfig;
+  /** App mode: builds a fresh config for "restart" (the save changed since the last attempt). */
+  refreshConfig?: () => RunConfig;
+  /** App mode: a shared engine that outlives the level (the session will not dispose it). */
+  audioEngine?: AudioEngine;
+  hudSettings?: Partial<HudSettings>;
+  /** App mode: the meta layer. `onFinished` runs once when the results open (the save writer commits there). */
+  hooks?: {
+    onFinished?(result: LevelResult, cfg: RunConfig): ResultExtras | undefined;
+    next(): void;
+    exit(): void;
+  };
 }
 
 export interface PerfStats {
@@ -71,7 +85,7 @@ export interface PlayDebug {
 }
 
 export class PlaySession {
-  readonly runner: LevelRunner;
+  runner: LevelRunner;
   readonly stage: LevelStage;
   readonly world: RenderWorld;
   readonly hud: Hud;
@@ -92,7 +106,8 @@ export class PlaySession {
   private readonly seenCounts: Record<string, number> = {};
   private readonly perfByPhase = new Map<string, number[]>();
   private biome: BiomeName | null = null;
-  private readonly pace: number;
+  private pace: number;
+  private readonly ownsAudio: boolean;
 
   private constructor(
     private readonly opts: SessionOptions,
@@ -101,17 +116,20 @@ export class PlaySession {
   ) {
     this.world = world;
     this.stage = stage;
-    const cfg = makeRunConfig(opts);
+    const cfg = opts.runConfig ?? makeRunConfig(opts);
     this.pace = cfg.options.pace;
     this.hud = new Hud(opts.hudCanvas);
     this.hud.setProjector(stage.projector);
-    this.audio = opts.audio === false ? null : new AudioEngine();
+    if (opts.hudSettings) this.hud.setSettings(opts.hudSettings);
+    this.ownsAudio = opts.audioEngine === undefined;
+    this.audio = opts.audio === false ? null : (opts.audioEngine ?? new AudioEngine());
     this.audio?.unlockOnGesture(window);
     this.screens = new Screens({
       resume: () => this.resume(),
       restart: () => this.restart(),
       quit: () => this.quit(),
       next: () => this.next(),
+      exit: opts.hooks ? () => opts.hooks?.exit() : undefined,
     });
     this.router = new EventRouter({
       render: stage,
@@ -175,7 +193,7 @@ export class PlaySession {
     cancelAnimationFrame(this.raf);
     this.keyboard.detach();
     this.screens.dispose();
-    this.audio?.dispose();
+    if (this.ownsAudio) this.audio?.dispose();
     this.stage.dispose();
     this.stage.handle.dispose();
     this.world.dispose();
@@ -228,7 +246,15 @@ export class PlaySession {
 
   restart(): void {
     const now = performance.now();
-    this.runner.restart(now, freshSeed());
+    if (this.opts.refreshConfig) {
+      // App mode: the save may have changed (first clear -> replay pay, new gear, new SRS words): rebuild the config.
+      const cfg = this.opts.refreshConfig();
+      this.pace = cfg.options.pace;
+      this.runner = new LevelRunner(cfg, (evs) => this.onEvents(evs));
+      this.runner.start(now);
+    } else {
+      this.runner.restart(now, freshSeed());
+    }
     this.stage.reset();
     this.hud.reset();
     this.screens.closePanel();
@@ -242,12 +268,21 @@ export class PlaySession {
   quit(): void {
     this.screens.closePanel();
     this.pauseShown = false;
+    if (this.opts.hooks) {
+      // App mode: leaving a level goes straight back to the map (an abandoned attempt changes nothing in the save).
+      this.opts.hooks.exit();
+      return;
+    }
     // The abandon command is applied at the paused time; the fail screen follows.
     this.runner.abandon(performance.now());
     this.runner.resume(performance.now());
   }
 
   next(): void {
+    if (this.opts.hooks) {
+      this.opts.hooks.next();
+      return;
+    }
     const ids = contentBundle.levels.map((l) => l.id);
     const i = ids.indexOf(this.opts.levelId);
     const nextId = ids[i + 1] ?? ids[i] ?? this.opts.levelId;
@@ -302,7 +337,11 @@ export class PlaySession {
       const res = r.result;
       if (res) {
         this.resultsShown = true;
-        this.screens.showResults(buildResultsModel(res, r.config.def, this.pace));
+        this.hud.banners.clear(); // the LEVEL CLEAR / DEFEATED banner must not ghost behind the panel
+        const extras = this.opts.hooks?.onFinished?.(res, r.config);
+        this.screens.showResults(
+          buildResultsModel(res, r.config.def, this.pace, extras?.knownWordKeys, extras),
+        );
       }
     }
 

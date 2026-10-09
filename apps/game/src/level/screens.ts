@@ -7,6 +7,7 @@
  */
 import type { LevelResult, LevelView, ResolvedLevel } from "@hd2d/sim";
 import { evaluateStars } from "@hd2d/sim";
+import { injectUiTheme } from "../hud/uiTheme";
 
 // ---------------------------------------------------------------------------------------------- model (pure)
 
@@ -26,6 +27,17 @@ export interface ResultsModel {
   maxCombo: number;
   perfectWords: number;
   secondWindUsed: boolean;
+  /** Short lines under the table (first clear / replay pay, unlocks, new gear). Added by the meta layer. */
+  notes: string[];
+}
+
+/** What the meta layer (save writer) adds to a results screen. All optional: the dev route has none. */
+export interface ResultExtras {
+  stars?: [boolean, boolean, boolean];
+  /** Total gold added to the wallet (level + chests + star bonus). */
+  gold?: number;
+  notes?: string[];
+  knownWordKeys?: ReadonlySet<string>;
 }
 
 export const formatTime = (ticks: number): string => {
@@ -53,6 +65,7 @@ export function buildResultsModel(
   def: ResolvedLevel,
   pace: number,
   knownWordKeys: ReadonlySet<string> = new Set(),
+  extras: ResultExtras = {},
 ): ResultsModel {
   const typed = result.words.filter((w) => w.kind === "word");
   const seen = new Set<string>();
@@ -73,8 +86,8 @@ export function buildResultsModel(
         : result.failReason === "timeout"
           ? "Time ran out"
           : "Your strength gave out",
-    stars: starsFor(result, def, pace),
-    gold: result.gold,
+    stars: extras.stars ?? starsFor(result, def, pace),
+    gold: extras.gold ?? result.gold,
     chests: result.chests.map((c) => c.tier),
     newWords,
     wordsTyped: typed.length,
@@ -84,6 +97,7 @@ export function buildResultsModel(
     maxCombo: result.stats.maxCombo,
     perfectWords: result.stats.perfectWords,
     secondWindUsed: result.stats.secondWindUsed,
+    notes: extras.notes ?? [],
   };
 }
 
@@ -95,24 +109,27 @@ export interface ScreenActions {
   quit(): void;
   /** After a clear: go on (the slice has no world map yet: reload the level list). */
   next(): void;
+  /** Back to the map (the app). Absent on the dev route. */
+  exit?(): void;
 }
 
 const CSS = `
-#play-ui{position:fixed;inset:0;z-index:30;pointer-events:none;font:14px/1.4 "Silkscreen","Press Start 2P",ui-monospace,monospace;color:#efe5cc}
-#play-ui .panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-width:420px;max-width:640px;padding:28px 36px;background:rgba(10,9,18,.9);border:2px solid #e9c46a;box-shadow:0 0 0 4px rgba(0,0,0,.55),0 12px 48px rgba(0,0,0,.6);text-align:center;pointer-events:auto}
-#play-ui h1{margin:0 0 4px;font:900 34px "Cinzel",Georgia,serif;letter-spacing:.08em;color:#fff0b8;text-shadow:0 2px 0 #5b3d12}
-#play-ui h1.fail{color:#ff9a8a;text-shadow:0 2px 0 #5a1a12}
-#play-ui .sub{margin:0 0 18px;color:#b9ad8c;letter-spacing:.1em}
-#play-ui .stars{font-size:40px;letter-spacing:10px;margin:6px 0 14px;color:#e9c46a}
-#play-ui .stars .off{color:#3a3550}
-#play-ui table{margin:0 auto 14px;border-collapse:collapse;text-align:left}
-#play-ui td{padding:3px 14px}
-#play-ui td:first-child{color:#b9ad8c}
-#play-ui .words{margin:0 0 16px;color:#cfe8d0;font-size:12px;max-width:520px}
-#play-ui button{font:inherit;color:#1b1408;background:#e9c46a;border:0;padding:9px 18px;margin:4px 6px;cursor:pointer;letter-spacing:.08em}
-#play-ui button.alt{background:#3a3550;color:#efe5cc}
-#play-ui button:hover{filter:brightness(1.12)}
-#play-ui .strip{position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:520px;padding:6px 16px;background:rgba(10,9,18,.78);border:1px solid #e9c46a;text-align:center;font-size:12px;letter-spacing:.06em}
+#play-ui{position:fixed;inset:0;z-index:30;pointer-events:none}
+#play-ui .panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-width:440px;max-width:660px;text-align:center;pointer-events:auto}
+#play-ui .stars{display:flex;justify-content:center;gap:10px;margin:6px 0 12px}
+#play-ui .stars{filter:drop-shadow(0 2px 0 #000)}
+#play-ui .stars span{display:block;width:44px;height:44px;background:#3a3550;clip-path:polygon(50% 0,62% 36%,100% 38%,70% 60%,81% 96%,50% 74%,19% 96%,30% 60%,0 38%,38% 36%)}
+#play-ui .stars span.on{background:#ffd24a}
+#play-ui .stars.lit{filter:drop-shadow(0 0 10px rgba(255,200,60,.7)) drop-shadow(0 2px 0 #5b3d12)}
+#play-ui table{margin:0 auto 12px;border-collapse:collapse;text-align:left}
+#play-ui td{padding:3px 16px}
+#play-ui td:first-child{color:var(--muted)}
+#play-ui td:last-child{color:var(--gold-hi)}
+#play-ui .notes{margin:0 0 10px;color:#cfe8d0;font-size:12px;line-height:1.6}
+#play-ui .notes b{color:var(--gold)}
+#play-ui .words{margin:0 0 14px;color:#cfe8d0;font-size:12px;max-width:520px;margin-left:auto;margin-right:auto}
+#play-ui .btns{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-top:8px;padding-left:16px}
+#play-ui .strip{position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:520px;padding:6px 16px;background:rgba(10,9,18,.78);border:1px solid var(--gold);text-align:center;font-size:12px;letter-spacing:.06em;color:var(--ink)}
 #play-ui .sw{top:8px;border-color:#ff8a6a;color:#ffd9c9}
 #play-ui .sw .bar{height:4px;margin-top:5px;background:#3a1d18}
 #play-ui .sw .bar i{display:block;height:100%;background:#ff8a6a}
@@ -131,11 +148,13 @@ export class Screens {
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(private readonly actions: ScreenActions) {
+    injectUiTheme();
     const style = document.createElement("style");
     style.textContent = CSS;
     document.head.append(style);
     this.root = document.createElement("div");
     this.root.id = "play-ui";
+    this.root.className = "hd-root";
     this.hintEl = document.createElement("div");
     this.hintEl.className = "strip";
     this.hintEl.style.display = "none";
@@ -190,23 +209,49 @@ export class Screens {
   private mount(kind: "pause" | "result", html: string, keys: Record<string, () => void>): void {
     this.closePanel();
     const p = document.createElement("div");
-    p.className = "panel";
+    p.className = "panel hd-panel";
     p.dataset.kind = kind;
     p.innerHTML = html;
     this.root.append(p);
     this.panel = p;
+    const buttons = [...p.querySelectorAll<HTMLButtonElement>("button[data-act]")];
     const h = (e: KeyboardEvent): void => {
+      if (e.repeat) return;
+      // Arrow keys move focus between the buttons (keyboard-only navigation); Enter on a focused button clicks it.
+      if (
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowUp" ||
+        e.key === "ArrowRight" ||
+        e.key === "ArrowDown"
+      ) {
+        const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const dir = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1;
+        const next = buttons[(i + dir + buttons.length) % buttons.length];
+        e.preventDefault();
+        next?.focus();
+        return;
+      }
+      if (
+        e.key === "Enter" &&
+        document.activeElement instanceof HTMLButtonElement &&
+        p.contains(document.activeElement)
+      ) {
+        e.preventDefault();
+        document.activeElement.click();
+        return;
+      }
       const fn = keys[e.key];
-      if (fn && !e.repeat) {
+      if (fn) {
         e.preventDefault();
         fn();
       }
     };
     this.keyHandler = h;
     window.addEventListener("keydown", h);
-    for (const b of p.querySelectorAll<HTMLButtonElement>("button[data-act]")) {
+    for (const b of buttons) {
       b.addEventListener("click", () => keys[`act:${b.dataset.act}`]?.());
     }
+    buttons[0]?.focus();
   }
 
   closePanel(): void {
@@ -225,8 +270,8 @@ export class Screens {
           : "The window lost focus";
     this.mount(
       "pause",
-      `<h1>PAUSED</h1><p class="sub">${esc(why)}</p>
-       <button data-act="resume">RESUME (Esc)</button><button class="alt" data-act="restart">RESTART</button><button class="alt" data-act="quit">QUIT LEVEL</button>`,
+      `<h1 class="hd-title">PAUSED</h1><p class="hd-sub" style="margin-bottom:16px">${esc(why)}</p>
+       <div class="btns"><button class="hd-btn primary" data-act="resume">Resume (Esc)</button><button class="hd-btn" data-act="restart">Restart</button><button class="hd-btn danger" data-act="quit">Quit level</button></div>`,
       {
         Escape: () => this.actions.resume(),
         "act:resume": () => this.actions.resume(),
@@ -237,34 +282,43 @@ export class Screens {
   }
 
   showResults(m: ResultsModel): void {
-    const stars = m.stars.map((on) => `<span class="${on ? "on" : "off"}">&#9733;</span>`).join("");
+    const cleared = m.outcome === "cleared";
+    const stars = m.stars.map((on) => `<span class="${on ? "on" : ""}"></span>`).join("");
     const words =
       m.newWords.length > 0
         ? `<div class="words">NEW WORDS (${m.newWords.length}): ${esc(m.newWords.slice(0, 12).join(", "))}${m.newWords.length > 12 ? ", ..." : ""}</div>`
         : "";
-    const rows =
-      m.outcome === "cleared"
-        ? `<tr><td>Gold</td><td id="r-gold">${m.gold}</td></tr>
-           <tr><td>Chests</td><td id="r-chests">${m.chests.length > 0 ? esc(m.chests.join(", ")) : "none"}</td></tr>`
-        : `<tr><td>Gold kept</td><td id="r-gold">${m.gold}</td></tr>`;
+    const notes =
+      m.notes.length > 0
+        ? `<div class="notes" id="r-notes">${m.notes.map((n) => `<div>${n}</div>`).join("")}</div>`
+        : "";
+    const rows = cleared
+      ? `<tr><td>Gold</td><td id="r-gold">${m.gold}</td></tr>
+         <tr><td>Chests</td><td id="r-chests">${m.chests.length > 0 ? esc(m.chests.join(", ")) : "none"}</td></tr>`
+      : `<tr><td>Gold kept</td><td id="r-gold">${m.gold}</td></tr>`;
+    const exit = this.actions.exit
+      ? `<button class="hd-btn" data-act="exit">Back to map (Esc)</button>`
+      : "";
     this.mount(
       "result",
-      `<h1 class="${m.outcome === "cleared" ? "" : "fail"}" id="r-title">${m.title}</h1><p class="sub">${esc(m.subtitle)}</p>
-       ${m.outcome === "cleared" ? `<div class="stars" id="r-stars">${stars}</div>` : ""}
+      `<h1 class="hd-title ${cleared ? "" : "fail"}" id="r-title">${m.title}</h1><p class="hd-sub" style="margin-bottom:8px">${esc(m.subtitle)}</p>
+       ${cleared ? `<div class="stars" id="r-stars">${stars}</div>` : ""}
        <table>${rows}
          <tr><td>Time</td><td id="r-time">${m.timeText}</td></tr>
          <tr><td>Speed</td><td id="r-wpm">${m.wpm} WPM</td></tr>
          <tr><td>Accuracy</td><td id="r-acc">${m.accuracyPct}%</td></tr>
          <tr><td>Best combo</td><td>${m.maxCombo} (${m.perfectWords} perfect words)</td></tr>
-       </table>${words}
-       ${m.outcome === "cleared" ? `<button data-act="next">CONTINUE (Enter)</button>` : ""}
-       <button class="${m.outcome === "cleared" ? "alt" : ""}" data-act="restart">${m.outcome === "cleared" ? "REPLAY (R)" : "TRY AGAIN (R / Enter)"}</button>`,
+       </table>${notes}${words}
+       <div class="btns">${cleared ? `<button class="hd-btn primary" data-act="next">Continue (Enter)</button>` : ""}
+       <button class="hd-btn ${cleared ? "" : "primary"}" data-act="restart">${cleared ? "Replay (R)" : "Try again (R)"}</button>${exit}</div>`,
       {
-        Enter: () => (m.outcome === "cleared" ? this.actions.next() : this.actions.restart()),
+        Enter: () => (cleared ? this.actions.next() : this.actions.restart()),
         r: () => this.actions.restart(),
         R: () => this.actions.restart(),
+        Escape: () => this.actions.exit?.(),
         "act:next": () => this.actions.next(),
         "act:restart": () => this.actions.restart(),
+        "act:exit": () => this.actions.exit?.(),
       },
     );
   }
