@@ -7,9 +7,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p node-tests/tsconfig.json",
+    "test:parity": "playwright test -c playwright.config.ts"
   },
   "dependencies": {
     "@hd2d/content": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "esbuild": "0.28.2"
   }
 }

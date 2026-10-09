@@ -69,6 +69,13 @@ importers:
       '@hd2d/content':
         specifier: workspace:*
         version: link:../content
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.64.0
+        version: 1.64.0
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
 
   tools/balance:
     devDependencies:
