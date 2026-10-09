@@ -31,7 +31,9 @@ test("full Ch1 run L1-L10 at 75 WPM: zero console errors", async ({ page }) => {
       return { outcome: r?.outcome, reason: r?.failReason, ticks: r?.durationTicks };
     });
     const inPage = await page.evaluate(() => window.__play?.consoleErrors ?? []);
-    outcomes.push(`${id}: ${res.outcome}${res.reason ? `(${res.reason})` : ""} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    outcomes.push(
+      `${id}: ${res.outcome}${res.reason ? `(${res.reason})` : ""} ${((Date.now() - t0) / 1000).toFixed(0)}s`,
+    );
     console.log(`FULLRUN ${outcomes.at(-1)}`);
     expect(inPage, `in-page errors on ${id}`).toEqual([]);
     const next = LEVELS[i + 1];

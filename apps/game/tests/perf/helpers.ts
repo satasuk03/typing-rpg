@@ -111,9 +111,7 @@ export async function installProbe(page: Page): Promise<void> {
 }
 
 export async function drainFrames(page: Page): Promise<FrameSample[]> {
-  return page.evaluate(() =>
-    (window as unknown as { __probe: Probe }).__probe.frames.splice(0),
-  );
+  return page.evaluate(() => (window as unknown as { __probe: Probe }).__probe.frames.splice(0));
 }
 
 export interface Summary {
@@ -167,7 +165,14 @@ export async function installGlCounters(page: Page): Promise<void> {
       string,
       (...a: unknown[]) => unknown
     >;
-    for (const kind of ["Framebuffer", "Renderbuffer", "Texture", "Buffer", "VertexArray", "Program"]) {
+    for (const kind of [
+      "Framebuffer",
+      "Renderbuffer",
+      "Texture",
+      "Buffer",
+      "VertexArray",
+      "Program",
+    ]) {
       const key = (kind[0] ?? "").toLowerCase() + kind.slice(1);
       counts[key] = 0;
       const create = proto[`create${kind}`];

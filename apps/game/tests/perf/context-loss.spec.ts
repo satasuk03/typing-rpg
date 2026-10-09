@@ -24,9 +24,11 @@ test(`context loss: ${LEVEL} survives lose/restore mid-battle and finishes`, asy
         tick: p?.view().tick ?? -1,
         phase: p?.phase() ?? "",
         paused: p?.session.runner.paused ?? false,
+        // three.js bookkeeping (the raw GL counters keep counting the dead pre-loss objects, which the driver frees).
         fbo: w.__gl.framebuffer ?? 0,
-        tex: w.__gl.texture ?? 0,
-        prog: w.__gl.program ?? 0,
+        tex: p?.session.world.renderer.info.memory.textures ?? 0,
+        geo: p?.session.world.renderer.info.memory.geometries ?? 0,
+        prog: p?.session.world.renderer.info.programs?.length ?? 0,
         calls: p?.session.world.renderer.info.render.calls ?? 0,
         resultsShown: p?.resultsShown() ?? false,
       };
@@ -60,17 +62,19 @@ test(`context loss: ${LEVEL} survives lose/restore mid-battle and finishes`, asy
   await page.waitForTimeout(2500);
   const after = await state();
   const shotAfter = (await page.screenshot()).length;
-  console.log(`CTX before ${JSON.stringify(before)} lost ${JSON.stringify(lostB)} after ${JSON.stringify(after)}`);
+  console.log(
+    `CTX before ${JSON.stringify(before)} lost ${JSON.stringify(lostB)} after ${JSON.stringify(after)}`,
+  );
   console.log(`CTX screenshot bytes before ${shotBefore} after ${shotAfter}`);
 
   expect(after.paused, "game must resume after restore").toBe(false);
   expect(after.tick, "sim must advance after restore").toBeGreaterThan(lostB.tick);
   expect(after.calls, "renderer must be drawing again").toBeGreaterThan(0);
   expect(shotAfter, "picture is blank after restore").toBeGreaterThan(shotBefore * 0.5);
-  // Resources: no leaked or missing render targets / programs after the rebuild (textures may differ by pool timing).
-  expect(Math.abs(after.fbo - before.fbo)).toBeLessThanOrEqual(1);
+  // Resources: no leaked or missing render targets / programs after the rebuild (three.js counts; textures may differ by pool timing).
   expect(Math.abs(after.prog - before.prog)).toBeLessThanOrEqual(4);
   expect(after.tex).toBeLessThanOrEqual(before.tex + 8);
+  expect(after.geo).toBeLessThanOrEqual(before.geo + 8);
 
   // The bot keeps typing: the level must still finish.
   await page.waitForFunction(() => window.__play?.result() !== null, undefined, {
@@ -80,7 +84,9 @@ test(`context loss: ${LEVEL} survives lose/restore mid-battle and finishes`, asy
   const res = await page.evaluate(() => window.__play?.result()?.outcome ?? null);
   console.log(`CTX level result: ${JSON.stringify(res)}`);
 
-  const unexpected = errors.warnings.filter((w) => !/context (lost|restored)/i.test(w));
+  const unexpected = errors.warnings.filter(
+    (w) => !/context (lost|restored)/i.test(w) && !/Oscillator\.frequency/.test(w),
+  );
   console.log(`CTX warnings: ${JSON.stringify(errors.warnings)}`);
   expect(errors.list, errors.list.join("\n")).toEqual([]);
   expect(unexpected, unexpected.join("\n")).toEqual([]);

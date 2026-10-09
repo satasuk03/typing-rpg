@@ -416,8 +416,14 @@ export class PostPipeline {
   }
 
   /** Recreate render targets (after a context restore). */
-  reset(): void {
-    this.disposeTargets();
+  /**
+   * Rebuild the render targets. After a context loss pass `contextLost = true`: the old GL objects died with the
+   * context, and `dispose()` on them would call gl.delete* on handles from the dead context (INVALID_OPERATION warnings),
+   * so the old targets are only forgotten (three.js frees nothing: the driver already did).
+   */
+  reset(contextLost = false): void {
+    if (contextLost) this.t = null;
+    else this.disposeTargets();
     if (this.outW > 0) this.resize(this.outW, this.outH);
   }
 

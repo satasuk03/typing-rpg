@@ -11,7 +11,8 @@ const PORT = Number(process.env.PERF_PORT ?? 5291);
 const DPR = Number(process.env.PERF_DPR ?? 1);
 const headed = process.env.PERF_HEADED === "1";
 // PERF_UNCAPPED=1 turns vsync off so rAF runs as fast as the GPU allows: frame time becomes the true per-frame cost.
-const uncapped = process.env.PERF_UNCAPPED === "1" ? ["--disable-gpu-vsync", "--disable-frame-rate-limit"] : [];
+const uncapped =
+  process.env.PERF_UNCAPPED === "1" ? ["--disable-gpu-vsync", "--disable-frame-rate-limit"] : [];
 
 export default defineConfig({
   testDir: ".",

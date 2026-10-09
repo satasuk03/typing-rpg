@@ -83,7 +83,8 @@ for (const c of CASES) {
     console.log(`PERF ${row(name, s)}`);
     results.push({ ...c, dpr: DPR, ...s });
     expect(sample.length, "not enough combat frames sampled").toBeGreaterThan(300);
-    if (!UNCAPPED && c.tier === 0 && c.throttle === 1 && DPR === 1) expect(s.p95).toBeLessThan(BUDGET_T0);
+    if (!UNCAPPED && c.tier === 0 && c.throttle === 1 && DPR === 1)
+      expect(s.p95).toBeLessThan(BUDGET_T0);
     if (!UNCAPPED && c.tier === 2 && c.throttle === 4 && DPR === 1) {
       expect(s.p95).toBeLessThan(BUDGET_T2_THROTTLED);
     }
