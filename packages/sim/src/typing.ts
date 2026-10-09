@@ -17,7 +17,7 @@ import type { SimKey } from "./input.ts";
 import { emitPassive, hasPassive, lastStandMultBp, tutorialCue } from "./passives.ts";
 import type { EncounterState, PlateState, RunState } from "./state.ts";
 import { grantBarrier } from "./statuses.ts";
-import type { LevelState } from "./types.ts";
+import type { Gimmick, LevelState } from "./types.ts";
 import { firstLetter, plateFolds } from "./words.ts";
 
 export interface TypingHooks {
@@ -42,7 +42,7 @@ export const comboMultBp = (combo: number): number =>
   BP + K.COMBO_PER_BP * Math.min(combo, K.COMBO_CAP);
 
 export const isExclusiveKind = (k: PlateKind): boolean => k === "secondWind" || k === "finisher";
-/** Only word and guard plates pay ATB (secondWind, finisher, doom and minigame plates do not; T1.5 may revisit). */
+/** Only word and guard plates pay ATB (secondWind, finisher, doom and minigame plates do not; kept in T1.5). */
 const paysAtb = (k: PlateKind): boolean => k === "word" || k === "guard";
 
 // ---------------------------------------------------------------- plate management
@@ -58,7 +58,12 @@ export function visibleFirstLetters(
   exceptId: PlateId | null = null,
 ): string[] {
   const out: string[] = [];
-  for (const p of enc.plates) if (p.id !== exceptId) out.push(firstLetter(p.text));
+  for (const p of enc.plates) {
+    if (p.id === exceptId) continue;
+    out.push(firstLetter(p.text));
+    // a scrambled plate's first VISIBLE letter must stay distinct too (gimmicks never break the rule, T1.5)
+    if (p.scrambled) out.push(firstLetter(p.display));
+  }
   return out;
 }
 
@@ -70,6 +75,10 @@ export interface PlateSpec {
   expiresAt?: number | null;
   totalTicks?: number | null;
   lane?: number | null;
+  /** T1.5 gimmicks: the scrambled text to show (default: the text), the carried gimmick and the Fading word's fade tick. */
+  display?: string;
+  gimmick?: Gimmick | null;
+  fadeAt?: number | null;
 }
 
 /** Adds a plate and emits PlateShown. Exclusive kinds are auto-targeted (TargetAcquired). The caller guarantees letter uniqueness. */
@@ -81,7 +90,7 @@ export function addPlate(state: LevelState, spec: PlateSpec, emit: Emit): PlateS
     ownerId: spec.ownerId,
     kind: spec.kind,
     text: spec.text,
-    display: spec.text,
+    display: spec.display ?? spec.text,
     fold: plateFolds(spec.text, run.options.caseMode),
     typed: 0,
     perfect: true,
@@ -97,6 +106,10 @@ export function addPlate(state: LevelState, spec: PlateSpec, emit: Emit): PlateS
     totalTicks: spec.totalTicks ?? null,
     lane: spec.lane ?? null,
     wordsDone: 0,
+    gimmick: spec.gimmick ?? null,
+    fadeAt: spec.fadeAt ?? null,
+    faded: false,
+    scrambled: spec.display !== undefined && spec.display !== spec.text,
   };
   enc.plates.push(plate);
   emit({
@@ -241,6 +254,13 @@ function correctChar(state: LevelState, plate: PlateState, hooks: TypingHooks, e
   run.wrongStreak = 0;
   run.stats.correctChars++;
   if (idx === 0) plate.tFirst = tick;
+  if (plate.scrambled) {
+    // Scrambled word: the right first letter unlocks the plate (it unscrambles for good)
+    plate.scrambled = false;
+    plate.display = plate.text;
+    if (plate.ownerId !== null)
+      emit({ type: "WordUnscrambled", tick, plateId: plate.id, enemyId: plate.ownerId });
+  }
 
   // ATB: pay once per index (anti-farm, B1)
   let gainM = 0;

@@ -90,7 +90,19 @@ export interface ResolvedBoss {
   hpM: Milli;
   hitM: Milli;
   plateLength: [min: number, max: number];
-  phase1: { endAtHpBp: Bp; adds: ResolvedEnemyRef[] };
+  phase1: {
+    endAtHpBp: Bp;
+    adds: ResolvedEnemyRef[];
+    /**
+     * T1.5 (additive, optional). The adds' total HP pool and their grunt-hit base: each add gets
+     * `addsHpPoolM x hpWeight / sum(hpWeights)` HP and `addsGruntHitM x hitWeight` per hit (the same rule as a normal
+     * encounter, so the adds are the referenced EnemyDefs scaled by the level's encounter scaling). resolveLevel sets
+     * them (pool = boss HP x 0.5/3.2 = economy_sim BOSS_ADDS_HP_ENC; hit = the level's encounter gruntHit). When absent the
+     * sim derives the pool from the boss HP and the hit from `hitM / BOSS_HIT_MULT`.
+     */
+    addsHpPoolM?: Milli;
+    addsGruntHitM?: Milli;
+  };
   phase2: { endAtHpBp: Bp; doomEveryTicks: number; minDoomSpells: number };
   phase3: {
     minigame: {

@@ -5,6 +5,8 @@ import { describe, expect, test } from "vitest";
 import {
   below,
   deriveRng,
+  type Gimmick,
+  type ResolvedBoss,
   type ResolvedEnemy,
   type ResolvedLevel,
   type ResolvedSegment,
@@ -15,6 +17,9 @@ import { firstLetter } from "../src/words.ts";
 import { BOSS, Driver, mkDef } from "./typingHarness.ts";
 
 const ALPHA = "abcdefghijklmnopqrstuvwxyz";
+/** T1.5: random typing gimmicks (fading / scrambled / none) on enemy refs. */
+const randomGimmick = (r: RngState): Gimmick | null =>
+  (["fading", "scrambled", null, null] as const)[below(r, 4)] as Gimmick | null;
 
 function randomWord(r: RngState, letters: number): string {
   const len = 2 + below(r, 8);
@@ -58,7 +63,7 @@ function randomDef(seed: number): ResolvedLevel {
     const waves = Array.from({ length: 1 + below(r, 3) }, () =>
       Array.from({ length: 1 + below(r, 6) }, () => ({
         enemyId: ids[below(r, ids.length)] as string,
-        gimmick: null,
+        gimmick: randomGimmick(r),
       })),
     );
     segments.push({
@@ -71,9 +76,40 @@ function randomDef(seed: number): ResolvedLevel {
   }
   const hasBoss = below(r, 3) === 0;
   if (hasBoss) segments.push({ kind: "boss", bossId: BOSS.id });
+  // T1.5: boss with random small HP (so the random typist actually crosses the 66% / 33% gates), adds with gimmicks,
+  // and short doom / minigame timings so every boss mechanic is exercised
+  const boss: ResolvedBoss = {
+    ...BOSS,
+    hpM: 8000 + below(r, 40_000),
+    hitM: 2000 + below(r, 8000),
+    phase1: {
+      endAtHpBp: 6600,
+      adds: Array.from({ length: below(r, 3) }, () => ({
+        enemyId: ids[below(r, ids.length)] as string,
+        gimmick: randomGimmick(r),
+      })),
+    },
+    phase2: { endAtHpBp: 3300, doomEveryTicks: 60 + below(r, 400), minDoomSpells: below(r, 3) },
+    phase3: {
+      minigame: {
+        kind: "fallingRubble",
+        lanes: 2 + below(r, 3),
+        spawnEveryTicks: 40 + below(r, 200),
+        fallTicks: 100 + below(r, 400),
+        clearAtkMultBp: 20_000,
+        missHitM: 1000 + below(r, 4000),
+      },
+      finisherText: BOSS.phase3.finisherText,
+    },
+    breatherTicks: 1 + below(r, 120),
+  };
+  const sentences = Array.from(
+    { length: below(r, 5) },
+    () => `${randomWord(r, letters)} ${randomWord(r, letters)} ${randomWord(r, letters)}`,
+  );
   const def = mkDef({
     isBoss: hasBoss,
-    boss: hasBoss ? BOSS : null,
+    boss: hasBoss ? boss : null,
     enemies,
     segments,
     words: {
@@ -82,10 +118,10 @@ function randomDef(seed: number): ResolvedLevel {
       biome: pool(10),
       weak: pool(4),
       guard: pool(8),
-      doom: [],
+      doom: sentences,
       finisher: [],
-      secondWind: [],
-      minigame: [],
+      secondWind: below(r, 2) === 0 ? sentences.slice(0, 2) : [],
+      minigame: pool(6),
     },
   });
   return def;
@@ -100,6 +136,11 @@ interface Stats {
   maxVisible: number;
   cleared: number;
   failed: number;
+  doomsShown: number;
+  rubbleShown: number;
+  phaseChanges: number;
+  gimmickEvents: number;
+  finishers: number;
 }
 
 function runOne(seed: number, stats: Stats): void {
@@ -115,6 +156,7 @@ function runOne(seed: number, stats: Stats): void {
   });
 
   const live = new Map<number, string>(); // plateId -> first letter, rebuilt from events
+  const scrambledVisible = new Map<number, string>(); // live scrambled plates' visible first letters
   let lastTick = -1;
   let cursor = 0;
   const consume = (opTick: number): void => {
@@ -125,12 +167,28 @@ function runOne(seed: number, stats: Stats): void {
       expect(e.tick).toBeLessThanOrEqual(opTick);
       lastTick = e.tick;
       stats.events++;
+      if (e.type === "BossPhaseChanged") stats.phaseChanges++;
+      if (e.type === "FinisherShown") stats.finishers++;
+      if (e.type === "WordFaded" || e.type === "WordScrambled") stats.gimmickEvents++;
+      if (e.type === "WordUnscrambled") scrambledVisible.delete(e.plateId);
       if (e.type === "PlateRemoved") {
+        scrambledVisible.delete(e.plateId);
         expect(live.delete(e.plateId)).toBe(true);
       } else if (e.type === "PlateShown") {
         const f = firstLetter(e.text);
         for (const other of live.values()) expect(other).not.toBe(f); // distinct at the moment of showing
         live.set(e.plateId, f);
+        // a scrambled plate's first VISIBLE letter is distinct from every other visible plate's letters, too
+        if (e.display !== e.text) {
+          const vis = firstLetter(e.display);
+          expect(vis).not.toBe(f);
+          for (const [id, other] of live) if (id !== e.plateId) expect(other).not.toBe(vis);
+          scrambledVisible.set(e.plateId, vis);
+        }
+        for (const [id, vis] of scrambledVisible)
+          if (id !== e.plateId && live.has(id)) expect(vis).not.toBe(f);
+        if (e.kind === "doom") stats.doomsShown++;
+        if (e.kind === "minigame") stats.rubbleShown++;
         if (e.kind === "guard") stats.guardSwaps++;
         stats.maxVisible = Math.max(stats.maxVisible, live.size);
       }
@@ -139,6 +197,7 @@ function runOne(seed: number, stats: Stats): void {
   const check = (): void => {
     const v = d.view();
     const letters = v.plates.map((p) => firstLetter(p.text));
+    for (const p of v.plates) if (p.display !== p.text) letters.push(firstLetter(p.display));
     expect(new Set(letters).size).toBe(letters.length);
     expect(v.plates.map((p) => p.id).sort((a, b) => a - b)).toEqual(
       [...live.keys()].sort((a, b) => a - b),
@@ -190,11 +249,24 @@ describe("property: distinct first letters and ordered events", () => {
       maxVisible: 0,
       cleared: 0,
       failed: 0,
+      doomsShown: 0,
+      rubbleShown: 0,
+      phaseChanges: 0,
+      gimmickEvents: 0,
+      finishers: 0,
     };
     for (let seed = 1; seed <= 120; seed++) runOne((seed * 2654435761) % 0xffffffff, stats);
+    (globalThis as unknown as { console: { log: (x: string) => void } }).console.log(
+      `property: ${JSON.stringify(stats)}`,
+    );
     expect(stats.ticks + stats.keys).toBeGreaterThanOrEqual(10_000);
     expect(stats.guardSwaps).toBeGreaterThan(50); // guard swaps were genuinely exercised
     expect(stats.maxVisible).toBeGreaterThanOrEqual(5);
+    // T1.5: gimmicks and the boss script were genuinely exercised
+    expect(stats.gimmickEvents).toBeGreaterThan(100);
+    expect(stats.phaseChanges).toBeGreaterThan(5);
+    expect(stats.doomsShown).toBeGreaterThan(3);
+    expect(stats.rubbleShown).toBeGreaterThan(3);
     // stats are asserted loosely so the numbers can be quoted in reports
     expect(stats.runs).toBe(120);
   }, 30_000);
@@ -209,6 +281,11 @@ describe("property: distinct first letters and ordered events", () => {
       maxVisible: 0,
       cleared: 0,
       failed: 0,
+      doomsShown: 0,
+      rubbleShown: 0,
+      phaseChanges: 0,
+      gimmickEvents: 0,
+      finishers: 0,
     };
     const b = { ...a };
     runOne(777, a);

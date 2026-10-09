@@ -10,11 +10,22 @@ import { chance } from "./rng.ts";
 import type { EncounterState, EnemyState, RunState } from "./state.ts";
 import type { LevelState } from "./types.ts";
 
-/** The Focus if alive, else the lowest-slot living enemy, else null. */
+/** A phase-gated enemy that already sits at its gate: damage cannot hurt it (T1.5: the 66% gate waits for the adds). */
+export const gatedAtFloor = (e: Readonly<EnemyState>): boolean =>
+  e.gateHpM !== null && e.hpM <= e.gateHpM;
+
+/**
+ * The Focus if alive, else the lowest-slot living enemy, else null. A boss waiting at its phase gate is skipped while
+ * another enemy (its adds) can still take damage, so attacks and skills are not wasted on a clamped target.
+ */
 export function heroImpactTarget(enc: EncounterState): EnemyState | null {
   const focus = enc.enemies.find((e) => e.id === enc.focusEnemyId && e.alive);
-  if (focus !== undefined) return focus;
-  return enc.enemies.find((e) => e.alive) ?? null;
+  const pick = focus !== undefined ? focus : (enc.enemies.find((e) => e.alive) ?? null);
+  if (pick !== null && gatedAtFloor(pick)) {
+    const other = enc.enemies.find((e) => e.alive && !gatedAtFloor(e));
+    if (other !== undefined) return other;
+  }
+  return pick;
 }
 
 /**

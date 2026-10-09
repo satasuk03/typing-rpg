@@ -185,6 +185,14 @@ export const BOSS: ResolvedBoss = {
   introTicks: 120,
 };
 
+/** BOSS without phases: no adds, both gates at the final gate, no Doom Spells owed, 1-tick breathers (reaches the Finisher fast). */
+export const FLAT_BOSS: ResolvedBoss = {
+  ...BOSS,
+  phase1: { endAtHpBp: 0, adds: [] },
+  phase2: { endAtHpBp: 0, doomEveryTicks: 900, minDoomSpells: 0 },
+  breatherTicks: 1,
+};
+
 export const SEGMENTS: ResolvedSegment[] = [
   { kind: "walk", ticks: 120, heal: false },
   {

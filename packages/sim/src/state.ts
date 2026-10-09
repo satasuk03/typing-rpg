@@ -11,7 +11,14 @@ import type {
 } from "./events.ts";
 import type { RngState } from "./rng.ts";
 import type { Tick } from "./time.ts";
-import type { ActiveSkillId, LevelOptions, Loadout, ResolvedLevel, WordResult } from "./types.ts";
+import type {
+  ActiveSkillId,
+  Gimmick,
+  LevelOptions,
+  Loadout,
+  ResolvedLevel,
+  WordResult,
+} from "./types.ts";
 
 export interface PlateState {
   id: PlateId;
@@ -34,6 +41,12 @@ export interface PlateState {
   totalTicks: number | null;
   lane: number | null;
   wordsDone: number; // sentence words finished (for SentenceWordDone)
+  /** T1.5: the owner's typing gimmick this plate carries (word plates of gimmick enemies only). */
+  gimmick: Gimmick | null;
+  fadeAt: Tick | null; // Fading word: the tick the letters fade (null once faded or for other plates)
+  faded: boolean;
+  /** Scrambled word: the scrambled `display` is shown until the first correct letter unlocks it (then display == text). */
+  scrambled: boolean;
 }
 
 export interface EnemyState {
@@ -41,6 +54,7 @@ export interface EnemyState {
   defId: string;
   slot: number;
   isBoss: boolean;
+  gimmick: Gimmick | null; // Fading / Scrambled word plates (T1.5), from the level's EnemyRef
   alive: boolean;
   hpM: number;
   maxHpM: number;
@@ -87,6 +101,34 @@ export type PendingHit =
       crit: false;
     };
 
+/** A Falling Rubble word in flight (T1.5). The plate is re-shown after a Second Wind, so the entry owns the timing. */
+export interface RubbleWord {
+  plateId: PlateId | null; // null while a Second Wind has removed the plate
+  text: string;
+  lane: number;
+  landTick: Tick;
+}
+
+/** Ruin Golem script state (T1.5): phases, Doom Spells, the Falling Rubble minigame and the finisher. */
+export interface BossState {
+  enemyId: EntityId;
+  phase: 1 | 2 | 3;
+  addIds: EntityId[];
+  /** Phase 2: tick the next Doom Spell starts; null while one is active or outside phase 2. */
+  nextDoomTick: Tick | null;
+  doom: { plateId: PlateId | null; text: string; deadline: Tick; totalTicks: number } | null;
+  doomsResolved: number; // success or failure
+  doomsStarted: number;
+  /** Phase 3 (the minigame): next spawn tick, words in flight, counters. */
+  nextSpawnTick: Tick | null;
+  rubble: RubbleWord[];
+  cleared: number;
+  missed: number;
+  minigameActive: boolean;
+  lastDoomText: string | null; // anti-repeat for consecutive Doom Spells
+  rng: RngState; // the `boss` stream (doom sentences, rubble words and lanes)
+}
+
 export interface EncounterState {
   index: number; // encounter counter (encounter + boss segments), 0-based
   isBoss: boolean;
@@ -107,6 +149,7 @@ export interface EncounterState {
   aiRng: RngState;
   combatRng: RngState;
   gimmickRng: RngState;
+  boss: BossState | null; // boss encounters only (T1.5)
   recent: string[]; // recently assigned plate texts (anti-repeat)
   finisherShown: boolean;
   steadyLeft: number; // Steady Hands: forgiven typos left this encounter

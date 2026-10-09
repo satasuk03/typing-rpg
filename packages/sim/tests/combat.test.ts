@@ -17,9 +17,9 @@ import {
 } from "../src/index.ts";
 import type { EnemyState } from "../src/state.ts";
 import {
-  BOSS,
   Driver,
   ENEMIES,
+  FLAT_BOSS,
   mkDef,
   mkLoadout,
   type mkOptions,
@@ -362,6 +362,8 @@ describe("enemy attacks (doc 01 §1.6-1.7)", () => {
     expect(d.ofType("HeroDamaged", ev)[0]).toMatchObject({ blocked: true });
     expect(d.state.run.heroHpM).toBe(100_000 - 1000);
     expect(d.state.run.stats.blocks).toBe(1);
+    // ruling (T1.5, untouched star): a block that still dealt HP damage counts as a hit taken
+    expect(d.state.run.stats.hitsTaken).toBe(1);
   });
 
   test("perfect parry: 0 damage, counter Hit 50% ATK after GuardParried, +10 ATB", () => {
@@ -392,6 +394,7 @@ describe("enemy attacks (doc 01 §1.6-1.7)", () => {
     expect(d.state.run.heroHpM).toBe(100_000);
     expect(d.state.enc!.atbM - atb).toBe(K.PARRY_ATB_M);
     expect(d.state.run.stats.perfectParries).toBe(1);
+    expect(d.state.run.stats.hitsTaken).toBe(0); // a parried hit deals no HP damage: still untouched
   });
 
   test("a counter on a weak enemy is x1.3 and chips the shield", () => {
@@ -432,6 +435,7 @@ describe("enemy attacks (doc 01 §1.6-1.7)", () => {
     arm(d, e, 200);
     impact(d, e);
     expect(d.ofType("EnemyAttack")[0]).toMatchObject({ outcome: "barrier", damage: 0 });
+    expect(d.state.run.stats.hitsTaken).toBe(0); // a fully absorbed hit does not break untouched
     expect(d.state.run.heroHpM).toBe(100_000);
     expect(d.state.run.barrier).toBe(0);
   });
@@ -578,7 +582,10 @@ describe("kills and phase gates", () => {
 
   test("a boss stops at 1 milli (the final gate) and the Finisher is shown", () => {
     const d = drive(
-      mkDef({ segments: [{ kind: "boss", bossId: "ruinGolem" }], boss: { ...BOSS, hpM: 3000 } }),
+      mkDef({
+        segments: [{ kind: "boss", bossId: "ruinGolem" }],
+        boss: { ...FLAT_BOSS, hpM: 3000 },
+      }),
       {
         difficulty: "zen",
       },
@@ -587,7 +594,8 @@ describe("kills and phase gates", () => {
     queueAuto(d, true);
     const ev = d.step(2);
     expect(hit(d, ev).map((h) => h.damageM)).toEqual([2999, 0]);
-    expect(d.ofType("FinisherShown", ev)).toHaveLength(1);
+    // the script polls the gate: the (flat) boss passes two 1-tick breathers and shows the Finisher
+    expect(d.ofType("FinisherShown", [...ev, ...d.step(12)])).toHaveLength(1);
     expect(enemy(d).hpM).toBe(1);
   });
 });

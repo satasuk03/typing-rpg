@@ -117,13 +117,21 @@ export function runBot(
     const plates = v.plates;
     const target = plates.find((x) => x.isTarget);
     const guard = plates.find((x) => x.kind === "guard" && noticed(x, state.tick) && wantsGuard(x));
+    // T1.5: a Doom Spell is urgent like a guard word (a deadline), falling-rubble words are typed soonest-landing first
+    const doom = plates.find((x) => x.kind === "doom" && noticed(x, state.tick));
+    const urgent = guard ?? doom;
+    const rubble = plates
+      .filter((x) => x.kind === "minigame")
+      .sort((x, y) => (x.expiresAtTick ?? 0) - (y.expiresAtTick ?? 0))[0];
     let pick: PlateView | undefined;
     if (v.phase === "secondWind") {
       pick = plates.find((x) => x.kind === "secondWind");
     } else if (target !== undefined) {
       if (
-        guard !== undefined &&
+        urgent !== undefined &&
         target.kind !== "guard" &&
+        target.kind !== "doom" &&
+        target.kind !== "finisher" &&
         target.text.length - target.typedIndex > 2
       ) {
         press("Escape");
@@ -131,8 +139,10 @@ export function runBot(
         return;
       }
       pick = target;
-    } else if (guard !== undefined) {
-      pick = guard;
+    } else if (urgent !== undefined) {
+      pick = urgent;
+    } else if (rubble !== undefined) {
+      pick = rubble;
     } else {
       const words = plates.filter((x) => x.kind === "word");
       pick = words.find((x) => x.ownerId === v.focusEnemyId) ?? words[0];

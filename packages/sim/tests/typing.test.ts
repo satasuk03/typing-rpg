@@ -6,8 +6,8 @@ import { applyInput, createLevel, deriveRng, mulBp, type SimEvent } from "../src
 import { comboMultBp } from "../src/typing.ts";
 import { firstLetter, pickPlateWord } from "../src/words.ts";
 import {
-  BOSS,
   Driver,
+  FLAT_BOSS,
   mkDef,
   mkLoadout,
   mkOptions,
@@ -19,8 +19,17 @@ import {
 const bossDef = () =>
   mkDef({
     segments: [{ kind: "boss", bossId: "ruinGolem" }],
-    boss: { ...BOSS, hpM: 8000 },
+    boss: { ...FLAT_BOSS, hpM: 8000 },
   });
+
+/** Types the boss's word plates until the Finisher is shown (the flat boss passes its 1-tick breathers on the way). */
+const toFinisher = (d: Driver): void => {
+  for (let i = 0; i < 400 && d.ofType("FinisherShown").length === 0; i++) {
+    const w = d.plates().find((p) => p.kind === "word");
+    if (w !== undefined) d.type(w.text);
+    else d.step();
+  }
+};
 
 /** Zen difficulty = enemies never attack, so typing tests are not disturbed by guard words. */
 const zenDriver = (
@@ -1094,9 +1103,7 @@ describe("level flow (typing-only)", () => {
 
   test("the boss finisher is an exclusive, auto-targeted sentence plate that needs typed spaces", () => {
     const d = new Driver(bossDef(), 9, { difficulty: "zen" }).toCombat();
-    for (let i = 0; i < 12 && d.ofType("FinisherShown").length === 0; i++) {
-      d.type(d.plates()[0]?.text ?? "");
-    }
+    toFinisher(d);
     const shown = d.ofType("FinisherShown")[0];
     expect(shown?.text).toBe("the old stones fall silent");
     const v = d.view();
@@ -1118,8 +1125,7 @@ describe("level flow (typing-only)", () => {
 
   test("Escape does not drop an exclusive (finisher) plate", () => {
     const d = new Driver(bossDef(), 9, { difficulty: "zen" }).toCombat();
-    for (let i = 0; i < 12 && d.ofType("FinisherShown").length === 0; i++)
-      d.type(d.plates()[0]?.text ?? "");
+    toFinisher(d);
     expect(d.key("Escape")).toEqual([]);
     expect(d.view().plates[0]?.isTarget).toBe(true);
   });
