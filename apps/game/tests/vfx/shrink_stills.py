@@ -15,7 +15,7 @@ from PIL import Image
 
 here = Path(__file__).resolve().parent / "__shots__"
 total_before = total_after = 0
-for p in sorted(here.glob("combat-*.png")):
+for p in sorted([*here.glob("combat-*.png"), *here.glob("metal-*.png")]):
     before = os.path.getsize(p)
     im = Image.open(p).convert("RGB")
     q = im.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG)

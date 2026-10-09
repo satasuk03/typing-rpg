@@ -44,7 +44,7 @@ test("intensity 0 keeps only the information layer: no aura, no particles, no li
 test("quality tier 2 drops the held aura light and caps world pool A", async ({ page }) => {
   const errors = await openTyping(page, "wpm=40&tier=4&at=2");
   const hi = await page.evaluate(() => window.__typingVfx?.worldStats());
-  expect(hi?.poolAUsed).toBe(384);
+  expect(hi?.poolAUsed).toBe(576); // T2.3 raised pool A (384 in the spec)
   // the real world quality tier drives the scaling (auto fallback included)
   await page.evaluate(() => {
     const a = window.__typingVfx;
@@ -54,7 +54,7 @@ test("quality tier 2 drops the held aura light and caps world pool A", async ({ 
     a.step(300);
   });
   const lo = await page.evaluate(() => window.__typingVfx?.worldStats());
-  expect(lo?.poolAUsed).toBe(192);
+  expect(lo?.poolAUsed).toBe(288);
   expect(lo?.auraLight).toBe(0);
   expect(lo?.auraLevel).toBeGreaterThan(0.9); // the shapes and motes still carry the read
   expect(errors).toEqual([]);

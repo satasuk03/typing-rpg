@@ -4,7 +4,9 @@
  * hidden at the same frame, with the FX on and then off, and measures:
  *   area  = hero pixels that differ from the hero-less frame (a washed-out hero loses area)
  *   edge  = Sobel edge energy over those pixels (a white-out loses edges)
- * Requirement: on/off ratio >= 0.6 for both.
+ * Requirement: on/off ratio >= 0.75 for both (T6.3 #3; was 0.6). The combat library (skill cast, crit, chest + slash)
+ * is covered in the real runner by `heroSilhouettePlay.spec.ts`; the guard parry and the tier-4 sentence/finisher
+ * moments are covered here.
  */
 import { expect, test } from "@playwright/test";
 import { openTyping } from "./helpers";
@@ -12,7 +14,7 @@ import { openTyping } from "./helpers";
 test.use({ viewport: { width: 1280, height: 720 } });
 test.setTimeout(120_000);
 
-const MIN_RATIO = 0.6;
+const MIN_RATIO = 0.75;
 
 interface Probe {
   area: number;
@@ -41,6 +43,24 @@ const CASES: { name: string; params: string; reach: string; afterMs: number; nth
     params: "wpm=40&tier=4&at=0&seed=2&biome=forest",
     reach: "AtbFilled",
     afterMs: 40,
+  },
+  {
+    name: "guard parry +70, cave",
+    params: "wpm=40&tier=3&guard=1&at=0&biome=cave",
+    reach: "GuardParried",
+    afterMs: 70,
+  },
+  {
+    name: "guard parry +20, cave tier 4",
+    params: "wpm=40&tier=4&guard=1&at=0&biome=cave",
+    reach: "GuardParried",
+    afterMs: 20,
+  },
+  {
+    name: "tier-4 word payoff +120 (PERFECT, strike beam), forest",
+    params: "wpm=40&tier=4&at=2.4&biome=forest",
+    reach: "WordCompleted",
+    afterMs: 120,
   },
   {
     name: "tier-up to T4, cave",

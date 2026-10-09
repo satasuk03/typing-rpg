@@ -11,6 +11,7 @@
  * Keyed on SkillCast / Hit{origin:"skill", skillId} / StatusApplied / StatusEnded / HeroHealed (see eventBindings).
  */
 import type { EventOf, LevelView } from "@hd2d/sim";
+import { WEAPON_ANCHOR_OFFSET } from "../../../level/typingFxParams";
 import { FxKind } from "../../materials/fx";
 import type { RenderWorld } from "../../RenderWorld";
 import { AuraKind, AuraQuad } from "../AuraQuad";
@@ -32,7 +33,9 @@ import {
 
 const EN = { x: 0, y: 0, z: 0 };
 const INFO: EnemyInfo = { frame: null, scale: 1, x: 0, y: 0, z: 0, height: 2 };
-const BUBBLE: Rgb = [0.3, 0.5, 0.95];
+const BUBBLE: Rgb = [0.3, 0.55, 1.0];
+/** Rim / fresnel colour of the Aegis lattice. */
+const BUBBLE_RIM: Rgb = [0.75, 0.95, 1.5];
 const GOLD_COL: Rgb = [3.2, 2.4, 0.9];
 const MAX_MARK = 8;
 
@@ -62,7 +65,7 @@ export class SkillFx {
     private readonly proj: Projectiles,
     private readonly rim: (who: "hero" | number, amount: number, rgb: Rgb, dur: number) => void,
   ) {
-    this.bubble = new FxQuad(world, FxKind.Guard, 9);
+    this.bubble = new FxQuad(world, FxKind.Hex, 9);
     this.column = new AuraQuad(world, AuraKind.Column, 6, 1.7, 0.5);
     for (let i = 0; i < 4; i++) this.ice.push(new FxQuad(world, FxKind.Guard, 9, i * 3.3));
     for (let i = 0; i < MAX_MARK; i++) this.marks.push({ id: -1, acc: 0, freeze: 0 });
@@ -79,8 +82,12 @@ export class SkillFx {
     if (kit.scale.k <= 0) return;
     const st = SKILL_STYLE[e.skillId];
     this.hero();
-    const hx = kit.hero.x + 0.7;
-    const hy = 1.6;
+    // T6.3 #3: the cast flash sits at the WEAPON TIP (the swirl converges there, the projectile leaves from there),
+    // not on the hero's chest, so the burst never white-washes the sprite
+    const arche = kit.archetypeOverride ?? kit.deps.getView()?.hero.archetype ?? "sword";
+    const off = WEAPON_ANCHOR_OFFSET[arche] ?? { x: 0.55, y: 0.65 };
+    const hx = kit.hero.x + off.x + 0.45;
+    const hy = off.y + 0.25;
     const hz = kit.hero.z + 0.4;
     const total = Math.max(0.2, (e.impactTick - e.tick) / 60);
     // gather swirl: particles converge into the hand, then the effect leaves it
@@ -104,8 +111,8 @@ export class SkillFx {
       sp.delay = kit.rnd() * 0.12;
       kit.emitA(sp);
     }
-    kit.flash(kit.hero.x, 1.3, kit.hero.z - 0.85, st.light, 1.6, HERO_LIGHT_R, 0.3);
-    kit.star(hx, hy, hz + 0.3, 0.5, 2.2, 0.25, st.core, 0.8);
+    kit.flash(hx - 0.2, hy + 0.2, kit.hero.z - 0.6, st.light, 1.3, HERO_LIGHT_R, 0.3);
+    kit.star(hx, hy, hz + 0.3, 0.5, 1.9, 0.25, st.core, 0.7);
 
     switch (e.skillId) {
       case "fireball": {
@@ -617,6 +624,7 @@ export class SkillFx {
       const pulse = sc.reducedMotion || sc.reducedFlash ? 0 : 0.06 * Math.sin(kit.time * 3);
       this.bubble
         .color(BUBBLE[0], BUBBLE[1], BUBBLE[2])
+        .color2(BUBBLE_RIM[0], BUBBLE_RIM[1], BUBBLE_RIM[2])
         .at(kit.hero.x + 0.3, 1.5, kit.hero.z + 0.3)
         .size(3 * scale * (1 + pulse));
       this.bubble.progress(this.bubbleFlare * 1.2);

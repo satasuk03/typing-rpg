@@ -162,36 +162,60 @@ export class RewardFx {
     }
     const n = kit.n(coinCount(e.amount, e.source));
     const spin = kit.scale.reducedMotion ? 0 : 1;
+    const big = e.source !== "passive";
+    // a warm bloom under the fountain (the POC's loot pile glows)
+    if (big) kit.glow(x, 0.9, z + 0.3, 1.0, 4.2, 0.7, [1.8, 1.1, 0.3], 0.9);
     for (let i = 0; i < n; i++) {
       const a = kit.rnd() * Math.PI * 2;
-      const s = 1 + kit.rnd() * 2.6;
+      const s = 1.2 + kit.rnd() * (big ? 4 : 2.6);
       const sp = kit.p(
         x,
         y,
         z + 0.2,
-        Math.cos(a) * s * 0.7,
-        5 + kit.rnd() * 5,
-        Math.sin(a) * s * 0.5,
-        1.8 + kit.rnd() * 0.8,
-        0.11,
+        Math.cos(a) * s * 0.85,
+        (big ? 7 : 5) + kit.rnd() * (big ? 7 : 5),
+        Math.sin(a) * s * 0.55,
+        2.0 + kit.rnd() * 1.0,
+        big ? 0.2 : 0.13,
         PK_PIXEL,
         GOLD,
       );
-      sp.grav = 14;
-      sp.bounce = 0.4;
+      sp.grav = 15;
+      sp.bounce = 0.45;
       sp.spin = spin * (10 + kit.rnd() * 14);
       sp.ph = kit.rnd() * 6;
-      sp.delay = kit.rnd() * 0.5;
+      sp.delay = kit.rnd() * 0.65;
       kit.emitA(sp);
+      // every second coin carries a soft golden glow, so the fountain reads as light and not just pixels
+      if (big && (i & 1) === 0) {
+        const gl = kit.p(
+          x,
+          y,
+          z + 0.25,
+          Math.cos(a) * s * 0.85,
+          sp.vy,
+          Math.sin(a) * s * 0.55,
+          sp.life,
+          0.55,
+          PK_GLOW,
+          [2.0, 1.3, 0.4],
+          0.55,
+        );
+        gl.grav = 15;
+        gl.bounce = 0.3;
+        gl.delay = sp.delay;
+        kit.emitA(gl);
+      }
     }
-    kit.sparks(x, y, z, kit.n(10), [3, 2.4, 1], 2.5, {
+    kit.sparks(x, y, z, kit.n(big ? 26 : 10), [3.2, 2.6, 1.1], 3.2, {
       kind: PK_GLOW,
-      size: 0.13,
-      life: 1,
+      size: big ? 0.2 : 0.13,
+      life: 1.3,
       grav: -1,
       st: 0,
     });
-    kit.flash(x, 1.1, z + 0.8, [1, 0.8, 0.4], 1.8, 5, 0.5);
+    kit.star(x, 0.9, z + 0.6, 3.4, 0.6, 0.35, [2.6, 1.9, 0.7], 0.8);
+    kit.flash(x, 1.1, z + 0.8, [1, 0.8, 0.4], big ? 2.6 : 1.8, 6, 0.6);
   }
 
   // ------------------------------------------------------------------------------- per frame

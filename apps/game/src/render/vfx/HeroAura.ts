@@ -13,9 +13,18 @@
  */
 import { easeOutQuad, STREAK_STYLE } from "../../level/typingFxParams";
 import { FxKind } from "../materials/fx";
+import { setHeroGuard } from "../materials/heroGuard";
 import type { RenderWorld } from "../RenderWorld";
 import { AuraKind, AuraQuad } from "./AuraQuad";
-import { accentRgb, COMBO_RGB, hueRgb, LIGHT_BEHIND, LIGHT_MAX_RADIUS, type Rgb } from "./colors";
+import {
+  accentRgb,
+  COMBO_RGB,
+  hueRgb,
+  LIGHT_BEHIND,
+  LIGHT_MAX_RADIUS,
+  type Rgb,
+  T4_HUE_DEG_PER_SEC,
+} from "./colors";
 import { FxQuad } from "./FxQuad";
 import type { LightSlots } from "./LightSlots";
 import {
@@ -66,6 +75,12 @@ const RUNE_SIZE = 3.7;
 /** Light shapes use accent x this (an "over" blend wants colours near 1, not HDR 2). */
 const OVER = 0.78;
 
+/** Ring / ray alpha gain on a bright world (caveK 0): the forest aura read muted (T6.3 #23). */
+const FOREST_SHAPE_GAIN = 0.3;
+/** Additive share of the rings, rays and shockwave: 0.6 in a cave, 0.2 in the forest (T6.3 #3). */
+const ADD_DARK = 0.6;
+const ADD_FOREST = 0.2;
+
 const SPEC: ParticleSpec = newSpec();
 const RGB: Rgb = [0, 0, 0];
 const RGB2: Rgb = [0, 0, 0];
@@ -104,7 +119,7 @@ export class HeroAura {
   enabled = true;
 
   constructor(
-    world: RenderWorld,
+    private readonly world: RenderWorld,
     private readonly poolA: PooledParticles,
     private readonly poolB: PooledParticles,
     private readonly lights: LightSlots,
@@ -264,6 +279,7 @@ export class HeroAura {
       } else {
         const e = 1 - (1 - u) * (1 - u);
         this.shock
+          .additive(ADD_DARK + (ADD_FOREST - ADD_DARK) * this.bright)
           .color(this.shockRgb[0], this.shockRgb[1], this.shockRgb[2])
           .at(hx, 0.06, hz + 0.1)
           .size(this.shockSize)
@@ -272,6 +288,9 @@ export class HeroAura {
       }
     }
 
+    // the aura never veils the hero body: alpha inside its rect is capped (AuraQuad)
+    setHeroGuard(this.world, hx, hz, true);
+
     // ---- streak flare
     if (v > 0.003) {
       const sc = this.shapeColor(RGB, tier);
@@ -279,6 +298,7 @@ export class HeroAura {
       const g = sc[1];
       const b = sc[2];
       const m = Math.min(1.1, v) * (1 + 0.65 * this.bright);
+      const fg = 1 + FOREST_SHAPE_GAIN * this.bright;
       // ground pool of light + two expanding pulse rings
       this.pool
         .color(r, g, b)
@@ -294,7 +314,7 @@ export class HeroAura {
           .at(hx, 0.055, hz + 0.1)
           .size(3.8 + 1.0 * v)
           .progress(0.18 + 0.82 * u)
-          .alpha(1.0 * m);
+          .alpha(1.0 * m * fg);
       }
       // pillar of light behind the hero (bright at the feet, fading up) plus two narrow side shafts
       const sway = rm ? 0 : Math.sin(time * 1.3) * 0.08;
@@ -310,7 +330,7 @@ export class HeroAura {
           s.color(r * 1.1, g * 1.1, b * 1.1)
             .at(hx + off, 2.1, hz - 0.1)
             .size(0.42, 3.6 + 0.5 * i)
-            .alpha(0.7 * m);
+            .alpha(0.7 * m * fg);
         else s.alpha(0);
       }
       // halo behind the chest
@@ -325,7 +345,7 @@ export class HeroAura {
           .color(r * 1.2, g * 1.2, b * 1.2)
           .at(hx, 1.25, hz - 0.12)
           .size(3.4 + 0.8 * v)
-          .alpha(0.8 * m);
+          .alpha(0.8 * m * fg);
         this.burst.mesh.rotation.z = rm ? 0 : time * 0.28;
       } else this.burst.alpha(0);
       // held light
@@ -364,12 +384,13 @@ export class HeroAura {
         continue;
       }
       const ph = (rm ? 0 : time * ((Math.PI * 2) / 1.8)) + i * Math.PI;
-      hueRgb(time * 140 + i * 120, 2.2, RGB2);
+      hueRgb(time * T4_HUE_DEG_PER_SEC + i * 120, 2.2, RGB2);
       s.color(RGB2[0], RGB2[1], RGB2[2])
         .at(
           hx + Math.cos(ph) * 0.95,
           1.2 + Math.sin(ph * 1.5) * 0.35,
-          hz + 0.25 + Math.sin(ph) * 0.2,
+          // behind the hero as it passes the body, in front only at the sides
+          hz - 0.3 + Math.abs(Math.cos(ph)) * 0.55 + Math.sin(ph) * 0.1,
         )
         .size(0.7)
         .intensity(Math.min(1, v) * 1.5);
@@ -408,11 +429,12 @@ export class HeroAura {
     o[2] = (acc[2] / m) ** p * dark * (1 + 0.5 * bk);
     const add = 0.45 * (1 - 0.85 * bk);
     this.pool.additive(0.35 * (1 - 0.85 * bk));
-    for (const r of this.rings) r.additive(0.6 * (1 - 0.8 * bk));
+    const addR = ADD_DARK + (ADD_FOREST - ADD_DARK) * bk;
+    for (const r of this.rings) r.additive(addR);
     this.pillar.additive(add);
-    for (const s of this.shafts) s.additive(0.55 * (1 - 0.8 * bk));
+    for (const s of this.shafts) s.additive(addR);
     this.halo.additive(add);
-    this.burst.additive(0.6 * (1 - 0.8 * bk));
+    this.burst.additive(addR);
     return o;
   }
 
@@ -433,8 +455,11 @@ export class HeroAura {
     else accentRgb(tier, time, false, RGB2);
     const pixel = r2 < 0.55;
     resetSpec(SPEC);
-    SPEC.x = this.heroX + Math.cos(ang) * 0.55;
-    SPEC.z = this.heroZ + Math.sin(ang) * 0.35;
+    // motes rise BESIDE the hero (|dx| >= 0.5) and mostly behind it: a 0.3 u pixel square over the body ate its
+    // silhouette (T6.3 #3)
+    const side = Math.cos(ang) < 0 ? -1 : 1;
+    SPEC.x = this.heroX + side * (0.5 + Math.abs(Math.cos(ang)) * 0.45);
+    SPEC.z = this.heroZ - 0.3 + (Math.sin(ang) * 0.5 + 0.5) * 0.4;
     SPEC.y = 0.08;
     SPEC.vy = rise[0] + (rise[1] - rise[0]) * r2;
     SPEC.vx = (r3 - 0.5) * 0.3;

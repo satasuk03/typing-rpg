@@ -81,6 +81,8 @@ export interface PropDef extends StyleDef {
   foreground: boolean;
   /** Flame size (0 = none): a torch flame + flickering light at the prop's flame attach point. */
   flame: number;
+  /** Flame / torch-light colour (linear, near 1). Absent = the default torch orange. */
+  flameColor?: V3;
   light?: PropLightDef;
 }
 
@@ -99,6 +101,7 @@ export interface ScatterDef extends StyleDef {
   /** Skip placements closer than this to a battle camera centre (keeps enemies unobstructed). */
   avoidBattle: number;
   flame: number;
+  flameColor?: V3;
   light?: PropLightDef;
   /** Probability (0..1) that a slot is left empty, for irregular rhythm. */
   gap: number;
@@ -149,6 +152,8 @@ export interface RuneDef {
   z: number;
   size: number;
   intensity: number;
+  /** Rune colour (linear HDR). Absent = the default cyan. */
+  color?: V3;
 }
 
 export interface ZoneDef {
@@ -357,6 +362,7 @@ const FIELDS = {
     flip: z.boolean().default(false),
     foreground: z.boolean().default(false),
     flame: num.min(0).default(0),
+    flameColor: vec3pos.optional(),
     light: propLight.optional(),
     ...style,
   }),
@@ -370,6 +376,7 @@ const FIELDS = {
     foreground: z.boolean().default(false),
     avoidBattle: num.min(0).default(0),
     flame: num.min(0).default(0),
+    flameColor: vec3pos.optional(),
     light: propLight.optional(),
     gap: num.min(0).max(0.95).default(0),
     ...style,
@@ -402,7 +409,11 @@ const FIELDS = {
     intensity: vec2,
     seed: z.number().int(),
   }),
-  Rune: z.strictObject({ size: num.positive(), intensity: num.positive() }),
+  Rune: z.strictObject({
+    size: num.positive(),
+    intensity: num.positive(),
+    color: vec3pos.optional(),
+  }),
   AmbientZone: z.strictObject({
     kind: z.enum(AMBIENT_KINDS),
     density: num.positive(),

@@ -14,18 +14,24 @@ import {
   Vector3,
   ZeroFactor,
 } from "three";
+import { GLSL_HERO_INSIDE, HERO_NDC } from "../../materials/heroGuard";
 import type { RenderWorld } from "../../RenderWorld";
 import { eIn2, eOut3, type Rgb } from "./params";
 
-const VS = /* glsl */ `uniform float uR, uW, uA0, uSweep; varying vec2 vUv;
+/** Light left of an arc over the hero's body box: a slash may cross the hero but never covers the sprite. */
+const ARC_HERO_DAMP = 0.45;
+
+const VS = /* glsl */ `uniform float uR, uW, uA0, uSweep; varying vec2 vUv; varying vec2 vNdc;
 void main(){ float u = uv.x, v = uv.y; float ang = uA0 + u * uSweep; float tp = pow(sin(clamp(u, 0.0, 1.0) * 3.14159), 0.55);
   float r = uR + (v - 0.5) * uW * tp; vec3 p = vec3(cos(ang) * r, sin(ang) * r, 0.0); vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`;
-const FS = /* glsl */ `uniform float uHead, uTail, uI; uniform vec3 uCore, uEdge; varying vec2 vUv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); vNdc = gl_Position.xy / gl_Position.w; }`;
+const FS = /* glsl */ `${GLSL_HERO_INSIDE}
+uniform float uHead, uTail, uI; uniform vec3 uCore, uEdge; varying vec2 vUv; varying vec2 vNdc;
 void main(){ float u = vUv.x; if (u > uHead || u < uTail) discard;
   float k = (u - uTail) / max(uHead - uTail, 1e-3); k = floor(k * 14.0) / 14.0;
   float across = vUv.y; float core = smoothstep(0.62, 0.95, across); float body = smoothstep(0.0, 0.85, across);
   vec3 col = (uEdge * body * (0.35 + 0.65 * k) + uCore * core * k * k) * uI;
+  col *= 1.0 - (1.0 - ${ARC_HERO_DAMP.toFixed(2)}) * heroInside(vNdc);
   gl_FragColor = vec4(col, 1.0); }`;
 
 interface Slot {
@@ -79,6 +85,7 @@ export class ArcPool {
           uCore: { value: new Vector3(6, 6, 6) },
           uEdge: { value: new Vector3(3, 1.2, 0.3) },
           uI: { value: 1 },
+          uHero: HERO_NDC,
         },
         vertexShader: VS,
         fragmentShader: FS,

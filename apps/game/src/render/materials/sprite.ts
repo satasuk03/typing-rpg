@@ -32,10 +32,17 @@ export function pixelTexture(src: TexImageSource, srgb = true, repeatX = false):
   return t;
 }
 
+/** Cave hero lift: albedo-lit fill and outline rim, both x uCaveRim (0.6) x caveK. */
+const CAVE_FILL = "0.4";
+const CAVE_RIM = "0.3";
+
 const FS_SPRITE = /* glsl */ `
 ${GLSL_COMMON}
+#define CAVE_FILL ${CAVE_FILL}
+#define CAVE_RIM ${CAVE_RIM}
 uniform sampler2D map, nmap, emap; uniform vec2 uTexSize; uniform vec3 uTint, uFlashCol, uEdgeCol, uRimFlashCol;
-uniform float uFlash, uDissolve, uEmis, uRim, uWrap, uDark, uGhost, uRimFlash, uLumCap;
+uniform float uFlash, uDissolve, uEmis, uRim, uWrap, uDark, uGhost, uRimFlash, uLumCap, uCaveRim, uCaveK;
+uniform vec3 uHiTint;
 varying vec2 vUv; varying vec3 vWP;
 void main(){
   vec4 c = texture2D(map, vUv); if (c.a < 0.5) discard;
@@ -49,16 +56,23 @@ void main(){
   vec3 nn = texture2D(nmap, vUv).xyz * 2.0 - 1.0;
   vec3 L = lightAt(vWP, normalize(nn), uWrap, uRim);
   vec3 col = c.rgb * uTint * L * (1.0 - uDark);
+  // cave rim lift (hero only, T6.3 #4): in a dark cave the lit sprite sits on a dark ground at ~1.5:1 luminance. A fill
+  // that scales with caveK keeps the body off the floor, and the outline pixels take the mood hi tint (an orange
+  // torch rim in the L8 cave, violet in the L10 hollow). 0 in the forest (caveK 0) and for every non-hero sprite.
+  float caveLift = uCaveRim * uCaveK;
+  vec3 rimTint = mix(uHiTint / max(max(uHiTint.r, uHiTint.g), max(uHiTint.b, 1e-3)), vec3(1.0), 0.35);
+  col += c.rgb * uTint * rimTint * (CAVE_FILL * caveLift);
   col += texture2D(emap, vUv).rgb * uEmis;
   col = mix(col, uFlashCol, uFlash);
   col += edge * uEdgeCol;
   col = applyFog(col, vWP);
-  if (uRimFlash > 0.0) {
-    // silhouette rim flash (typing VFX): only the outline pixels light up, the body stays readable
+  if (uRimFlash > 0.0 || caveLift > 0.0) {
+    // silhouette outline pixels (rim flash from the typing VFX, and the cave rim light)
     vec2 px = 1.0 / uTexSize;
     float nb = min(min(texture2D(map, vUv + vec2(px.x, 0.0)).a, texture2D(map, vUv - vec2(px.x, 0.0)).a),
                    min(texture2D(map, vUv + vec2(0.0, px.y)).a, texture2D(map, vUv - vec2(0.0, px.y)).a));
     float rimPx = nb < 0.5 ? 1.0 : 0.0;
+    col += rimTint * (CAVE_RIM * caveLift * rimPx);
     col = mix(col, uRimFlashCol, uRimFlash * rimPx);
   }
   // hard luminance cap (hero while typing FX are up): the silhouette never washes out
@@ -75,6 +89,8 @@ export interface SpriteMaterialOptions {
   rim?: number;
   /** Wrap lighting (soft terminator). */
   wrap?: number;
+  /** Cave rim light strength (the hero uses 0.6): scales with the mood's caveK, tinted by its `hi`. */
+  caveRim?: number;
   /** 0..1 darkening (foreground silhouettes). */
   dark?: number;
 }
@@ -195,6 +211,7 @@ export class SpriteResources {
           uRimFlash: { value: 0 },
           uRimFlashCol: { value: new Vector3(1.6, 1.6, 1.6) },
           uLumCap: { value: 1e3 },
+          uCaveRim: { value: o.caveRim ?? 0 },
         },
         vertexShader: VS_WORLD,
         fragmentShader: FS_SPRITE,

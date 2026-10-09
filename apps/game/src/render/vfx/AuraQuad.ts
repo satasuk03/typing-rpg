@@ -17,13 +17,17 @@ import {
   ShaderMaterial,
   Vector3,
 } from "three";
+import { GLSL_HERO_INSIDE, HERO_CAP, HERO_NDC } from "../materials/heroGuard";
 import type { RenderWorld } from "../RenderWorld";
+
+export { setHeroGuard } from "../materials/heroGuard";
 
 export const AuraKind = { Disc: 0, Column: 1, Ring: 2, Burst: 3, Halo: 4 } as const;
 export type AuraKindId = (typeof AuraKind)[keyof typeof AuraKind];
 
 const FS = /* glsl */ `
-uniform vec3 uColor; uniform float uA, uP, uTime, uAdd, uSeed; uniform int uKind; varying vec2 vUv;
+${GLSL_HERO_INSIDE}
+uniform vec3 uColor; uniform float uA, uP, uTime, uAdd, uSeed, uCap; uniform int uKind; varying vec2 vUv; varying vec2 vNdc;
 void main(){
   vec2 p = vUv - 0.5; float r = length(p) * 2.0; float a = 0.0;
   if (uKind == 0) {
@@ -50,6 +54,8 @@ void main(){
     a = ring + body;
   }
   a = clamp(a * uA, 0.0, 1.0);
+  // keep the hero sprite readable: inside its body rect (soft edge) the alpha never exceeds uCap
+  a = mix(a, min(a, uCap), heroInside(vNdc));
   gl_FragColor = vec4(uColor * a, a * (1.0 - uAdd));
 }`;
 
@@ -76,9 +82,11 @@ export class AuraQuad {
         uAdd: { value: add },
         uSeed: { value: seed },
         uKind: { value: kind },
+        uHero: HERO_NDC,
+        uCap: HERO_CAP,
       },
       vertexShader:
-        "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+        "varying vec2 vUv; varying vec2 vNdc; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); vNdc = gl_Position.xy / gl_Position.w; }",
       fragmentShader: FS,
       transparent: true,
       depthWrite: false,

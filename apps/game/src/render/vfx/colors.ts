@@ -88,11 +88,14 @@ export function hueRgb(hue: number, gain: number, out: Rgb): Rgb {
   return out;
 }
 
-/** World accent for a tier at a time; tier 4 cycles hue at `degPerSec` (reduced motion: fixed pink). */
+/** Tier-4 prismatic hue drift: 0.25 Hz (one full cycle in 4 s), slow enough that it never reads as a strobe (T6.3 #17). */
+export const T4_HUE_DEG_PER_SEC = 360 * 0.25;
+
+/** World accent for a tier at a time; tier 4 drifts hue at `T4_HUE_DEG_PER_SEC` (reduced motion: fixed pink). */
 export function accentRgb(tier: number, time: number, reducedMotion: boolean, out: Rgb): Rgb {
   if (tier >= 4) {
     if (reducedMotion) return hueRgb(310, 1.9, out);
-    return hueRgb(time * 140, 1.9, out);
+    return hueRgb(time * T4_HUE_DEG_PER_SEC, 1.9, out);
   }
   const a = WORLD_ACCENT[tier] as Rgb;
   out[0] = a[0];

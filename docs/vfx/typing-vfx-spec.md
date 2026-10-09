@@ -814,6 +814,16 @@ apps/game/src/dev/typingVfxScene.ts   ?scene=typing-vfx (§12)
 | 2026-10-09 | B. §12.2 stills | forest backdrop for every still → forest for t4-90wpm and typo-guard (as in A), cave for perfect-shatter, converge, atb-ignite, tierup-t4 (+ `typing-t4-cave`) | Additive and "over" light on the bright forest stays soft by nature; the cave (the poc reference biome) shows what the effects do. Both are the real WorldBuilder backdrop. |
 | 2026-10-09 | B. `WORD` params | not in the spec | `level/typingFxParams.ts` gained `WORD` and `fragmentArrivalSec`, shared by the HUD shatter and the world blade charge so the glow fills exactly when the last fragment lands. |
 
+| 2026-10-09 | T6.3 hero silhouette test | on/off ratio >= 0.6 -> >= 0.75 (area and edge), plus guard-parry and PERFECT cases here and skill cast / crit / slash / chest + slash / aegis in the runner (`heroSilhouettePlay.spec.ts`) | Opus art review #3. At 0.75 the old build failed 3 of 5 cases (ATB ignite cave 0.70, forest edge 0.62). Cause: a 0.3 u pixel mote and the white hero flash over the body. Now min 0.77. |
+| 2026-10-09 | T6.3 aura over the hero | none -> alpha <= 0.35 inside the hero body box (`heroGuard.ts`); fx quads x0.5 and slash arcs x0.45 there; ATB hero flash 1.0 -> 0.03; motes beside and behind the hero; forest rings / shock / rays uAdd 0.6 -> 0.2 and alpha +30 % | #3, #23. |
+| 2026-10-09 | T6.3 cave contrast | hero luma vs 64 px surround 1.5 (L9) / 1.6 (L10) -> 2.4 / 2.4: hero `caveRim` 0.6, fill 0.4 and outline 0.3 in the mood `hi` tint | #4. Target >= 2.0, test in `heroSilhouettePlay.spec.ts`. |
+| 2026-10-09 | T6.3 parry flash | gold-white 3 u burst, 20 gold sparks -> cyan disc (core #7fe8ff, rim #3ab8ff, 140 ms, r 0.9 u) at the blade tip, 6 hex shards, thin cyan ring, amber barrier | #14. The old burst read near-white under the bloom. |
+| 2026-10-09 | T6.3 sentence bolts | glow 1.7 u + star, 4 streaks, arc 0.45 u, 260 ms -> halo 1.2 u, core 0.35 u violet to white, 6-sample trail, arc 1.2 u, 250 ms | #15. Invisible in flight at 1280x720. |
+| 2026-10-09 | T6.3 finisher | post flash white 0.35 / 120 ms -> [1, 0.92, 0.75] 0.3 / 90 ms; CA and zoom clamped to 0.006 / 0.04; slash lines clipped to the viewport | #16. |
+| 2026-10-09 | T6.3 tier-4 hue | 140 deg/s (0.39 Hz) -> 90 deg/s (0.25 Hz) | #17. |
+| 2026-10-09 | T6.3 BREAK, Aegis, coins, boss rune (T2.3 weak spots) | BREAK 6 u white hex disc + 7 u ring + 2.4 light -> 14 hex shards, 5 u thin ring, small hex flash, 1.4 light; Aegis `FxKind.Guard` -> `FxKind.Hex` lattice; coins 6 + n/12 (40) -> 14 + n/7 (72) with glow sprites; boss rune star 5 u [1, 3, 3.4] -> 3.2 u [0.3, 1, 1.25] behind the head | Opus review of T2.3: the BREAK dome owned the peak frame, the Aegis lattice was invisible, the fountain was small next to `poc/v2-loot-chest.png`. |
+| 2026-10-09 | T6.3 fireball core | 3.6, 2.5, 1.2 -> 2.9, 1.55, 0.5 | The projectile read white on the bright forest (real cast, `metal-real-skillcast`). |
+
 ### Chunk A notes (HUD half of T2.6, implemented)
 
 - **Files.** `level/typingFxParams.ts`; `hud/fx/typing/{TypingHudFx,pool,palette,glowSprites,letterPop,sparks,streaks,tierFx,speedFx,typoFx}.ts`; `hud/{fx,plates,hud,draw}.ts`; mock extensions in `hud/mock/mockDriver.ts`; dev scene `dev/typingVfxScene.ts` (`?scene=typing-vfx`); tests under `tests/hud/` and `tests/vfx/`.

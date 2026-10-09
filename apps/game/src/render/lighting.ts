@@ -30,6 +30,9 @@ export interface LightingUniforms {
   uFlat: U<number>;
   /** x range over which the ground blends from forest to cave. */
   uBiome: U<Vector2>;
+  /** The mood's caveK (0 forest .. 1 cave) and its `hi` highlight tint: the hero's cave rim light reads both. */
+  uCaveK: U<number>;
+  uHiTint: U<Vector3>;
 }
 
 export function createLightingUniforms(): LightingUniforms {
@@ -47,6 +50,8 @@ export function createLightingUniforms(): LightingUniforms {
     uTime: { value: 0 },
     uFlat: { value: 0 },
     uBiome: { value: new Vector2(98, 118) },
+    uCaveK: { value: 0 },
+    uHiTint: { value: new Vector3(0.045, 0.016, 0) },
   };
 }
 
@@ -182,6 +187,8 @@ export class LightRig {
     u.uFogCol.value.set(...m.fogCol);
     u.uFog.value.set(...m.fog);
     u.uScatter.value = m.scatter;
+    u.uCaveK.value = m.caveK;
+    u.uHiTint.value.set(...m.hi);
   }
 
   update(dt: number, focusX: number, time: number): void {

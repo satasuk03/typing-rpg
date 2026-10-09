@@ -7,8 +7,9 @@
  *    (easeOutBack) in 140 ms with a `uP` spike; block = azure and steady, parry = gold-white with a 4-point
  *    star on top (the shape cue) and a faster spin. A held light stays on until impact.
  *  - `block()`: the barrier takes the hit (rim flash 120 ms), 12 hex shards, shake, azure flash, push-back.
- *  - `parry()`: 70 ms hit-stop, gold flash, the barrier bursts outward as a ring (0 -> 3 u in 300 ms),
- *    camera punch, gold flash light, 20 gold sparks.
+ *  - `parry()`: 70 ms hit-stop; a 140 ms flash disc (core #7fe8ff, rim #3ab8ff, radius 0.9 u) at the contact point
+ *    where the blade meets the barrier (NOT on the hero's body), 6 hex shards, a thin cyan ring, camera punch.
+ *    (T6.3 #14: the old gold-white 3 u disc blew out and read near-white.)
  *  - `fade(ms)`: ignored word, the preview fades.
  *  - `shimmer()`: guard typo, the preview flickers red for 150 ms.
  *
@@ -17,13 +18,14 @@
 import { easeOutBack, easeOutQuad } from "../../level/typingFxParams";
 import { FxKind } from "../materials/fx";
 import type { RenderWorld } from "../RenderWorld";
-import { LIGHT_MAX_RADIUS, type Rgb } from "./colors";
+import { hexLinear, LIGHT_MAX_RADIUS, type Rgb } from "./colors";
 import { FxQuad } from "./FxQuad";
 import type { LightSlots } from "./LightSlots";
 import {
   newSpec,
   type ParticleSpec,
   PK_GLOW,
+  PK_HEX,
   PK_STREAK,
   type PooledParticles,
   resetSpec,
@@ -34,7 +36,28 @@ import type { TypingFxCallbacks, TypingFxSettings } from "./types";
 const SPEC: ParticleSpec = newSpec();
 const AZURE: Rgb = [0.45, 0.75, 1.0];
 const GOLD: Rgb = [1.0, 0.9, 0.55];
+/** The held / bursting parry barrier: amber, not gold-white (the rim saturated to white under the bloom). */
+const PARRY_BARRIER: Rgb = [0.8, 0.58, 0.2];
 const RED: Rgb = [1.6, 0.3, 0.2];
+/** Parry flash (T6.3 #14): core #7fe8ff, rim #3ab8ff, 140 ms, radius 0.9 u, 6 hex shards. */
+export const PARRY_FLASH = {
+  coreHex: "#7fe8ff",
+  rimHex: "#3ab8ff",
+  ms: 140,
+  radius: 0.9,
+  shards: 6,
+  /** HDR gain over the linear hex colours (a touch above 1 so the bloom catches the rim). */
+  coreGain: 1.5,
+  rimGain: 1.7,
+} as const;
+const PARRY_CORE: Rgb = hexLinear(PARRY_FLASH.coreHex).map((v) => v * PARRY_FLASH.coreGain) as Rgb;
+const PARRY_RIM: Rgb = hexLinear(PARRY_FLASH.rimHex).map((v) => v * PARRY_FLASH.rimGain) as Rgb;
+const PARRY_SHARD: Rgb = [0.35, 1.25, 1.9];
+const PARRY_DISC_SEC = PARRY_FLASH.ms / 1000;
+const PARRY_RADIUS = PARRY_FLASH.radius;
+const PARRY_SHARDS = PARRY_FLASH.shards;
+/** The contact point sits at the blade tip: this far in front of the barrier centre toward the hero. */
+const CONTACT_DX = -0.6;
 /** Barrier centre relative to the hero (world units). */
 const OFF_X = 1.65;
 const OFF_Y = 1.2;
@@ -52,6 +75,8 @@ export class GuardBarrier {
   private readonly quad: FxQuad;
   private readonly star: FxQuad;
   private readonly burst: FxQuad;
+  private readonly disc: FxQuad;
+  private discT = -1;
   private mode = M_NONE;
   private result: "block" | "parry" = "block";
   private level = 0;
@@ -79,6 +104,7 @@ export class GuardBarrier {
     this.quad = new FxQuad(world, FxKind.Guard, 9);
     this.star = new FxQuad(world, FxKind.Star, 10);
     this.burst = new FxQuad(world, FxKind.Ring, 10);
+    this.disc = new FxQuad(world, FxKind.Disc, 11);
   }
 
   get active(): boolean {
@@ -171,38 +197,62 @@ export class GuardBarrier {
     this.fadeDur = 0.3;
     if (k <= 0) return;
     this.td.hitStop(70 * Math.max(0.5, k));
-    const n = Math.max(3, Math.round(20 * k));
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
+    this.discT = 0;
+    const cx = this.hx + OFF_X + CONTACT_DX;
+    // 6 hex shards fly off the contact point (a fixed fan, flipping as they go)
+    for (let i = 0; i < PARRY_SHARDS; i++) {
+      const a = (i / PARRY_SHARDS) * Math.PI * 2 + 0.4;
       resetSpec(SPEC);
-      SPEC.x = this.hx + OFF_X;
+      SPEC.x = cx;
       SPEC.y = OFF_Y;
-      SPEC.z = this.hz + OFF_Z;
-      const sp = 3 + (i % 5) * 0.8;
+      SPEC.z = this.hz + OFF_Z + 0.15;
+      const sp = 3.4 + (i % 3) * 0.9;
+      SPEC.vx = Math.cos(a) * sp + 1.2;
+      SPEC.vy = Math.sin(a) * sp * 0.8;
+      SPEC.drag = 2.2;
+      SPEC.grav = 3;
+      SPEC.size = 0.26;
+      SPEC.size1 = 0.12;
+      SPEC.life = 0.55;
+      SPEC.spin = 9 + i;
+      SPEC.r = PARRY_SHARD[0];
+      SPEC.g = PARRY_SHARD[1];
+      SPEC.b = PARRY_SHARD[2];
+      SPEC.kind = PK_HEX;
+      this.pool.emit(SPEC);
+    }
+    // a few thin streaks for energy
+    const n = Math.max(3, Math.round(8 * k));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + 0.9;
+      resetSpec(SPEC);
+      SPEC.x = cx;
+      SPEC.y = OFF_Y;
+      SPEC.z = this.hz + OFF_Z + 0.15;
+      const sp = 4 + (i % 4) * 0.8;
       SPEC.vx = Math.cos(a) * sp;
       SPEC.vy = Math.sin(a) * sp;
       SPEC.drag = 1.8;
-      SPEC.grav = 2;
-      SPEC.size = 0.14;
+      SPEC.size = 0.1;
       SPEC.size1 = 0.03;
       SPEC.st = 0.1;
-      SPEC.life = 0.5;
-      SPEC.r = 2.4;
-      SPEC.g = 1.8;
-      SPEC.b = 0.6;
+      SPEC.life = 0.35;
+      SPEC.r = 0.5;
+      SPEC.g = 1.6;
+      SPEC.b = 2.2;
       SPEC.kind = PK_STREAK;
       this.pool.emit(SPEC);
     }
     this.lights.flash(
-      this.hx + OFF_X,
+      cx,
       OFF_Y,
       this.hz - 0.4,
-      1.0,
-      0.7,
-      0.22,
-      1.7,
-      Math.min(LIGHT_MAX_RADIUS, 3.6),
       0.35,
+      0.8,
+      1.0,
+      1.1,
+      Math.min(LIGHT_MAX_RADIUS, 3),
+      0.25,
     );
     if (!set.reducedMotion)
       this.world.camera.punch(0.45 * k, set.reducedFlash ? 0 : 0.0015 * k, 0.012 * k);
@@ -230,6 +280,7 @@ export class GuardBarrier {
     this.rimT = -1;
     this.burstT = -1;
     this.shimmerT = -1;
+    this.discT = -1;
     this.hide();
   }
 
@@ -237,6 +288,7 @@ export class GuardBarrier {
     this.quad.intensity(0);
     this.star.intensity(0);
     this.burst.intensity(0);
+    this.disc.intensity(0);
   }
 
   /** @hot */
@@ -252,7 +304,7 @@ export class GuardBarrier {
     let size = SIZE;
     let I = 0;
     let uP = 0;
-    const col = this.result === "parry" ? GOLD : AZURE;
+    const col = this.result === "parry" ? PARRY_BARRIER : AZURE;
     let r = AZURE[0];
     let g = AZURE[1];
     let b = AZURE[2];
@@ -370,7 +422,7 @@ export class GuardBarrier {
         .intensity(1.4 * k * (this.mode === M_PARRY ? 0.6 : 1));
     } else this.star.intensity(0);
 
-    // parry burst ring: 0 -> 3 u over 300 ms
+    // parry burst ring: a thin cyan ring, 0 -> 2.2 u over 300 ms
     if (this.burstT >= 0) {
       this.burstT += dt;
       const u = this.burstT / 0.3;
@@ -378,21 +430,41 @@ export class GuardBarrier {
         this.burstT = -1;
         this.burst.intensity(0);
       } else {
-        const s = 3 * 2 * easeOutQuad(u);
+        const s = 2.2 * 2 * easeOutQuad(u);
         this.burst
-          .color(1.5, 1.1, 0.35)
-          .color2(1.1, 0.75, 0.2)
+          .color(0.3, 1.0, 1.6)
+          .color2(0.1, 0.5, 1.2)
           .at(hx, OFF_Y, this.hz + OFF_Z + 0.1)
           .size(s, s)
           .progress(0.2 + 0.75 * u)
-          .intensity(1.0 * (1 - u) * k);
+          .intensity(0.8 * (1 - u) * k);
       }
     } else this.burst.intensity(0);
+
+    // parry flash disc: 140 ms, radius 0.9 u, at the contact point (blade tip), never on the hero's body
+    if (this.discT >= 0) {
+      this.discT += dt;
+      const u = this.discT / PARRY_DISC_SEC;
+      if (u >= 1) {
+        this.discT = -1;
+        this.disc.intensity(0);
+      } else {
+        const sc = 2 * PARRY_RADIUS * (0.55 + 0.45 * easeOutQuad(u));
+        this.disc
+          .color(PARRY_CORE[0], PARRY_CORE[1], PARRY_CORE[2])
+          .color2(PARRY_RIM[0], PARRY_RIM[1], PARRY_RIM[2])
+          .at(hx + CONTACT_DX, OFF_Y, this.hz + OFF_Z + 0.2)
+          .size(sc, sc)
+          .progress(u)
+          .intensity((1 - u * u) * k * (set.reducedFlash ? 0.5 : 1));
+      }
+    } else this.disc.intensity(0);
   }
 
   dispose(): void {
     this.quad.dispose();
     this.star.dispose();
     this.burst.dispose();
+    this.disc.dispose();
   }
 }
