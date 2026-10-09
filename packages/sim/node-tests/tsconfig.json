@@ -5,6 +5,7 @@
     "./*.ts",
     "../tests/toy.ts",
     "../tests/typingGolden.ts",
+    "../tests/trialHarness.ts",
     "../scripts/gen-tables.ts",
     "./tables.test.ts",
     "../playwright.config.ts"

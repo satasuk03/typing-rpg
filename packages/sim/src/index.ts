@@ -12,6 +12,7 @@ export * from "./replay.ts";
 export * from "./rng.ts";
 export * from "./snapshot.ts";
 export * from "./time.ts";
+export * from "./trialResim.ts";
 export * from "./types.ts";
 export { SIM_VERSION } from "./version.ts";
 export * from "./view.ts";

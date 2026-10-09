@@ -116,15 +116,15 @@ describe("replay runner (toy sim)", () => {
 });
 
 describe("public replay entry points", () => {
-  test("replay()/replayTrial() are wired to the (not yet implemented) level/trial sims", () => {
-    // T1.2 / T5.1 replace the stubs; until then the wiring must fail loudly rather than return garbage.
-    expect(() =>
-      replayTrial(
-        { trialId: "t", durationTicks: 3600, passages: ["a"], contentVersion: "00000000" },
-        1,
-        [],
-      ),
-    ).toThrow(/not implemented/);
+  test("replay()/replayTrial() are wired to the real level/trial sims", () => {
+    // T5.1: the trial sim exists; an empty log runs to durationTicks with no keys.
+    const r = replayTrial(
+      { trialId: "t", durationTicks: 3600, passages: ["a"], contentVersion: "00000000" },
+      1,
+      [],
+    );
+    expect(r.finalState.tick).toBe(3600);
+    expect(r.result).toMatchObject({ correctChars: 0, typos: 0, wpmX100: 0, accuracyBp: 10000 });
     expect(() => replay({} as never, {} as never, 1, {} as never, [])).toThrow(); // level sim exists since T1.2
   });
 });
