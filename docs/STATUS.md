@@ -14,6 +14,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T5.1 D1 schema + migrations | Backend (sonnet) | **done** (merged 43eaca3) | 5 STRICT migrations apply clean + idempotent; 15 api tests on real local D1 via `getPlatformProxy` (save If-Match + keep-5, one-open-trial index, idempotent transition, LB around-me + flagged shadow rank, gem ledger append-only, refresh family revocation). Decisions for T5.2: blobs stored as base64 TEXT; flagged owner shadow rank; tie-break achieved_at then user_id |
 | T1.1a Contracts published | Sim (sonnet) | **merged early** (2f68711) | events.ts, view.ts, types.ts, content + shared schemas on main; CHECK PASS |
 | T2.4 HUD (mock events) | UI (sonnet) | in progress | — |
+| T1.2 Typing engine | Sim (sonnet) | in progress | — |
+| T4.1 Word data + validator | Content (sonnet) | in progress | — |
 
 ## Notes
 - Stack pins: three 0.186.1, vite 8.3.4, typescript 7.0.2 (native tsc), vitest 5.0.3, playwright 1.64.0, biome 2.5.15, hono 4.13.13, wrangler 4.149.0, zod 4.
