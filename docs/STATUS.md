@@ -10,7 +10,8 @@ Maintained by the orchestrator. One line per task: owner · state · AC evidence
 | T1.1 Sim kernel + publish contracts | Sim (sonnet) | in progress | — |
 | T2.1 Render core | Render (sonnet) | **done** (merged, 94a9857) | side-by-sides `apps/game/tests/render/__shots__/side-by-side/*-1280x720.png` (all 4 biomes match the POC; checked by orchestrator after 1 rework); render specs 19/19; CHECK PASS; perf (SwiftShader, indicative only): tier 2 ≈45% of tier 0 cost. Gap: real-GPU fps not yet measured |
 | T2.2 World from data | Render (sonnet) | in progress | — |
-| T2.5 Audio | Audio (sonnet) | in progress | — |
+| T2.5 Audio | Audio (sonnet) | **done** (merged 04fbc98) | 51 unit tests; audio Playwright spec green; `play('key')` p95 0.1 ms (headless); bindings synced to interfaces v1.1 (drift test). **Needs PO listen pass:** `apps/game/src/audio/LISTEN_CHECKLIST.md` at `?scene=audio-test` |
+| T5.1 D1 schema + migrations | Backend (sonnet) | in progress | — |
 
 ## Notes
 - Stack pins: three 0.186.1, vite 8.3.4, typescript 7.0.2 (native tsc), vitest 5.0.3, playwright 1.64.0, biome 2.5.15, hono 4.13.13, wrangler 4.149.0, zod 4.

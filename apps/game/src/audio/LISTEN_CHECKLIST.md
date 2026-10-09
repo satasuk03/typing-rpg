@@ -14,6 +14,7 @@ Page keys: letters = key click (streak rises), `x` = typo, `Enter` = word comple
 - [ ] **tier 3 (streak 50)**: clearly sparkly click; sting has a rising saw swell underneath (5 notes).
 - [ ] **tier 4 (streak 100)**: brightest click; big 6-note bell sting with a sub boom. Feels like a reward, not a jump scare.
 - [ ] **typo (`x`)**: short dull low "thud/buzz". Noticeable but not punishing; the streak resets (pitch drops back).
+- [ ] **guard typo** (`Typo{kind:"guard"}`, test via the typo button with guard variant or `window.__audioTest`): heavier than a normal typo, lower and longer with an extra low thud. Should read as "danger", still not harsh.
 - [ ] **no zipper/clipping** when mashing keys quickly for 10 seconds (limiter keeps it clean).
 - [ ] **latency**: the click feels instant, no perceptible lag after the keypress.
 
