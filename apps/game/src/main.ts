@@ -1,5 +1,3 @@
-import { PerspectiveCamera, Scene, WebGLRenderer } from "three";
-
 /** Touch-only devices are blocked: the game needs a keyboard. */
 export function isTouchOnly(): boolean {
   return (
@@ -8,9 +6,10 @@ export function isTouchOnly(): boolean {
 }
 
 function boot(): void {
-  if (isTouchOnly()) {
-    const msg = document.getElementById("no-touch");
-    if (msg) msg.style.display = "flex";
+  const params = new URLSearchParams(location.search);
+  const scene = params.get("scene");
+  if (isTouchOnly() || params.get("force-touch") === "1") {
+    void import("./app/screens/touch").then((m) => m.showTouchBlock());
     return;
   }
 
@@ -18,83 +17,64 @@ function boot(): void {
   const hudCanvas = document.getElementById("hud") as HTMLCanvasElement;
 
   // Dev-only route: ?scene=render-test renders the hard-coded diorama (src/dev/renderTestScene.ts).
-  if (new URLSearchParams(location.search).get("scene") === "render-test") {
+  if (scene === "render-test") {
     void import("./dev/renderTestScene").then((m) => m.start(glCanvas));
     return;
   }
 
   // Dev-only route: ?scene=audio-test (src/dev/audioTestScene.ts).
-  if (new URLSearchParams(location.search).get("scene") === "audio-test") {
+  if (scene === "audio-test") {
     void import("./dev/audioTestScene").then((m) => m.start(glCanvas));
     return;
   }
 
-  // Dev-only route: ?scene=trial[&api=http://localhost:8787] is the Typing Trial + leaderboard (src/dev/trialScene.ts).
-  if (new URLSearchParams(location.search).get("scene") === "trial") {
+  // The Typing Trial + leaderboard (src/dev/trialScene.ts). The app links here with `from=app`: Esc then returns to
+  // the app unless a run is in progress.
+  if (scene === "trial") {
     void import("./dev/trialScene").then((m) => m.start(glCanvas));
+    if (params.get("from") === "app") {
+      window.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        const phase = (window as unknown as { __trial?: { phase: string } }).__trial?.phase;
+        if (phase === "running" || phase === "abandon") return;
+        void import("./app/trialLink").then((m) => location.assign(m.appUrl()));
+      });
+      const hint = document.createElement("div");
+      hint.id = "trial-back-hint";
+      hint.textContent = "Esc: back to the menu (not during a run)";
+      hint.style.cssText =
+        "position:fixed;right:14px;bottom:10px;z-index:60;font:12px Silkscreen,monospace;color:#b9ad8c;letter-spacing:.08em;pointer-events:none";
+      document.body.append(hint);
+    }
     return;
   }
 
   // Dev-only route: ?scene=hud-test (src/dev/hudTestScene.ts).
-  if (new URLSearchParams(location.search).get("scene") === "hud-test") {
+  if (scene === "hud-test") {
     void import("./dev/hudTestScene").then((m) => m.start(glCanvas));
     return;
   }
 
   // Dev-only route: ?scene=typing-vfx (src/dev/typingVfxScene.ts): T2.6 typing VFX over the real world.
-  if (new URLSearchParams(location.search).get("scene") === "typing-vfx") {
+  if (scene === "typing-vfx") {
     void import("./dev/typingVfxScene").then((m) => m.start(glCanvas));
     return;
   }
 
   // Playable level: ?scene=play&level=ch1-l03[&wpm-bot=40] (src/dev/playScene.ts).
-  if (new URLSearchParams(location.search).get("scene") === "play") {
+  if (scene === "play") {
     void import("./dev/playScene").then((m) => m.start(glCanvas));
     return;
   }
 
   // Dev-only route: ?scene=level&id=ch1-l03&pose=walk|battle:1|boss renders a level from its layout data.
-  if (new URLSearchParams(location.search).get("scene") === "level") {
+  if (scene === "level") {
     void import("./dev/levelScene").then((m) => m.start(glCanvas));
     return;
   }
 
-  const renderer = new WebGLRenderer({ canvas: glCanvas, antialias: false });
-  renderer.setClearColor(0x080a12, 1);
-  const scene = new Scene();
-  const camera = new PerspectiveCamera(35, 16 / 9, 0.1, 200);
-  const hud = hudCanvas.getContext("2d");
-
-  const resize = (): void => {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    renderer.setPixelRatio(dpr);
-    renderer.setSize(w, h, false);
-    hudCanvas.width = Math.round(w * dpr);
-    hudCanvas.height = Math.round(h * dpr);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-  };
-  window.addEventListener("resize", resize);
-  resize();
-
-  const drawHud = (): void => {
-    if (!hud) return;
-    const dpr = hudCanvas.width / window.innerWidth;
-    hud.setTransform(dpr, 0, 0, dpr, 0, 0);
-    hud.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    hud.fillStyle = "#f3e7c0";
-    hud.font = "16px system-ui, sans-serif";
-    hud.fillText("HUD", 16, 28);
-  };
-
-  const frame = (): void => {
-    renderer.render(scene, camera);
-    drawHud();
-    requestAnimationFrame(frame);
-  };
-  requestAnimationFrame(frame);
+  // The real game: title -> map -> levels (src/app/).
+  void import("./app/boot").then((m) => m.start(glCanvas, hudCanvas));
 }
 
 boot();

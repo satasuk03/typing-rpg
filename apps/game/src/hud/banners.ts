@@ -39,6 +39,12 @@ export class BannerSystem {
   clear(): void {
     this.banners.length = 0;
   }
+  /** Drops every banner of one style. */
+  remove(style: BannerStyle): void {
+    for (let i = this.banners.length - 1; i >= 0; i--) {
+      if (this.banners[i]?.style === style) this.banners.splice(i, 1);
+    }
+  }
 }
 
 /** Fade envelope: fast in (10%), hold, fade out over the last 20%. */

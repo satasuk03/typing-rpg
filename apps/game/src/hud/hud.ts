@@ -404,7 +404,7 @@ export class Hud {
           "boss",
           e.name.toUpperCase(),
           e.title,
-          Math.max(1.8, (e.untilTick - e.tick) / 60),
+          Math.max(1, (e.untilTick - e.tick) / 60),
         );
         break;
       case "LevelCleared":
@@ -575,6 +575,8 @@ export class Hud {
     this.alpha = clamp(alpha, 0, 1);
     this.time += dt;
     this.pops.update(dt);
+    // The boss card lives exactly as long as the intro window; it must never outlast it onto live plates.
+    if (view.phase !== "bossIntro") this.banners.remove("boss");
     this.banners.update(dt);
     this.fx.update(dt);
     this.plateFx.update(dt);
@@ -639,6 +641,9 @@ export class Hud {
     const set = this.settings;
     const nowTick = view.tick + this.alpha;
     const hudVisible = view.phase !== "cleared" || this.banners.banners.length > 0;
+    // T3.2: the boss name card owns the screen during the intro: no plates (typing is not live yet) and no add HP bars under it.
+    const introHold = view.phase === "bossIntro";
+    const plates = introHold ? [] : view.plates;
 
     // ---- plates: measure, layout
     c.setTransform(dpr * s, 0, 0, dpr * s, 0, 0);
@@ -656,7 +661,7 @@ export class Hud {
     if (boss) avoid.push({ ...bossPlateRect(W), h: bossPlateRect(W).h + 22 });
     else avoid.push(TOP_LABEL_RECT(W));
     for (const e of view.enemies) {
-      if (!e.alive || e.isBoss) continue;
+      if (!e.alive || e.isBoss || introHold) continue;
       const f = this.anchorDesign(e, "feet");
       avoid.push(enemyBarsRect(f.x, f.y));
     }
@@ -667,7 +672,7 @@ export class Hud {
       this.bannerRects.push(this.toCss(br));
     }
     const minLanes = view.minigame?.lanes ?? 3;
-    for (const p of view.plates) {
+    for (const p of plates) {
       const g = measurePlate(c, p);
       geoms.set(p.id, g);
       const owner = p.ownerId === null ? undefined : view.enemies.find((e) => e.id === p.ownerId);
@@ -696,9 +701,9 @@ export class Hud {
 
     // sync entries
     this.nextIndexByPlate.clear();
-    for (const p of view.plates) this.nextIndexByPlate.set(p.id, p.typedIndex);
+    for (const p of plates) this.nextIndexByPlate.set(p.id, p.typedIndex);
     const alive = new Set<number>();
-    for (const p of view.plates) {
+    for (const p of plates) {
       const g = geoms.get(p.id);
       const box = rects.get(p.id);
       if (!g || !box) continue;
@@ -759,7 +764,7 @@ export class Hud {
         };
         if (e.isBoss) {
           if (view.boss && view.boss.enemyId === e.id) drawBossPlate(pc, view, e, st);
-        } else {
+        } else if (!introHold) {
           const f = this.anchorDesign(e, "feet");
           drawEnemyBars(pc, e, f.x, f.y, st);
         }
@@ -820,7 +825,7 @@ export class Hud {
         letterRects: [],
       });
     }
-    const order = [...view.plates].sort(
+    const order = [...plates].sort(
       (a, b) => Number(a.id === view.targetPlateId) - Number(b.id === view.targetPlateId),
     );
     for (const p of order) {
