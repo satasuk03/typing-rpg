@@ -1,7 +1,7 @@
 /**
  * Playable level route:
  *   ?scene=play&level=ch1-l03[&seed=N][&pace=35][&tier=0|1|2][&wpm-bot=40[&bot-acc=0.96][&bot-seed=N]]
- *     [&fx=0 (typing VFX off)][&intensity=0..1][&reducedFlash=1][&reducedMotion=1]
+ *     [&demo=1 (window.__play.demo(name): combat VFX demo)][&fx=0 (typing VFX off)][&combat=0 (combat VFX off)][&intensity=0..1][&reducedFlash=1][&reducedMotion=1]
  *     [&audio=0][&fonts=0][&difficulty=story|standard|hard|zen]
  *
  * Loads the level by id with the starter loadout (parLoadout(1) + starter kit) and plays it through the real runner,
@@ -13,6 +13,7 @@
 import { contentBundle } from "@hd2d/content";
 import type { LevelOptions } from "@hd2d/sim";
 import { PlaySession } from "../level/session";
+import { makeDemo } from "./combatFxDemo";
 
 const num = (v: string | null): number | undefined => {
   if (v === null || v === "") return undefined;
@@ -47,6 +48,7 @@ export function start(glCanvas: HTMLCanvasElement): void {
   };
   void PlaySession.create({
     typingFx: q.get("fx") !== "0",
+    combatFx: q.get("combat") !== "0",
     fxSettings,
     glCanvas,
     hudCanvas,
@@ -64,6 +66,7 @@ export function start(glCanvas: HTMLCanvasElement): void {
   })
     .then((session) => {
       window.__play = session.debugApi(consoleErrors);
+      if (q.get("demo") === "1") window.__play.demo = makeDemo(session);
     })
     .catch((err: unknown) => {
       consoleErrors.push(String(err));

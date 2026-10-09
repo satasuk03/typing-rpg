@@ -17,6 +17,7 @@ import { KeyboardCapture, pressKey } from "../input/keyboard";
 import { isQualityTier, type QualityTier, RenderWorld } from "../render";
 import { buildWorld, loadLevel, toRenderBiome } from "../render/world";
 import { WpmBot } from "./bot";
+import { attachCombatFx, type SessionCombatFx } from "./combatFx";
 import { freshSeed, makeRunConfig, type PlayParams } from "./config";
 import { EventRouter } from "./eventBindings";
 import { LevelRunner, type LoggedInput, type PauseReason, type RunConfig } from "./runner";
@@ -33,6 +34,8 @@ export interface SessionOptions extends PlayParams {
   bot?: { wpm: number; accuracy?: number; seed?: number };
   /** T2.6 typing VFX (default on). `?fx=0` turns them off (A/B captures). */
   typingFx?: boolean;
+  /** T2.3 combat VFX (default on). `?combat=0` turns them off (A/B captures). */
+  combatFx?: boolean;
   /** Effect settings for the typing VFX (`?intensity=`, `?reducedFlash=1`, `?reducedMotion=1`). */
   fxSettings?: { effectsIntensity?: number; reducedFlash?: boolean; reducedMotion?: boolean };
   /** App mode (T3.2): a prebuilt run config (equipped gear, settings, SRS words, replay pay). */
@@ -86,6 +89,8 @@ export interface PlayDebug {
   perf(phase: string): PerfStats;
   resultsShown(): boolean;
   stage(): ReturnType<LevelStage["debug"]>;
+  /** Dev (`&demo=1`): play a combat VFX on the first living enemy (see dev/combatFxDemo.ts). */
+  demo?: (name: string) => boolean;
   consoleErrors: string[];
 }
 
@@ -100,6 +105,8 @@ export class PlaySession {
   bot: WpmBot | null = null;
   /** T2.6 typing VFX (null when disabled). */
   typingFx: SessionTypingFx | null = null;
+  /** T2.3 combat VFX (null when disabled). */
+  combat: SessionCombatFx | null = null;
 
   private readonly keyboard: KeyboardCapture;
   private lastView: LevelView;
@@ -154,6 +161,15 @@ export class PlaySession {
         audio: this.audio as AudioApi | null,
         seed: cfg.seed,
         settings: opts.fxSettings,
+      });
+    if (opts.combatFx !== false)
+      this.combat = attachCombatFx({
+        stage,
+        world,
+        hud: this.hud,
+        router: this.router,
+        typing: this.typingFx,
+        seed: cfg.seed,
       });
     this.runner = new LevelRunner(cfg, (evs) => this.onEvents(evs));
     this.lastView = getView(this.runner.state);
@@ -220,6 +236,7 @@ export class PlaySession {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.keyboard.detach();
+    this.combat?.dispose();
     this.typingFx?.dispose();
     this.screens.dispose();
     if (this.ownsAudio) this.audio?.dispose();
@@ -287,6 +304,7 @@ export class PlaySession {
     this.stage.reset();
     this.hud.reset();
     this.typingFx?.reset();
+    this.combat?.reset();
     this.screens.closePanel();
     this.screens.secondWind(false);
     this.resultAt = null;
@@ -355,7 +373,9 @@ export class PlaySession {
     const animDt = paused ? 0 : dt;
 
     const worldDt = this.typingFx ? this.typingFx.update(animDt, view) : animDt;
+    this.stage.setFxSettings(this.hud.getSettings());
     this.stage.update(view, alpha, worldDt);
+    this.combat?.update(view);
     this.setBiomeFromWorld();
     this.world.render();
     this.hud.render(view, alpha, animDt);

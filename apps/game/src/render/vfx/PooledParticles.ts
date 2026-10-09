@@ -50,6 +50,9 @@ export interface ParticleSpec {
   ph: number;
   fadeIn: number;
   delay: number;
+  /** T2.3: ground bounce restitution (0 = none; bounces at y <= 0.03) and flip spin rate (rad/s, 0 = none). */
+  bounce: number;
+  spin: number;
 }
 
 export function newSpec(): ParticleSpec {
@@ -75,6 +78,8 @@ export function newSpec(): ParticleSpec {
     ph: 0,
     fadeIn: 0,
     delay: 0,
+    bounce: 0,
+    spin: 0,
   };
 }
 export function resetSpec(s: ParticleSpec): ParticleSpec {
@@ -85,7 +90,7 @@ export function resetSpec(s: ParticleSpec): ParticleSpec {
   s.st = 0;
   s.r = s.g = s.b = s.a = 1;
   s.kind = PK_GLOW;
-  s.grav = s.drag = s.sway = s.ph = s.fadeIn = s.delay = 0;
+  s.grav = s.drag = s.sway = s.ph = s.fadeIn = s.delay = s.bounce = s.spin = 0;
   return s;
 }
 
@@ -123,6 +128,9 @@ export class PooledParticles {
   private readonly ph: Float32Array;
   private readonly fadeIn: Float32Array;
   private readonly delay: Float32Array;
+  private readonly bnc: Float32Array;
+  private readonly spn: Float32Array;
+  private readonly rot: Float32Array;
 
   constructor(
     cap: number,
@@ -197,6 +205,9 @@ export class PooledParticles {
     this.ph = f();
     this.fadeIn = f();
     this.delay = f();
+    this.bnc = f();
+    this.spn = f();
+    this.rot = f();
   }
 
   /** Spawn one particle (steals the slot with the least remaining life fraction when full). */
@@ -237,6 +248,9 @@ export class PooledParticles {
     this.ph[i] = s.ph;
     this.fadeIn[i] = s.fadeIn;
     this.delay[i] = s.delay;
+    this.bnc[i] = s.bounce;
+    this.spn[i] = s.spin;
+    this.rot[i] = s.ph;
   }
 
   clear(): void {
@@ -271,6 +285,13 @@ export class PooledParticles {
         (sw ? Math.sin((this.ph[i] as number) + l * 3) * sw * dt : 0);
       this.py[i] = (this.py[i] as number) + (this.vy[i] as number) * dt;
       this.pz[i] = (this.pz[i] as number) + (this.vz[i] as number) * dt;
+      const bn = this.bnc[i] as number;
+      if (bn && (this.py[i] as number) < 0.03 && (this.vy[i] as number) < 0) {
+        this.py[i] = 0.03;
+        this.vy[i] = -(this.vy[i] as number) * bn;
+      }
+      const sp = this.spn[i] as number;
+      if (sp) this.rot[i] = (this.rot[i] as number) + sp * dt;
     }
   }
 
@@ -301,6 +322,9 @@ export class PooledParticles {
     this.ph[i] = this.ph[last] as number;
     this.fadeIn[i] = this.fadeIn[last] as number;
     this.delay[i] = this.delay[last] as number;
+    this.bnc[i] = this.bnc[last] as number;
+    this.spn[i] = this.spn[last] as number;
+    this.rot[i] = this.rot[last] as number;
   }
 
   /** @hot Copy live particles into the instance buffers. Call once per frame before rendering. */
@@ -331,7 +355,7 @@ export class PooledParticles {
       S[n * 4] = s0 + ((this.size1[i] as number) - s0) * k;
       S[n * 4 + 1] = this.st[i] as number;
       S[n * 4 + 2] = this.kind[i] as number;
-      S[n * 4 + 3] = 0;
+      S[n * 4 + 3] = (this.spn[i] as number) ? (this.rot[i] as number) : 0;
       n++;
     }
     this.geo.instanceCount = n;

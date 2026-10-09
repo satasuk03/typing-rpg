@@ -13,6 +13,7 @@ import type { EnemyView, LevelView } from "@hd2d/sim";
 import type { HudAnchor, HudProjector } from "../hud";
 import type { CameraPose, RenderWorld, SpriteActor, SpriteFrame } from "../render";
 import { HERO_LUM_CAP } from "../render/vfx/colors";
+import { motionK } from "../render/vfx/combat/params";
 import type { WorldHandle } from "../render/world";
 import { WEAPON_ANCHOR_OFFSET } from "./typingFxParams";
 
@@ -69,6 +70,8 @@ const easeOut = (t: number): number => 1 - (1 - clamp01(t)) ** 3;
 const WALK_LEAD = 3.2;
 const FLY_Y = 1.7;
 const TICKS_PER_S = 60;
+/** How long a dead enemy waits for its EnemyDeath to be presented before dissolving anyway (s). */
+const DEATH_WAIT = 1.6;
 
 interface HeroFrames {
   idle: readonly SpriteFrame[];
@@ -84,6 +87,7 @@ interface EnemyActor {
   id: number;
   defId: string;
   slot: number;
+  isBoss: boolean;
   actor: SpriteActor;
   idle: readonly SpriteFrame[];
   atk: readonly SpriteFrame[];
@@ -91,6 +95,10 @@ interface EnemyActor {
   flyY: number;
   baseX: number;
   baseZ: number;
+  /** The frame drawn last frame (the death dissolve samples its pixels). */
+  frame: SpriteFrame | null;
+  /** Stage seconds spent dead before EnemyDeath was presented. */
+  deadWait: number;
   /** Stage-time (s) timers since the last event of each kind. Infinity = never. */
   born: number;
   hurtT: number;
@@ -107,6 +115,10 @@ export class LevelStage {
   readonly clock = new RenderClock();
   /** Stage time in seconds (dilated). */
   time = 0;
+  /** The dilated dt of the last `update` (0 during a hit-stop): the combat VFX advance on this clock. */
+  dt = 0;
+  /** Accessibility settings that scale the camera hits (`setFxSettings`, from the HUD settings each frame). */
+  private fxSet = { effectsIntensity: 1, reducedMotion: false };
 
   private hero: SpriteActor | null = null;
   private heroFrames: HeroFrames | null = null;
@@ -114,6 +126,7 @@ export class LevelStage {
   private heroZ = 0;
   private heroY = 0;
   private heroFlash = 0;
+  private heroFrame: SpriteFrame | null = null;
   private heroHurtT = Infinity;
   private heroAttackT = Infinity;
   private heroCastT = Infinity;
@@ -234,6 +247,7 @@ export class LevelStage {
       id,
       defId,
       slot,
+      isBoss,
       actor,
       idle,
       atk,
@@ -241,6 +255,8 @@ export class LevelStage {
       flyY,
       baseX: pos.x,
       baseZ: pos.z,
+      frame: null,
+      deadWait: 0,
       born: this.time,
       hurtT: Infinity,
       attackT: Infinity,
@@ -267,7 +283,9 @@ export class LevelStage {
     const e = this.foes.get(id);
     if (!e) return;
     e.hurtT = 0;
-    e.flash = Math.max(e.flash, strength);
+    // chip / DoT hits must not keep a big enemy white: no re-trigger while a flash is still up, bosses cap at 0.5
+    if (e.flash > 0.2) return;
+    e.flash = Math.max(e.flash, Math.min(strength, e.isBoss ? 0.5 : 1));
   }
 
   enemyAttack(id: number): void {
@@ -299,20 +317,33 @@ export class LevelStage {
     this.heroGuardT = 0;
   }
 
+  /** Scale the camera hits (shake / punch / hit-stop / slow-mo) by effectsIntensity and reducedMotion. */
+  setFxSettings(s: { effectsIntensity: number; reducedMotion: boolean }): void {
+    this.fxSet.effectsIntensity = s.effectsIntensity;
+    this.fxSet.reducedMotion = s.reducedMotion;
+  }
+
   shake(sec: number, mag: number): void {
-    this.world.camera.shake(sec, mag);
+    const k = motionK(this.fxSet);
+    if (k > 0) this.world.camera.shake(sec, mag * k);
   }
 
   punch(punch: number, ca: number, zoom: number): void {
-    this.world.camera.punch(punch, ca, zoom);
+    const k = motionK(this.fxSet);
+    if (k > 0) this.world.camera.punch(punch * k, ca * k, zoom * k);
   }
 
   hitStop(sec: number): void {
-    this.clock.hitStop(sec);
+    // an impact frame is part of the feel at any intensity but 0; reduced motion keeps only a token one
+    const k = this.fxSet.effectsIntensity;
+    if (k <= 0) return;
+    this.clock.hitStop(this.fxSet.reducedMotion ? Math.min(sec, 0.04) : sec * k);
   }
 
   slowMo(scale: number, sec: number): void {
-    this.clock.slowMo(scale, sec);
+    const k = motionK(this.fxSet);
+    if (k <= 0) return;
+    this.clock.slowMo(1 - (1 - scale) * k, sec);
   }
 
   // ------------------------------------------------------------------------------------------- typing VFX hooks (T2.6)
@@ -330,6 +361,39 @@ export class LevelStage {
     out.x = e.baseX;
     out.y = e.flyY + e.actor.height * 0.5;
     out.z = e.baseZ;
+    return true;
+  }
+
+  /** The hero's current frame and foot position (afterimages). Null before the hero exists. */
+  heroSnapshot(out: { x: number; y: number; z: number }): SpriteFrame | null {
+    if (!this.hero) return null;
+    const p = this.hero.mesh.position;
+    out.x = p.x;
+    out.y = p.y;
+    out.z = p.z;
+    return this.heroFrame;
+  }
+
+  /** What the combat VFX need of an enemy: current frame, scale, resting foot position, sprite height. */
+  enemyInfo(
+    id: number,
+    out: {
+      frame: SpriteFrame | null;
+      scale: number;
+      x: number;
+      y: number;
+      z: number;
+      height: number;
+    },
+  ): boolean {
+    const e = this.foes.get(id);
+    if (!e) return false;
+    out.frame = e.frame;
+    out.scale = e.scale;
+    out.x = e.baseX;
+    out.y = e.flyY;
+    out.z = e.baseZ;
+    out.height = e.actor.height;
     return true;
   }
 
@@ -373,6 +437,7 @@ export class LevelStage {
    */
   update(view: LevelView, alpha: number, realDt: number): void {
     const dt = this.clock.dilate(realDt);
+    this.dt = dt;
     this.time += dt;
     this.lastView = view;
     const tickF = view.tick + alpha;
@@ -462,7 +527,10 @@ export class LevelStage {
     }
     const idx = frames.length > 1 ? Math.floor(this.time * fps) % frames.length : 0;
     const f = frames[idx] ?? frames[0];
-    if (f) hero.setFrame(f);
+    if (f) {
+      hero.setFrame(f);
+      this.heroFrame = f;
+    }
     hero.setFlash(this.heroFlash, [1, 0.25, 0.2]);
     hero.place(x, y, z);
     this.heroY = y;
@@ -474,20 +542,27 @@ export class LevelStage {
     e.hurtT += dt;
     e.attackT += dt;
     if (e.deadT !== Infinity) e.deadT += dt;
-    e.flash = Math.max(0, e.flash - dt * 7);
+    e.flash = Math.max(0, e.flash - dt * 12);
 
     let dx = 0;
     let dz = 0;
     let useAtk = false;
-    let flashCol: readonly [number, number, number] = [1, 1, 1];
+    let flashCol: readonly [number, number, number] = [1.25, 1.2, 1.1];
     let flash = e.flash;
     const age = this.time - e.born;
     if (age < 0.7) dx += 4 * (1 - easeOut(age / 0.7));
 
     if (!ev.alive) {
-      if (e.deadT === Infinity) e.deadT = 0;
-      e.actor.setDissolve(clamp01(e.deadT / 0.7));
-      if (e.deadT >= 0.7) e.actor.visible = false;
+      // the dissolve starts when EnemyDeath is presented (`enemyDied`): a finisher holds the death for its
+      // cinematic. A death that is never presented still dissolves after DEATH_WAIT so nothing can linger.
+      if (e.deadT === Infinity) {
+        e.deadWait += dt;
+        if (e.deadWait >= DEATH_WAIT) e.deadT = 0;
+      }
+      if (e.deadT !== Infinity) {
+        e.actor.setDissolve(clamp01(e.deadT / 0.7));
+        if (e.deadT >= 0.7) e.actor.visible = false;
+      }
     } else {
       if (ev.pose === "windup") {
         // lean back, then (EnemyAttack) lunge
@@ -514,7 +589,10 @@ export class LevelStage {
     const frames = useAtk && e.atk.length > 0 ? e.atk : e.idle;
     const idx = frames.length > 1 ? Math.floor(this.time * 2.2 + e.slot) % frames.length : 0;
     const f = frames[idx] ?? frames[0];
-    if (f) e.actor.setFrame(f);
+    if (f) {
+      e.actor.setFrame(f);
+      e.frame = f;
+    }
     e.actor.setFlash(flash, flashCol);
     e.actor.place(e.baseX + dx, e.flyY + bob, e.baseZ + dz);
   }

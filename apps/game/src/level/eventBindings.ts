@@ -5,7 +5,10 @@
  *
  * - The table type `{ [K in SimEventType]: EventBinding<K> }` makes a missing key a compile error, and
  *   `tests/level/bindings.test.ts` enumerates `ALL_EVENT_TYPES` at runtime as well.
- * - `render`: world-side action (actors, camera, hit-stop). Minimal on purpose; T2.3 adds spectacle through hooks.
+ * - `render`: world-side action (actors, camera shake / punch, hit-stop, slow-mo): the stage's own motion.
+ * - `fx`: the combat VFX library (T2.3, `render/vfx/combat/`): arcs, particles, quads, lights, markers. Every event is
+ *   either bound here or carries `fxNone`, the reason it has no combat effect (typing events belong to T2.6, plates
+ *   and gauges to the HUD, state to LevelView). `tests/vfx/combatBindings.test.ts` enforces that.
  * - `hud`: "push" = `Hud.pushEvent` has a case for it (pops, banners, plate FX); "none" = the HUD ignores it.
  * - `audio`: "bound" = `AUDIO_BINDINGS[type]` exists (audio/bindings.ts is the single audio table), "silent" = it is
  *   intentionally silent (`AUDIO_SILENT_EVENTS`). Derived from the audio table so the two can never disagree.
@@ -18,6 +21,7 @@
  */
 import type { EventOf, SimEvent, SimEventType } from "@hd2d/sim";
 import { AUDIO_BINDINGS, type AudioApi, dispatchAudioEvent } from "../audio/bindings";
+import type { CombatFxSink } from "../render/vfx/combat/CombatFx";
 
 // ---------------------------------------------------------------------------------------------- sinks
 
@@ -59,12 +63,18 @@ export interface Sinks {
   /** null = audio disabled (tests, `&audio=0`). */
   audio: AudioApi | null;
   ui: UiActions;
+  /** The combat VFX library (T2.3). Absent in tests and when effects are off. */
+  fx?: CombatFxSink;
 }
 
-export type BindingCtx = Pick<Sinks, "render" | "ui">;
+export type BindingCtx = Pick<Sinks, "render" | "ui" | "fx">;
 
 export interface EventBinding<K extends SimEventType> {
   render?: (e: EventOf<K>, c: BindingCtx) => void;
+  /** Combat VFX (T2.3), run right after `render`. */
+  fx?: (e: EventOf<K>, c: BindingCtx) => void;
+  /** Required when `fx` is absent: why the event has no combat effect. */
+  fxNone?: string;
   hud: "push" | "none";
   audio: "bound" | "silent";
   /** Why the event is intentionally not presented anywhere (required when nothing else is set). */
@@ -108,7 +118,12 @@ const audioOf = (t: SimEventType): "bound" | "silent" => (t in AUDIO_BINDINGS ? 
 
 function b<K extends SimEventType>(
   type: K,
-  extra: { render?: EventBinding<K>["render"]; silent?: string } = {},
+  extra: {
+    render?: EventBinding<K>["render"];
+    fx?: EventBinding<K>["fx"];
+    fxNone?: string;
+    silent?: string;
+  } = {},
 ): EventBinding<K> {
   return { hud: hudOf(type), audio: audioOf(type), ...extra };
 }
@@ -117,191 +132,311 @@ const STATE = "state is read from LevelView each frame";
 
 export const BINDINGS: BindingTable = {
   // ---- flow ----
-  LevelStarted: b("LevelStarted"),
-  WalkStarted: b("WalkStarted", { render: (e, c) => c.render.walkStarted(e.tick, e.untilTick) }),
-  WalkEnded: b("WalkEnded", { silent: "the next EncounterStarted places the hero" }),
+  LevelStarted: b("LevelStarted", {
+    fxNone:
+      "a new attempt clears every in-flight effect (CombatFx.clear / TypingWorldFx.clear); nothing to play",
+  }),
+  WalkStarted: b("WalkStarted", {
+    render: (e, c) => c.render.walkStarted(e.tick, e.untilTick),
+    fxNone: "the walk is the stage's hero and camera motion, not an effect",
+  }),
+  WalkEnded: b("WalkEnded", {
+    silent: "the next EncounterStarted places the hero",
+    fxNone: "the next EncounterStarted places the hero",
+  }),
   EncounterStarted: b("EncounterStarted", {
     render: (e, c) => c.render.encounterStarted(e.encounterIndex),
+    fxNone: "the stage places the hero; the encounter banner is HUD",
   }),
-  WaveStarted: b("WaveStarted"),
+  WaveStarted: b("WaveStarted", {
+    fxNone: "enemies arrive through EnemySpawned; the wave banner is HUD",
+  }),
   EnemySpawned: b("EnemySpawned", {
     render: (e, c) => c.render.spawnEnemy(e.enemyId, e.defId, e.slot, e.isBoss),
+    fxNone: "the stage slides the enemy in; the boss entrance is BossIntroStarted",
   }),
-  EncounterCleared: b("EncounterCleared", { render: (_e, c) => c.render.encounterCleared() }),
-  LevelCleared: b("LevelCleared"),
-  LevelFailed: b("LevelFailed", { render: (_e, c) => c.render.slowMo(0.3, 1.2) }),
+  EncounterCleared: b("EncounterCleared", {
+    render: (_e, c) => c.render.encounterCleared(),
+    fxNone: "the rewards have their own events (ChestDropped, GoldGained)",
+  }),
+  LevelCleared: b("LevelCleared", {
+    fxNone: "the victory pose is the stage's; the banner and results are HUD / screens",
+  }),
+  LevelFailed: b("LevelFailed", {
+    render: (_e, c) => c.render.slowMo(0.3, 1.2),
+    fxNone: "the slow-mo is the render column; the defeat banner and results are HUD / screens",
+  }),
   TutorialCue: b("TutorialCue", {
     render: (e, c) => c.ui.hint(TUTORIAL_TEXT[e.cue], 6, e.cue),
+    fxNone: "a DOM hint (UiActions.hint), not a world effect",
   }),
 
   // ---- plates & typing (HUD + typing VFX hook) ----
-  PlateShown: b("PlateShown", { silent: `plates are drawn from LevelView.plates (${STATE})` }),
-  PlateRemoved: b("PlateRemoved"),
-  TargetAcquired: b("TargetAcquired", { silent: "target highlight comes from PlateView.isTarget" }),
-  TargetDropped: b("TargetDropped", { silent: "target highlight comes from PlateView.isTarget" }),
-  CharCorrect: b("CharCorrect"),
-  Typo: b("Typo"),
-  WordCompleted: b("WordCompleted"),
-  SentenceWordDone: b("SentenceWordDone"),
-  ComboTierChanged: b("ComboTierChanged"),
-  KeyStreakTierChanged: b("KeyStreakTierChanged"),
-  BurstWpm: b("BurstWpm", { silent: "no presentation in the slice (stats panel shows burst WPM)" }),
+  PlateShown: b("PlateShown", {
+    silent: `plates are drawn from LevelView.plates (${STATE})`,
+    fxNone: "plates are HUD objects (PlateView), not world effects",
+  }),
+  PlateRemoved: b("PlateRemoved", {
+    fxNone: "plates are HUD objects (PlateView), not world effects",
+  }),
+  TargetAcquired: b("TargetAcquired", {
+    silent: "target highlight comes from PlateView.isTarget",
+    fxNone: "plates are HUD objects (PlateView), not world effects",
+  }),
+  TargetDropped: b("TargetDropped", {
+    silent: "target highlight comes from PlateView.isTarget",
+    fxNone: "plates are HUD objects (PlateView), not world effects",
+  }),
+  CharCorrect: b("CharCorrect", { fxNone: "typing VFX (T2.6) owns this event" }),
+  Typo: b("Typo", { fxNone: "typing VFX (T2.6) owns this event" }),
+  WordCompleted: b("WordCompleted", { fxNone: "typing VFX (T2.6) owns this event" }),
+  SentenceWordDone: b("SentenceWordDone", { fxNone: "typing VFX (T2.6) owns this event" }),
+  ComboTierChanged: b("ComboTierChanged", { fxNone: "typing VFX (T2.6) owns this event" }),
+  KeyStreakTierChanged: b("KeyStreakTierChanged", { fxNone: "typing VFX (T2.6) owns this event" }),
+  BurstWpm: b("BurstWpm", {
+    silent: "no presentation in the slice (stats panel shows burst WPM)",
+    fxNone: "no presentation in the slice (the stats panel shows burst WPM)",
+  }),
 
   // ---- defense ----
-  EnemyAttackWindup: b("EnemyAttackWindup"),
+  EnemyAttackWindup: b("EnemyAttackWindup", { fx: (e, c) => c.fx?.windup(e) }),
   GuardWordShown: b("GuardWordShown", {
     silent: `the guard plate arrives via PlateShown (${STATE})`,
+    fxNone: "the guard plate is HUD; the barrier preview is T2.6 (GuardBarrier)",
   }),
-  GuardWordTyped: b("GuardWordTyped", { render: (_e, c) => c.render.heroGuard() }),
+  GuardWordTyped: b("GuardWordTyped", {
+    render: (_e, c) => c.render.heroGuard(),
+    fxNone: "the barrier snap is T2.6 (GuardBarrier)",
+  }),
   GuardBlocked: b("GuardBlocked", {
     render: (_e, c) => {
       c.render.heroGuard();
       c.render.shake(0.18, 0.5);
     },
+    fx: (e, c) => c.fx?.guardBlocked(e),
   }),
   GuardParried: b("GuardParried", {
     render: (_e, c) => {
       c.render.heroGuard();
       c.render.hitStop(0.07);
-      c.render.punch(0.8, 0.01, 0.05);
+      c.render.punch(0.8, 0.003, 0.012);
     },
+    fx: (e, c) => c.fx?.guardParried(e),
   }),
 
   // ---- ATB & hero offense ----
-  AtbFilled: b("AtbFilled"),
-  AutoAttack: b("AutoAttack", { render: (e, c) => c.render.heroAttack(e.targetId) }),
+  AtbFilled: b("AtbFilled", { fxNone: "typing VFX (T2.6) owns this event" }),
+  AutoAttack: b("AutoAttack", {
+    render: (e, c) => c.render.heroAttack(e.targetId),
+    fx: (e, c) => c.fx?.autoAttack(e),
+  }),
   Hit: b("Hit", {
     render: (e, c) => {
       if (e.targetId === 0) return;
       const strong = e.crit || e.kind === "skill" || e.kind === "finisher";
       c.render.enemyHit(
         e.targetId,
-        strong ? 1 : e.kind === "chip" || e.kind === "dot" ? 0.35 : 0.7,
+        strong ? 1 : e.kind === "chip" || e.kind === "dot" ? 0.12 : 0.7,
       );
       if (e.kind === "chip" || e.kind === "dot") return;
       c.render.shake(e.crit ? 0.3 : 0.15, e.crit ? 1 : 0.5);
       if (e.crit) {
         c.render.hitStop(0.06);
-        c.render.punch(1, 0.014, 0.07);
+        c.render.punch(0.8, 0.003, 0.012);
       } else if (e.killed) c.render.hitStop(0.05);
     },
+    fx: (e, c) => c.fx?.hit(e),
   }),
-  WeaknessRevealed: b("WeaknessRevealed"),
+  WeaknessRevealed: b("WeaknessRevealed", { fx: (e, c) => c.fx?.weaknessRevealed(e) }),
   ShieldDamaged: b("ShieldDamaged", {
-    silent: "shield pips are drawn by the HUD from EnemyView.shield",
+    fx: (e, c) => c.fx?.shieldDamaged(e),
   }),
   Break: b("Break", {
     render: (e, c) => {
       c.render.enemyHit(e.enemyId, 1);
       c.render.hitStop(0.1);
       c.render.shake(0.4, 1.2);
-      c.render.punch(1.2, 0.02, 0.09);
+      c.render.punch(1.2, 0.004, 0.02);
     },
+    fx: (e, c) => c.fx?.breakStarted(e),
   }),
-  BreakEnded: b("BreakEnded", { silent: "pose returns to idle from EnemyView.pose" }),
+  BreakEnded: b("BreakEnded", {
+    silent: "pose returns to idle from EnemyView.pose",
+    fxNone: "the pose returns to idle from EnemyView.pose; there is nothing to play",
+  }),
   StatusApplied: b("StatusApplied", {
-    silent: "status icons come from EnemyView/HeroView.statuses; status VFX is T2.3",
+    fx: (e, c) => c.fx?.statusApplied(e),
   }),
   StatusEnded: b("StatusEnded", {
-    silent: "status icons come from EnemyView/HeroView.statuses; status VFX is T2.3",
+    fx: (e, c) => c.fx?.statusEnded(e),
   }),
-  FocusChanged: b("FocusChanged", { silent: "focus ring comes from EnemyView.isFocus" }),
+  FocusChanged: b("FocusChanged", {
+    silent: "focus ring comes from EnemyView.isFocus",
+    fxNone: "the focus ring is HUD (EnemyView.isFocus)",
+  }),
 
   // ---- enemy offense & hero state ----
-  EnemyAttack: b("EnemyAttack", { render: (e, c) => c.render.enemyAttack(e.enemyId) }),
+  EnemyAttack: b("EnemyAttack", {
+    render: (e, c) => c.render.enemyAttack(e.enemyId),
+    fx: (e, c) => c.fx?.enemyAttack(e),
+  }),
   HeroDamaged: b("HeroDamaged", {
     render: (e, c) => {
       if (e.blocked) return;
       c.render.heroHurt(1);
       c.render.shake(0.3, e.cause === "attack" ? 0.8 : 1.1);
     },
+    fxNone:
+      "shown by the cause: the EnemyAttack lunge, DoomSpellFailed or MinigameWordMissed (flash and shake are the render column)",
   }),
-  HeroHealed: b("HeroHealed"),
+  HeroHealed: b("HeroHealed", { fx: (e, c) => c.fx?.heroHealed(e) }),
   EnemyDeath: b("EnemyDeath", {
     render: (e, c) => {
       c.render.enemyDied(e.enemyId);
       if (e.isBoss) {
         c.render.hitStop(0.16);
         c.render.slowMo(0.3, 0.9);
-        c.render.punch(1.5, 0.025, 0.12);
+        c.render.punch(1.5, 0.006, 0.03);
         c.render.shake(0.8, 1.6);
       } else c.render.hitStop(0.06);
     },
+    fx: (e, c) => c.fx?.enemyDeath(e),
   }),
   HeroDowned: b("HeroDowned", {
     render: (_e, c) => {
       c.render.heroHurt(1);
       c.render.slowMo(0.35, 0.7);
     },
+    fx: (e, c) => c.fx?.heroDowned(e),
   }),
-  SecondWindStarted: b("SecondWindStarted", { render: (_e, c) => c.ui.secondWind(true) }),
-  SecondWindSucceeded: b("SecondWindSucceeded", { render: (_e, c) => c.ui.secondWind(false) }),
-  SecondWindFailed: b("SecondWindFailed", { render: (_e, c) => c.ui.secondWind(false) }),
-  Revived: b("Revived", { silent: "hook only; never emitted in the slice" }),
+  SecondWindStarted: b("SecondWindStarted", {
+    render: (_e, c) => c.ui.secondWind(true),
+    fxNone: "the countdown plate and overlay are HUD / screens; the payoff is SecondWindSucceeded",
+  }),
+  SecondWindSucceeded: b("SecondWindSucceeded", {
+    render: (_e, c) => c.ui.secondWind(false),
+    fx: (e, c) => c.fx?.secondWindSucceeded(e),
+  }),
+  SecondWindFailed: b("SecondWindFailed", {
+    render: (_e, c) => c.ui.secondWind(false),
+    fxNone: "LevelFailed follows with its own slow-mo",
+  }),
+  Revived: b("Revived", {
+    silent: "hook only; never emitted in the slice",
+    fxNone: "hook only; never emitted in the slice",
+  }),
 
   // ---- skills ----
-  SkillCharged: b("SkillCharged", { silent: "ready state comes from SkillView.ready" }),
-  SkillCast: b("SkillCast", { render: (_e, c) => c.render.heroCast() }),
-  PassiveTriggered: b("PassiveTriggered", { silent: "passive proc VFX is T2.3 (register a hook)" }),
+  SkillCharged: b("SkillCharged", {
+    silent: "ready state comes from SkillView.ready",
+    fxNone: "the ready state is HUD (SkillView.ready); the cast is SkillCast",
+  }),
+  SkillCast: b("SkillCast", {
+    render: (_e, c) => c.render.heroCast(),
+    fx: (e, c) => c.fx?.skillCast(e),
+  }),
+  PassiveTriggered: b("PassiveTriggered", { fx: (e, c) => c.fx?.passive(e) }),
 
   // ---- gimmicks ----
-  WordFaded: b("WordFaded", { silent: "PlateView.faded drives the plate" }),
-  WordScrambled: b("WordScrambled", { silent: "PlateView.display drives the plate" }),
-  WordUnscrambled: b("WordUnscrambled", { silent: "PlateView.display drives the plate" }),
+  WordFaded: b("WordFaded", {
+    silent: "PlateView.faded drives the plate",
+    fxNone: "PlateView.faded drives the plate",
+  }),
+  WordScrambled: b("WordScrambled", {
+    silent: "PlateView.display drives the plate",
+    fxNone: "PlateView.display drives the plate",
+  }),
+  WordUnscrambled: b("WordUnscrambled", {
+    silent: "PlateView.display drives the plate",
+    fxNone: "PlateView.display drives the plate",
+  }),
 
   // ---- boss ----
   BossIntroStarted: b("BossIntroStarted", {
     render: (_e, c) => {
       c.render.shake(0.8, 1);
-      c.render.punch(0.8, 0.01, 0.05);
+      c.render.punch(1, 0.004, 0.02);
     },
+    fx: (e, c) => c.fx?.bossIntro(e),
   }),
   BossPhaseChanged: b("BossPhaseChanged", {
     render: (_e, c) => {
       c.render.shake(0.9, 1.4);
-      c.render.punch(1, 0.014, 0.07);
+      c.render.punch(1, 0.004, 0.02);
     },
+    fx: (e, c) => c.fx?.bossPhase(e),
   }),
-  DoomSpellStarted: b("DoomSpellStarted", { render: (_e, c) => c.render.shake(0.5, 0.6) }),
+  DoomSpellStarted: b("DoomSpellStarted", {
+    render: (_e, c) => c.render.shake(0.5, 0.6),
+    fx: (e, c) => c.fx?.doomStarted(e),
+  }),
   DoomSpellCompleted: b("DoomSpellCompleted", {
     render: (_e, c) => {
       c.render.hitStop(0.08);
-      c.render.punch(1, 0.014, 0.07);
+      c.render.punch(0.8, 0.003, 0.012);
     },
+    fx: (e, c) => c.fx?.doomCompleted(e),
   }),
   DoomSpellFailed: b("DoomSpellFailed", {
     render: (_e, c) => {
       c.render.heroHurt(1);
       c.render.shake(0.7, 1.5);
     },
+    fx: (e, c) => c.fx?.doomFailed(e),
   }),
-  MinigameStarted: b("MinigameStarted", { silent: "rubble lanes are HUD plates (PlateView.lane)" }),
+  MinigameStarted: b("MinigameStarted", {
+    silent: "rubble lanes are HUD plates (PlateView.lane)",
+    fxNone: "the rubble lanes are HUD plates (PlateView.lane)",
+  }),
   MinigameWordSpawned: b("MinigameWordSpawned", {
     silent: "rubble lanes are HUD plates (PlateView.lane)",
+    fxNone: "the rubble lanes are HUD plates (PlateView.lane)",
   }),
-  MinigameWordCleared: b("MinigameWordCleared", { render: (_e, c) => c.render.shake(0.12, 0.4) }),
+  MinigameWordCleared: b("MinigameWordCleared", {
+    render: (_e, c) => c.render.shake(0.12, 0.4),
+    fxNone:
+      "the rock is a HUD plate and its clear pop is the HUD's; the shake is the render column",
+  }),
   MinigameWordMissed: b("MinigameWordMissed", {
     render: (_e, c) => {
       c.render.heroHurt(1);
       c.render.shake(0.4, 1);
     },
+    fx: (e, c) => c.fx?.minigameMissed(e),
   }),
-  MinigameEnded: b("MinigameEnded", { silent: "the finisher plate follows" }),
-  FinisherShown: b("FinisherShown", { render: (_e, c) => c.render.slowMo(0.55, 0.5) }),
+  MinigameEnded: b("MinigameEnded", {
+    silent: "the finisher plate follows",
+    fxNone: "the finisher plate follows",
+  }),
+  FinisherShown: b("FinisherShown", {
+    render: (_e, c) => c.render.slowMo(0.55, 0.5),
+    fxNone: "the finisher cinematic (T2.6 FinisherCinematic) owns the scene",
+  }),
   FinisherCompleted: b("FinisherCompleted", {
     render: (_e, c) => {
       c.render.hitStop(0.12);
-      c.render.punch(1.5, 0.025, 0.12);
+      c.render.punch(1.5, 0.006, 0.03);
     },
+    fxNone:
+      "the finisher cinematic (T2.6 FinisherCinematic) draws the arcs, camera push and landing",
   }),
 
   // ---- rewards ----
-  GoldGained: b("GoldGained"),
-  ChestDropped: b("ChestDropped", { silent: "listed on the results screen; chest pop-up is T3.2" }),
+  GoldGained: b("GoldGained", { fx: (e, c) => c.fx?.goldGained(e) }),
+  ChestDropped: b("ChestDropped", {
+    silent: "listed on the results screen; chest pop-up is T3.2",
+    fx: (e, c) => c.fx?.chestDropped(e),
+  }),
 
   // ---- trial (never in a level stream) ----
-  TrialStarted: b("TrialStarted", { silent: "Typing Trial events are not produced by a level" }),
-  TrialEnded: b("TrialEnded", { silent: "Typing Trial events are not produced by a level" }),
+  TrialStarted: b("TrialStarted", {
+    silent: "Typing Trial events are not produced by a level",
+    fxNone: "Typing Trial events are not produced by a level",
+  }),
+  TrialEnded: b("TrialEnded", {
+    silent: "Typing Trial events are not produced by a level",
+    fxNone: "Typing Trial events are not produced by a level",
+  }),
 };
 
 const TUTORIAL_TEXT: Record<EventOf<"TutorialCue">["cue"], string> = {
@@ -386,6 +521,7 @@ export class EventRouter {
     const s = this.sinks;
     const binding = BINDINGS[e.type] as EventBinding<SimEventType>;
     (binding.render as ((ev: SimEvent, c: BindingCtx) => void) | undefined)?.(e, s);
+    (binding.fx as ((ev: SimEvent, c: BindingCtx) => void) | undefined)?.(e, s);
     if (binding.hud === "push") s.hud.pushEvent(e);
     if (binding.audio === "bound" && s.audio) dispatchAudioEvent(e, s.audio);
     const list = this.hooks.get(e.type);

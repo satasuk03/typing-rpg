@@ -35,7 +35,8 @@ import { screenToActionPlane } from "./screenToWorld";
 import type { TimeDilation } from "./TimeDilation";
 import type { TypingFxCallbacks, TypingFxSettings, WorldAnchors } from "./types";
 
-const POOL_A_USED = [384, 288, 192] as const;
+/** 384 for typing + 192 reserved for the T2.3 combat effects (they share the pool and its single draw call). */
+const POOL_A_USED = [576, 432, 288] as const;
 export const WORLD_Q = [1.0, 0.8, 0.55] as const;
 /** Light flashes are multiplied so they actually light the diorama (spec numbers read as torch-weak). */
 const FLASH_GAIN = 0.85;
@@ -106,8 +107,8 @@ export class TypingWorldFx {
     private readonly td: TimeDilation,
     private readonly cb: TypingFxCallbacks,
   ) {
-    this.poolA = new PooledParticles(384, true, world.scene);
-    this.poolB = new PooledParticles(128, false, world.scene);
+    this.poolA = new PooledParticles(576, true, world.scene);
+    this.poolB = new PooledParticles(192, false, world.scene);
     this.lights = new LightSlots(world.lights);
     this.aura = new HeroAura(world, this.poolA, this.poolB, this.lights);
     this.blade = new BladeGlow(world, this.poolA);
