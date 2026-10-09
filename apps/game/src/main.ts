@@ -41,6 +41,12 @@ function boot(): void {
     return;
   }
 
+  // Playable level: ?scene=play&level=ch1-l03[&wpm-bot=40] (src/dev/playScene.ts).
+  if (new URLSearchParams(location.search).get("scene") === "play") {
+    void import("./dev/playScene").then((m) => m.start(glCanvas));
+    return;
+  }
+
   // Dev-only route: ?scene=level&id=ch1-l03&pose=walk|battle:1|boss renders a level from its layout data.
   if (new URLSearchParams(location.search).get("scene") === "level") {
     void import("./dev/levelScene").then((m) => m.start(glCanvas));
