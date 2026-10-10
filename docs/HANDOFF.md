@@ -32,7 +32,7 @@ For the next orchestrator session. Read this, then `docs/STATUS.md` (task table,
    - Boss intro: the Golem reads washed white with sparkle motes during the intro card (`apps/game/tests/vfx/__shots__/metal-l10-boss-intro.png`; that still predates the H1 merge, so re-capture on main first: the HUD should be hidden there now).
    - Fireball + auto-slash on the bright forest still make a large white glare blob next to the hero (`metal-real-skillcast.png`).
    - Parry hex shards and the BREAK ring are barely visible.
-   - `tests/level/typing-fx.spec.ts` L10 flaked once on the "pop/tag covers a letter" HUD invariant (passed on re-run): investigate on a quiet machine.
+   - `tests/level/typing-fx.spec.ts` L10 flaked once on the "pop/tag covers a letter" HUD invariant (passed on re-run): investigate on a quiet machine. (Ch2 L10 "letter outside its plate" flake root-caused and fixed: a wrapped line's trailing space cell lay up to one cell past the plate frame; see `tests/hud/plateWrap.test.ts`. The Ch1 "pop/tag" flake is a different invariant and is still unexplained.)
    - Metal-only specs: run `*.metal.ts` with `apps/game/tests/vfx/playwright.metal.config.ts` (the default configs skip them).
    - A good next step is a second Opus art review on Metal captures of `main` to confirm the backlog is closed and decide on PO sign-off material.
 3. **Re-measure on a quiet machine** (no agents running): `apps/game/tests/hud/typingPerf.spec.ts` (budget 0.45 ms/key amortised; it fails only under load) and `typingSettings.spec.ts`. Also re-run `pnpm --filter game exec playwright test -c tests/perf/playwright.config.ts frame-budget` once.
@@ -62,6 +62,7 @@ Always pass a unique port (`PW_PORT`, `LEVEL_PORT`, `PERF_PORT`, `APP_PORT`). Co
 | Spec | What | Cost / notes |
 |---|---|---|
 | `tests/hud/readability.spec.ts`, `guardLeakHud.spec.ts`, `ch2Hud.spec.ts` | HUD readability, leak badge, Ch2 HUD invariants | in `scripts/check.sh` (~15 s) |
+| `tests/level/typing-fx-ch2.spec.ts` (+ shared `tests/level/fxProbe.ts`) | **Required pre-sign-off run, not in check.sh** (about 5 min on Metal, far too slow for the gate): real-runner readability sweep of `ch2-l01`, `ch2-l05`, `ch2-l10` (Hush Spells, riddles, finisher): HUD invariants incl. "letter outside its plate", next-letter contrast, 0 console errors. Run `LEVEL_GL=metal LEVEL_PORT=<port> ./node_modules/.bin/playwright test -c tests/level/playwright.config.ts typing-fx-ch2`. Use Metal: on SwiftShader the bot loses the Willow, so the sentence/riddle phases are not exercised. Regression for the L10 flake: `tests/hud/plateWrap.test.ts` (unit, in check.sh) |
 | `tests/app/chapter.spec.ts` | **Ch1 only** (ids filtered to chapter 1 since T3.4): fresh profile, title to CHAPTER COMPLETE, 75 WPM bot, real time | ~15 min, SwiftShader, opt-in |
 | `tests/app/ch2Flow.spec.ts` | Ch2 map tabs, unlock moment, Ignore-capitals, intro card (typed with Shift, then skipped) | fast |
 | `tests/perf/full-run.spec.ts` | Ch1 L1-L10 in one page, 0 console errors, Metal | ~15 min, opt-in |
