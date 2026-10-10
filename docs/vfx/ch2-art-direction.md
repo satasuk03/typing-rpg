@@ -1,5 +1,15 @@
 # C0.2 Chapter II "The Hushwood": art and audio direction brief
 
+> **Orchestrator note on naming (2026-10-10).** Where names differ, `docs/interfaces.md` v2.0 wins. Map this brief's names as follows:
+> - `RiddleShown` → `RiddleStarted`.
+> - `RiddleAnswered` / `RiddleTimedOut` → `RiddleResolved{right|wrong|timeout}`, with `RiddleLeafPicked` on each pick.
+> - "uppercase flag" → `CharCorrect.shifted`.
+> - `BossPhaseChanged` already exists. "BossFreed" is the existing defeat/finish flow, restyled for the Willow.
+> - `HealerCasting` isn't in v2.0. Derive the wind-up in render from the heal cadence (`EnemyView.healer`); only propose a new event if that proves insufficient.
+> - `Ground.kind`, `QualitySettings.waterReflect` and the extended `BiomeName` are render/audio-side names. The T2.x and T3.3 agents own them, so they aren't sim contracts.
+>
+> **Sprite quality.** The mock sprites set the **direction only**. The Gloom Wolf and Mire Toad read as flat and blocky, the Willow fronds read as noise, and the Shade goes near-black. T2.3 must clearly exceed them before an Opus art review passes.
+
 Status: direction pass (Opus art director). Implementers: T2.1 (hushwood + grove), T2.2 (fen + water), T2.3 (sprites), T2.4 (layouts), T3.2 (VFX), T3.3 (audio).
 Inputs: `docs/CH2_PLAN.md` (the PO decisions block is binding), `docs/vfx/typing-vfx-spec.md` (format, R1–R9), `docs/brainstorm/04-art-vfx-sfx-research.md`, and the real render and audio code (`apps/game/src/render/{biomes,lighting,quality}.ts`, `render/post/*`, `render/materials/*`, `render/sprites/*`, `render/ambient/*`, `render/world/*`, `apps/game/src/audio/*`).
 
