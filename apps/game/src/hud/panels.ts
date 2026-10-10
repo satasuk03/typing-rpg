@@ -1,5 +1,6 @@
 /** Bars and panels: hero HP/ATB, skills, stats, combo + key streak, enemy bars, boss plate. */
 import type { EnemyView, LevelView, SkillView } from "@hd2d/sim";
+import { drawHealCross } from "./ch2Glyphs";
 import type { Ctx } from "./draw";
 import { bar, clamp, damageIcon, diamond, frame, shieldBadge, txt } from "./draw";
 import type { Rect } from "./layout";
@@ -357,15 +358,17 @@ export function drawSkill(p: PanelCtx, sk: SkillView, charge: number): void {
 // ---------------------------------------------------------------- enemies
 
 export const ENEMY_BAR_W = 88;
-export const enemyBarsRect = (fx: number, fy: number, leak = false): Rect =>
-  leak
-    ? { x: fx - 74, y: fy - 6, w: 156, h: 62 }
-    : {
-        x: fx - 74,
-        y: fy + 8,
-        w: 156,
-        h: 48,
-      };
+export const enemyBarsRect = (fx: number, fy: number, leak = false, tags = false): Rect =>
+  tags
+    ? { x: fx - 74, y: fy - 14, w: 156, h: 70 }
+    : leak
+      ? { x: fx - 74, y: fy - 6, w: 156, h: 62 }
+      : {
+          x: fx - 74,
+          y: fy + 8,
+          w: 156,
+          h: 48,
+        };
 
 /** v1.9 guard leak: "20%" when the enemy's typed guard lets damage through, else null (no badge at all). */
 export function leakBadgeLabel(e: { leakBp?: number }): string | null {
@@ -398,6 +401,72 @@ export function drawLeakBadge(c: Ctx, label: string, x: number, cy: number): voi
   );
   c.restore();
   txt(c, label, x0 + 3 + ICON_PX + 3, cy + 1, sz, "#ff9a8a", { w: 700, stroke: false });
+}
+
+/** v2.0: healer badge and/or elite tag need the tall bars rect (a tag row above the HP bar). */
+export const enemyHasTags = (e: { elite?: boolean; healer?: unknown }): boolean =>
+  e.elite === true || !!e.healer;
+
+/** Healer charge in 0..1 (fills as the heal comes due); null = paused / no heals left (ring hidden). */
+export function healerCharge(h: NonNullable<EnemyView["healer"]>): number | null {
+  if (h.ticksLeft === null || h.totalTicks <= 0) return null;
+  return clamp(1 - h.ticksLeft / h.totalTicks, 0, 1);
+}
+
+/**
+ * v2.0 tag row above the HP bar: the green healer badge (disc + pixel cross + charge ring + heals left) and
+ * the gold ELITE tag. Green is reserved for healing; gold matches the elite sprite rim. Both are static
+ * except a small badge swell in the last 600 ms before a heal (off in reduced motion).
+ */
+export function drawEnemyTags(p: PanelCtx, e: EnemyView, x: number, cy: number): void {
+  const { c } = p;
+  let tx = x - 44;
+  const h = e.healer;
+  if (h) {
+    const charge = healerCharge(h);
+    const cx = tx + 10;
+    const soon = h.ticksLeft !== null && h.ticksLeft <= 36 && !p.settings.reducedMotion;
+    const px = soon ? 2 + Math.round(0.5 + 0.5 * Math.sin(p.time * 14)) : 2;
+    c.fillStyle = "rgba(0,0,0,0.9)";
+    c.beginPath();
+    c.arc(cx, cy, 11.5, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = charge === null ? "#18241c" : "#0c2a18";
+    c.beginPath();
+    c.arc(cx, cy, 9.5, 0, Math.PI * 2);
+    c.fill();
+    if (charge !== null) {
+      c.lineWidth = 3;
+      c.strokeStyle = "rgba(92,240,138,0.25)";
+      c.beginPath();
+      c.arc(cx, cy, 8, 0, Math.PI * 2);
+      c.stroke();
+      c.strokeStyle = "#5cf08a";
+      c.beginPath();
+      c.arc(cx, cy, 8, -Math.PI / 2, -Math.PI / 2 + charge * Math.PI * 2);
+      c.stroke();
+    }
+    drawHealCross(c, cx, cy, px, charge === null ? "#6a8a74" : "#d8ffe4");
+    tx += 24;
+    if (h.healsLeft !== null) {
+      const label = `x${h.healsLeft}`;
+      txt(c, label, tx, cy + 1, 12, charge === null ? "#8aa894" : "#8af0ae", { w: 700 });
+      tx += label.length * 8 + 8;
+    }
+  }
+  if (e.elite) {
+    const w = 50;
+    c.fillStyle = "rgba(0,0,0,0.9)";
+    c.fillRect(tx - 1, cy - 9, w + 2, 18);
+    c.fillStyle = "#4a3208";
+    c.fillRect(tx, cy - 8, w, 16);
+    c.fillStyle = "#ffd25a";
+    c.fillRect(tx, cy - 8, w, 2);
+    c.fillRect(tx, cy + 6, w, 2);
+    c.fillStyle = "#ffe08a";
+    c.fillRect(tx + 4, cy - 2, 4, 4);
+    txt(c, "ELITE", tx + 12, cy + 1, 11, "#ffe9a8", { w: 700, ls: 1, stroke: false });
+  }
 }
 
 export interface EnemyBarState {
@@ -433,6 +502,7 @@ export function drawEnemyBars(
   if (e.shieldMax > 0) shieldBadge(c, x - 58, y + 6, String(e.shield), broken, 13);
   const leak = leakBadgeLabel(e);
   if (leak) drawLeakBadge(c, leak, x + 44, fy + 2);
+  if (enemyHasTags(e) && !e.isBoss) drawEnemyTags(p, e, x, fy + 1);
   e.weaknesses.forEach((wk, i) => {
     damageIcon(c, wk.type, x + 58 + i * 20, y + 6, 6, wk.revealed);
   });

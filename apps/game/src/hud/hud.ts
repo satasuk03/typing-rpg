@@ -23,6 +23,7 @@ import {
   drawTopLabel,
   ENEMY_BAR_W,
   enemyBarsRect,
+  enemyHasTags,
   HERO_PANEL,
   heroAtbRect,
   SKILL_AREA,
@@ -44,6 +45,7 @@ import {
   popAlpha,
   popScale,
 } from "./pops";
+import { activeRiddle, drawRiddlePanel, riddlePanelRect } from "./riddlePanel";
 import type { HudSettings } from "./settings";
 import { DEFAULT_HUD_SETTINGS, normalizeSettings } from "./settings";
 import { getSkillIcon } from "./skillIcons";
@@ -124,6 +126,19 @@ export interface HudDebugSnapshot {
   /** Hero-panel text rows (CSS px); they must never overlap each other. */
   panelTextRects: { id: string; rect: Rect }[];
   bannerRects: Rect[];
+  /** v2.0 riddle panel rect (CSS px), null when no live riddle. Pops/tags and plates must keep clear. */
+  riddlePanelRect?: Rect | null;
+  /** v2.0 gutter cues (shift key cap / leaf glyph, CSS px) and healer/elite tag rows: none may touch a plate letter. */
+  cueRects?: Rect[];
+  tagRects?: Rect[];
+  /** v2.0 per-plate cue flags: the ⇧ cue is drawn iff `shiftCue`; healer/elite tags per enemy. */
+  cues?: {
+    shiftCue: number[];
+    exactCase: number[];
+    healers: number;
+    elites: number;
+    leaves: number;
+  };
   /**
    * FX pixels (alpha > 10) of the typing-FX above layer inside the keep-out rects (hero panel above the
    * ATB bar, boss plate, stats panel, guard label rows, next letter +4 px). Set only while the typing FX
@@ -202,6 +217,7 @@ export class Hud {
   private popTexts: string[] = [];
   private heroRectCss: Rect | null = null;
   private bossRectCss: Rect | null = null;
+  private riddleRectDesign: Rect | null = null;
   private panelText: { id: string; rect: Rect }[] = [];
   /** 0 during the boss intro, then 1 over 300 ms: panels, combo and skill orbs fade back in. */
   private introFade = 1;
@@ -785,10 +801,15 @@ export class Hud {
       : undefined;
     if (boss) avoid.push({ ...bossPlateRect(W), h: bossPlateRect(W).h + 22 });
     else avoid.push(TOP_LABEL_RECT(W));
+    // v2.0 riddle panel: a hard keep-out for every plate, pop and tag (null while there is no live riddle)
+    const riddle = introHold ? null : activeRiddle(view);
+    this.riddleRectDesign = riddle ? riddlePanelRect(W, !!boss) : null;
+    if (this.riddleRectDesign) avoid.push({ ...this.riddleRectDesign });
+    const isRiddle = view.minigame?.kind === "riddle";
     for (const e of view.enemies) {
       if (!e.alive || e.isBoss || introHold) continue;
       const f = this.anchorDesign(e, "feet");
-      avoid.push(enemyBarsRect(f.x, f.y, (e.leakBp ?? 0) > 0));
+      avoid.push(enemyBarsRect(f.x, f.y, (e.leakBp ?? 0) > 0, enemyHasTags(e)));
     }
     for (const r of this.reserved) {
       avoid.push({ x: r.x / this.s, y: r.y / this.s, w: r.w / this.s, h: r.h / this.s });
@@ -801,7 +822,8 @@ export class Hud {
     }
     const minLanes = view.minigame?.lanes ?? 3;
     for (const p of plates) {
-      const g = measurePlate(c, p);
+      const leaf = isRiddle && p.kind === "minigame";
+      const g = measurePlate(c, p, leaf);
       geoms.set(p.id, g);
       const owner = p.ownerId === null ? undefined : view.enemies.find((e) => e.id === p.ownerId);
       let ax = W / 2;
@@ -816,7 +838,8 @@ export class Hud {
             ? clamp((p.expiresAtTick - nowTick) / p.totalTicks, 0, 1)
             : 0.5;
         ax = W * (0.22 + (0.56 * (p.lane + 0.5)) / Math.max(1, minLanes));
-        ay = 150 + (1 - tl) * (H * 0.55);
+        // riddle leaves stay put (the clue is being read); rubble falls with its timer
+        ay = isRiddle ? H * 0.6 : 150 + (1 - tl) * (H * 0.55);
       }
       const priority = p.kind === "guard" || p.kind === "doom" || p.kind === "secondWind" ? 0 : 1;
       boxes.push({ id: p.id, w: g.w, h: g.h, ax, ay, priority });
@@ -910,6 +933,8 @@ export class Hud {
           this.lerpPrev(sk.chargeFrac, (p) => p.skills.find((x) => x.slot === sk.slot)?.chargeFrac),
         );
       drawComboDisplay(pc, view);
+      if (riddle && this.riddleRectDesign)
+        drawRiddlePanel(c, this.riddleRectDesign, riddle, this.alpha, this.time, set.reducedFlash);
       c.globalAlpha = 1;
     }
 
@@ -1024,6 +1049,7 @@ export class Hud {
       obst.push(br);
       this.bossRectCss = this.toCss(bossPlateRect(this.W));
     } else this.bossRectCss = null;
+    if (this.riddleRectDesign) obst.push(inflate(this.riddleRectDesign, 6));
     obst.push(
       COMBO_AREA(this.W),
       { ...HERO_PANEL },
@@ -1104,7 +1130,9 @@ export class Hud {
           x: bp.x + bp.w / 2 - base.w / 2,
           y: bp.y + bp.h + 24,
         };
-        const free = !this.entriesBoxes().some((b) => overlapsRect(r, inflate(b, 4)));
+        const free =
+          !this.entriesBoxes().some((b) => overlapsRect(r, inflate(b, 4))) &&
+          !(this.riddleRectDesign && overlapsRect(r, inflate(this.riddleRectDesign, 6)));
         if (free) {
           p.offX = r.x - base.x;
           p.offY = r.y - base.y;
@@ -1474,6 +1502,33 @@ export class Hud {
       bossPlateRect: this.bossRectCss ? { ...this.bossRectCss } : null,
       panelTextRects: this.panelText.map((t) => ({ id: t.id, rect: this.toCss(t.rect) })),
       bannerRects: this.bannerRects.map((r) => ({ ...r })),
+      cueRects: [...this.entries.entries()]
+        .filter(([id]) => {
+          const v = this.view?.plates.find((x) => x.id === id);
+          return !!v && (v.exactCase || this.view?.minigame?.kind === "riddle");
+        })
+        .map(([, en]) =>
+          this.toCss({
+            x: en.box.x + 2,
+            y: en.box.y + en.geom.fy + en.geom.fh / 2 - 13,
+            w: 26,
+            h: 26,
+          }),
+        ),
+      tagRects: (this.view?.enemies ?? [])
+        .filter((e) => e.alive && !e.isBoss && enemyHasTags(e))
+        .map((e) => {
+          const f = this.anchorDesign(e, "feet");
+          return this.toCss({ x: f.x - 46, y: f.y - 11, w: 92, h: 24 });
+        }),
+      riddlePanelRect: this.riddleRectDesign ? this.toCss(this.riddleRectDesign) : null,
+      cues: {
+        shiftCue: (this.view?.plates ?? []).filter((p) => p.shiftNext).map((p) => p.id),
+        exactCase: (this.view?.plates ?? []).filter((p) => p.exactCase).map((p) => p.id),
+        healers: (this.view?.enemies ?? []).filter((e) => e.alive && e.healer).length,
+        elites: (this.view?.enemies ?? []).filter((e) => e.alive && e.elite).length,
+        leaves: this.view?.minigame?.kind === "riddle" ? (this.view.plates ?? []).length : 0,
+      },
       fxKeepOut: this.keepOutProbe?.(),
       fx: this.fx.count,
       banners: this.banners.banners.length,

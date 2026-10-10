@@ -227,9 +227,12 @@ export async function makeWorldBackdrop(
 export function start(glCanvas: HTMLCanvasElement): void {
   const q = new URLSearchParams(location.search);
   const scenarioParam = q.get("scenario") as MockScenario | null;
-  const scenario: MockScenario = SCENARIOS.includes(scenarioParam as MockScenario)
-    ? (scenarioParam as MockScenario)
-    : "forest";
+  const riddleMode = q.get("riddle") === "1";
+  const scenario: MockScenario = riddleMode
+    ? "boss"
+    : SCENARIOS.includes(scenarioParam as MockScenario)
+      ? (scenarioParam as MockScenario)
+      : "forest";
   const wpm = Number(q.get("wpm") ?? 40) || 40;
   const at = Number(q.get("at") ?? 0) || 0;
   const pause = q.get("pause") === "1";
@@ -281,6 +284,10 @@ export function start(glCanvas: HTMLCanvasElement): void {
     scenario,
     wpm,
     leakBp: Math.round(Number(q.get("leak") ?? 0) * 100) || 0,
+    riddle: riddleMode,
+    shift: q.get("shift") === "1",
+    healer: q.get("healer") === "1",
+    elite: q.get("elite") === "1",
   });
   const DT = 1 / 60;
   const stepOnce = (renderFrame: boolean): void => {
