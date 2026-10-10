@@ -8,14 +8,25 @@
  * sim is player input, through `LevelRunner.handleKey`.
  */
 import { contentBundle } from "@hd2d/content";
-import { getView, type LevelResult, type LevelView, type SimEvent } from "@hd2d/sim";
+import {
+  getView,
+  type LevelResult,
+  type LevelView,
+  prologueRunConfig,
+  type SimEvent,
+} from "@hd2d/sim";
+import { PrologueOverlay } from "../app/prologueOverlay";
 import { type AudioApi, AudioEngine, type BiomeName } from "../audio";
+import { CutscenePlayer } from "../cutscene/player";
+import type { Cue, Timeline } from "../cutscene/types";
 import { Hud } from "../hud";
 import { loadHudFonts } from "../hud/fonts";
 import type { HudSettings } from "../hud/settings";
 import { KeyboardCapture, pressKey } from "../input/keyboard";
 import { isQualityTier, type QualityTier, RenderWorld } from "../render";
-import { buildWorld, loadLevel, toRenderBiome } from "../render/world";
+import { type BiomeMood, blendMood } from "../render/biomes";
+import type { CameraPose } from "../render/camera";
+import { buildWorld, levelIds, loadLevel, toRenderBiome } from "../render/world";
 import { WpmBot } from "./bot";
 import { attachCombatFx, type SessionCombatFx } from "./combatFx";
 import { freshSeed, makeRunConfig, type PlayParams } from "./config";
@@ -45,11 +56,70 @@ export interface SessionOptions extends PlayParams {
   /** App mode: a shared engine that outlives the level (the session will not dispose it). */
   audioEngine?: AudioEngine;
   hudSettings?: Partial<HudSettings>;
+  /**
+   * Prologue mode (P3.5). The run is `prologueRunConfig(contentBundle)` and nothing else (`runConfig`/`hooks` are ignored),
+   * the sim starts at the cutscene's `startPlay` cue, no results screen / save commit / run ticket ever happens.
+   * Pass `levelId: prologueLayoutId()`.
+   */
+  prologue?: PrologueModeOptions;
   /** App mode: the meta layer. `onFinished` runs once when the results open (the save writer commits there). */
   hooks?: {
     onFinished?(result: LevelResult, cfg: RunConfig, leakDamage: number): ResultExtras | undefined;
     next(): void;
     exit(): void;
+  };
+}
+
+/** Prologue session mode (interfaces v2.2 §14.3): Part A cutscene -> Part B real sim -> Part C cutscene, one world. */
+export interface PrologueModeOptions {
+  /** Replay mode (title "Prologue" button): the caller never writes the flag. The session itself never writes anything. */
+  replay: boolean;
+  timelines: { open: Timeline; unwriting: Timeline };
+  /** Test-only: multiplies the idle thresholds (nudge 9 s, ring hint 20 s, auto-advance 75 s). Default 1. */
+  idleScale?: number;
+  /** Test-only: how long Esc must be held to skip (default `SKIP_HOLD_MS` = 1000), so a still can be taken mid-hold. */
+  holdMs?: number;
+  /** The prologue is over (finished or skipped), after the 400 ms fade. The caller disposes the session and routes. */
+  onDone(how: "end" | "skip"): void;
+}
+
+/** Hold Esc this long to skip the whole prologue; the ring shows after `RING_SHOW_MS`. */
+export const SKIP_HOLD_MS = 1000;
+const RING_SHOW_MS = 250;
+export const PROLOGUE_NUDGE_S = 9;
+export const PROLOGUE_RING_HINT_S = 20;
+export const PROLOGUE_AUTO_ADVANCE_S = 75;
+const PROLOGUE_FADE_MS = 400;
+
+interface ProState {
+  readonly o: PrologueModeOptions;
+  phase: "A" | "B" | "C" | "done";
+  player: CutscenePlayer | null;
+  overlay: PrologueOverlay;
+  idleMs: number;
+  escDownAt: number | null;
+  escTimer: number;
+  climaxed: boolean;
+  finishing: boolean;
+  /** Why Part C started: the sim's climax, or the idle auto-advance. */
+  cReason: "climax" | "idle" | null;
+  offs: (() => void)[];
+}
+
+/** The layout the prologue plays on: `assets/levels/prologue.json` once it exists, else a Ch1 boss level (fallback). */
+export function prologueLayoutId(): string {
+  const want = contentBundle.prologue?.layoutId ?? "prologue";
+  return levelIds().includes(want) ? want : "ch1-l10";
+}
+
+/** Placeholder UNWRITTEN grade for the cutscene's mood blend (the real constant is P2.x's); P3.6 swaps this. */
+function drain(base: BiomeMood): BiomeMood {
+  return {
+    ...base,
+    sat: base.sat * 0.18,
+    exposure: base.exposure * 0.92,
+    fogCol: [0.2, 0.21, 0.24],
+    vig: base.vig * 1.2,
   };
 }
 
@@ -89,6 +159,15 @@ export interface PlayDebug {
   perf(phase: string): PerfStats;
   resultsShown(): boolean;
   stage(): ReturnType<LevelStage["debug"]>;
+  /** Prologue mode only: the flow state (test hook). */
+  prologue?(): {
+    phase: string;
+    idleMs: number;
+    nudge: boolean;
+    ringHint: boolean;
+    cReason: string | null;
+    simStarted: boolean;
+  };
   /** Dev (`&demo=1`): play a combat VFX on the first living enemy (see dev/combatFxDemo.ts). */
   demo?: (name: string) => boolean;
   consoleErrors: string[];
@@ -124,6 +203,8 @@ export class PlaySession {
   private biome: BiomeName | null = null;
   private pace: number;
   private readonly ownsAudio: boolean;
+  /** Prologue mode state (null for every story level). */
+  private pro: ProState | null = null;
 
   private constructor(
     private readonly opts: SessionOptions,
@@ -132,7 +213,9 @@ export class PlaySession {
   ) {
     this.world = world;
     this.stage = stage;
-    const cfg = opts.runConfig ?? makeRunConfig(opts);
+    const cfg = opts.prologue
+      ? prologueRunConfig(contentBundle)
+      : (opts.runConfig ?? makeRunConfig(opts));
     this.pace = cfg.options.pace;
     this.hud = new Hud(opts.hudCanvas);
     this.hud.setProjector(stage.projector);
@@ -146,6 +229,7 @@ export class PlaySession {
       quit: () => this.quit(),
       next: () => this.next(),
       exit: opts.hooks ? () => opts.hooks?.exit() : undefined,
+      skip: opts.prologue ? () => this.skipPrologue() : undefined,
     });
     this.router = new EventRouter({
       render: stage,
@@ -180,6 +264,7 @@ export class PlaySession {
       onAutoPause: (reason) => {
         // A bot run (tests) is allowed to lose focus; a human run is not.
         if (reason === "blur" && this.bot) return;
+        this.pro?.player?.pause(); // a cutscene part freezes its clock instead (resumed on focus)
         this.openPause(reason);
       },
     });
@@ -227,9 +312,10 @@ export class PlaySession {
     window.addEventListener("resize", resize);
     this.hud.setQuality(this.world.qualityTier); // caps the HUD backing-store DPR per tier
     resize();
+    if (this.opts.prologue) this.attachPrologue(this.opts.prologue);
     this.keyboard.attach();
     this.setBiomeFromWorld(true);
-    this.runner.start(performance.now());
+    if (!this.pro) this.runner.start(performance.now());
     this.lastNow = performance.now();
     this.raf = requestAnimationFrame((t) => this.frame(t));
   }
@@ -238,6 +324,7 @@ export class PlaySession {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.keyboard.detach();
+    this.detachPrologue();
     this.combat?.dispose();
     this.typingFx?.dispose();
     this.screens.dispose();
@@ -252,6 +339,14 @@ export class PlaySession {
   private onEvents(events: SimEvent[]): void {
     for (const e of events) this.seenCounts[e.type] = (this.seenCounts[e.type] ?? 0) + 1;
     this.leakDamage += sumLeakDamage(events);
+    const pro = this.pro;
+    if (pro) {
+      // Prologue: the climax hands the stage to Part C; the sim's LevelCleared (gold 0) is never presented (no banner,
+      // no fanfare, no results screen, no save commit).
+      if (events.some((e) => e.type === "PrologueClimax")) pro.climaxed = true;
+      this.router.dispatch(events.filter((e) => e.type !== "LevelCleared"));
+      return;
+    }
     this.router.dispatch(events);
     for (const e of events) {
       if (e.type === "LevelCleared") this.resultAt = performance.now() + 3600;
@@ -265,6 +360,17 @@ export class PlaySession {
 
   private onKey(key: string, ts: number): void {
     const r = this.runner;
+    const pro = this.pro;
+    if (pro) {
+      if (pro.finishing) return;
+      // Parts A and C: only Space/Enter (a cutscene line); letters never advance anything.
+      if (pro.phase !== "B") {
+        if (pro.phase !== "done") pro.player?.key(key);
+        return;
+      }
+      if (key === "Escape") return; // owned by the hold/tap handler (keyup), see attachPrologue
+      this.noteInput();
+    }
     if (r.paused) {
       if (key === "Escape" && r.pauseReason === "menu") this.resume();
       return;
@@ -282,9 +388,10 @@ export class PlaySession {
 
   openPause(reason: PauseReason): void {
     if (this.runner.terminal || this.runner.paused) return;
+    if (this.pro && this.pro.phase !== "B") return; // cutscene parts have no pause menu (blur freezes the cutscene clock)
     this.runner.pause(performance.now(), reason);
     this.pauseShown = true;
-    this.screens.showPause(reason);
+    this.screens.showPause(reason, this.pro !== null);
   }
 
   resume(): void {
@@ -361,8 +468,9 @@ export class PlaySession {
     const dt = Math.min(0.25, Math.max(0, rawDt));
     const r = this.runner;
 
+    const pro = this.pro;
     let paused = r.paused;
-    if (!paused) {
+    if (!paused && pro?.phase !== "C" && pro?.phase !== "done") {
       const f = r.frame(now);
       this.lastView = f.view;
       this.lastAlpha = f.alpha;
@@ -370,9 +478,14 @@ export class PlaySession {
     }
     if (paused && !this.pauseShown && !r.terminal) {
       this.pauseShown = true;
-      this.screens.showPause(r.pauseReason ?? "menu");
+      this.screens.showPause(r.pauseReason ?? "menu", pro !== null);
     }
-    const view = this.lastView;
+    if (pro) this.proFrame(now, Math.min(1, Math.max(0, rawDt)), paused);
+    // Part C: the HUD shows no plates (the cinematic HUD is P3.3's); the sim is not stepped any more.
+    const view: LevelView =
+      this.pro?.phase === "C"
+        ? { ...this.lastView, plates: [], targetPlateId: null }
+        : this.lastView;
     const alpha = paused ? 0 : this.lastAlpha;
     const animDt = paused ? 0 : dt;
 
@@ -386,7 +499,8 @@ export class PlaySession {
     this.screens.updateView(view);
     this.audio?.update();
 
-    if (!paused) this.bot?.update(() => getView(this.runner.state), now);
+    if (!paused && (!pro || pro.phase === "B"))
+      this.bot?.update(() => getView(this.runner.state), now);
 
     if (this.resultAt !== null && now >= this.resultAt && !this.resultsShown) {
       const res = r.result;
@@ -416,6 +530,259 @@ export class PlaySession {
   }
 
   // ------------------------------------------------------------------------------------------- debug
+
+  // ------------------------------------------------------------------------------------------- prologue (P3.5)
+
+  private attachPrologue(o: PrologueModeOptions): void {
+    const overlay = new PrologueOverlay();
+    const pro: ProState = {
+      o,
+      phase: "A",
+      player: null,
+      overlay,
+      idleMs: 0,
+      escDownAt: null,
+      escTimer: 0,
+      climaxed: false,
+      finishing: false,
+      cReason: null,
+      offs: [],
+    };
+    this.pro = pro;
+    const holdMs = o.holdMs ?? SKIP_HOLD_MS;
+    this.hud.setPanelAlpha(0); // Part A is a cutscene: no panels until the sim starts
+    const listen = <K extends keyof WindowEventMap>(
+      type: K,
+      fn: (e: WindowEventMap[K]) => void,
+      capture = false,
+    ): void => {
+      window.addEventListener(type, fn, { capture });
+      pro.offs.push(() => window.removeEventListener(type, fn, { capture }));
+    };
+    // Esc is owned here for the whole prologue (registered before the KeyboardCapture, so it never sees Esc): its keydown
+    // keeps its normal meaning in Part B (drop the target / pause menu / resume), and holding it for `holdMs` skips
+    // everything. Synthetic Escapes (the wpm-bot drops targets with a bare keydown) never start a hold.
+    listen(
+      "keydown",
+      (e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (pro.finishing) return;
+        if (!e.isTrusted) {
+          this.escTap(e.timeStamp);
+          return;
+        }
+        if (e.repeat || pro.escDownAt !== null) return;
+        pro.escDownAt = e.timeStamp;
+        this.escTap(e.timeStamp);
+        // a timer, not the frame loop, completes the hold: a slow frame must not turn a 1 s hold into a miss
+        window.clearTimeout(pro.escTimer);
+        pro.escTimer = window.setTimeout(() => {
+          if (pro.escDownAt !== null) this.skipPrologue();
+        }, holdMs);
+        const downAt = pro.escDownAt;
+        window.setTimeout(() => {
+          if (pro.escDownAt === downAt && !pro.finishing)
+            overlay.setProgress(RING_SHOW_MS / holdMs);
+        }, RING_SHOW_MS);
+      },
+      true,
+    );
+    listen(
+      "keyup",
+      (e) => {
+        if (e.key !== "Escape") return;
+        const at = pro.escDownAt;
+        pro.escDownAt = null;
+        window.clearTimeout(pro.escTimer);
+        overlay.setProgress(null);
+        if (at !== null && !pro.finishing && e.timeStamp - at >= holdMs) this.skipPrologue();
+      },
+      true,
+    );
+    listen("blur", () => {
+      pro.escDownAt = null;
+      window.clearTimeout(pro.escTimer);
+      overlay.setProgress(null);
+    });
+    listen("focus", () => pro.player?.resume());
+    const vis = (): void => {
+      if (document.visibilityState === "visible") pro.player?.resume();
+    };
+    document.addEventListener("visibilitychange", vis);
+    pro.offs.push(() => document.removeEventListener("visibilitychange", vis));
+    // Part A opens with the "Hold Esc to skip" hint for 3 s
+    overlay.setRingHint(true);
+    const hintTimer = window.setTimeout(() => {
+      if (pro.phase === "A") overlay.setRingHint(false);
+    }, 3000);
+    pro.offs.push(() => window.clearTimeout(hintTimer));
+    pro.player = this.makePlayer(o.timelines.open);
+    pro.player.start();
+  }
+
+  private detachPrologue(): void {
+    const pro = this.pro;
+    if (!pro) return;
+    for (const off of pro.offs.splice(0)) off();
+    window.clearTimeout(pro.escTimer);
+    pro.player?.release();
+    pro.player = null;
+    pro.overlay.dispose();
+  }
+
+  private makePlayer(tl: Timeline): CutscenePlayer {
+    const h = this.stage.handle;
+    const pose = (n: string): CameraPose | undefined => {
+      try {
+        return h.cameraPose(n as never);
+      } catch {
+        return undefined;
+      }
+    };
+    const walk = h.cameraPose("walk");
+    const home = { ...walk, x: h.getAnchor("start").x + 3.2 };
+    const hs = this.hud.getSettings();
+    return new CutscenePlayer(tl, {
+      env: {
+        basePose: tl.setup === "continue" ? { ...this.world.camera.pose } : home,
+        anchors: {
+          walk: home,
+          battle: pose("battle:1"),
+          bossIntro: pose("boss"),
+          boss: pose("boss"),
+        },
+        reducedMotion: hs.reducedMotion,
+        effectsIntensity: hs.effectsIntensity,
+      },
+      director: this.stage.director(),
+      moodAt: (k) => {
+        const base: BiomeMood = h.moodAt(this.world.camera.pose.x);
+        return blendMood(base, drain(base), k);
+      },
+      sink: { onCue: (c) => this.onCue(c) },
+    });
+  }
+
+  private onCue(c: Cue): void {
+    const pro = this.pro;
+    if (!pro || pro.finishing) return;
+    if (c.kind === "startPlay") {
+      if (pro.phase !== "A") return;
+      pro.phase = "B";
+      pro.idleMs = 0;
+      pro.overlay.setRingHint(false);
+      this.hud.setPanelAlpha(1);
+      this.runner.start(performance.now());
+    } else if (c.kind === "sfx") {
+      try {
+        this.audio?.play(c.id);
+      } catch {
+        /* audio is best-effort */
+      }
+    }
+  }
+
+  /** Any real input in Part B: the idle clock restarts and the nudge / ring hint go away. */
+  private noteInput(): void {
+    const pro = this.pro;
+    if (!pro) return;
+    pro.idleMs = 0;
+    pro.overlay.setNudge(false);
+    pro.overlay.setRingHint(false);
+  }
+
+  /** A quick tap of Esc (released before the ring shows). Only Part B uses it: pause menu / resume / drop the target. */
+  private escTap(ts: number): void {
+    const r = this.runner;
+    if (this.pro?.phase !== "B") return;
+    this.noteInput();
+    if (r.paused) {
+      if (r.pauseReason === "menu") this.resume();
+      return;
+    }
+    if (r.terminal) return;
+    if (getView(r.state).targetPlateId === null) {
+      this.openPause("menu");
+      return;
+    }
+    r.handleKey("Escape", ts);
+  }
+
+  private beginPartC(reason: "climax" | "idle"): void {
+    const pro = this.pro;
+    if (!pro || pro.phase === "C" || pro.finishing) return;
+    pro.phase = "C";
+    pro.cReason = reason;
+    pro.overlay.setNudge(false);
+    pro.overlay.setRingHint(false);
+    this.hud.setPanelAlpha(0);
+    this.hud.banners.clear();
+    this.screens.closePanel();
+    pro.player?.release();
+    pro.player = this.makePlayer(pro.o.timelines.unwriting);
+    pro.player.start();
+    pro.player.climax(); // input is ignored for 1.5 s after the climax
+  }
+
+  /** Per frame: the hold-Esc ring, the cutscene clock, the idle ladder, the climax handover. */
+  private proFrame(now: number, dtSec: number, paused: boolean): void {
+    const pro = this.pro;
+    if (!pro || pro.finishing || pro.phase === "done") return;
+    if (pro.escDownAt !== null) {
+      const held = now - pro.escDownAt;
+      const holdMs = pro.o.holdMs ?? SKIP_HOLD_MS;
+      pro.overlay.setProgress(held >= RING_SHOW_MS ? held / holdMs : null);
+      if (held >= holdMs) {
+        this.skipPrologue();
+        return;
+      }
+    }
+    if (pro.player) {
+      pro.player.tick(dtSec * 1000);
+      if (pro.player.isFinished) {
+        if (pro.phase === "C") {
+          this.finish("end");
+          return;
+        }
+        pro.player.release(); // Part A is over: the stage takes its camera back
+        pro.player = null;
+      }
+    }
+    if (pro.phase !== "B") return;
+    if (pro.climaxed) {
+      this.beginPartC("climax");
+      return;
+    }
+    // idle only counts while there is something to type: not in the boss intro or between encounters (keys are ignored there)
+    if (paused || this.runner.terminal || this.lastView.phase !== "combat") return;
+    pro.idleMs += dtSec * 1000;
+    const k = (pro.o.idleScale ?? 1) * 1000;
+    if (pro.idleMs >= PROLOGUE_NUDGE_S * k) pro.overlay.setNudge(true);
+    if (pro.idleMs >= PROLOGUE_RING_HINT_S * k) pro.overlay.setRingHint(true);
+    if (pro.idleMs >= PROLOGUE_AUTO_ADVANCE_S * k) this.beginPartC("idle");
+  }
+
+  /** Skip the whole prologue (hold Esc, or the pause menu): 400 ms fade, then `onDone("skip")`. */
+  skipPrologue(): void {
+    this.finish("skip");
+  }
+
+  private finish(how: "end" | "skip"): void {
+    const pro = this.pro;
+    if (!pro || pro.finishing) return;
+    pro.finishing = true;
+    pro.escDownAt = null;
+    pro.overlay.setProgress(null);
+    pro.overlay.setNudge(false);
+    pro.overlay.setRingHint(false);
+    this.screens.closePanel();
+    void pro.overlay.fadeOut(PROLOGUE_FADE_MS).then(() => {
+      pro.phase = "done";
+      if (!this.disposed) pro.o.onDone(how);
+    });
+  }
 
   perf(phase: string): PerfStats {
     const a = this.perfByPhase.get(phase) ?? [];
@@ -447,6 +814,17 @@ export class PlaySession {
       perf: (p) => this.perf(p),
       resultsShown: () => this.resultsShown,
       stage: () => this.stage.debug(),
+      prologue: () => {
+        const p = this.pro;
+        return {
+          phase: p?.phase ?? "none",
+          idleMs: p?.idleMs ?? 0,
+          nudge: p?.overlay.nudgeOn ?? false,
+          ringHint: p?.overlay.ringHintOn ?? false,
+          cReason: p?.cReason ?? null,
+          simStarted: this.runner.gameMs(performance.now()) > 0,
+        };
+      },
       consoleErrors,
     };
   }

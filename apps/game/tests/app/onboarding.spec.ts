@@ -4,7 +4,17 @@
  * The first-session timing run (AC b) is in `firstSession.spec.ts`.
  */
 import { test } from "@playwright/test";
-import { expect, openApp, route, save, shot, typeCalibration, waitRoute } from "./helpers";
+import {
+  expect,
+  openApp,
+  prologueFlag,
+  route,
+  save,
+  shot,
+  skipPrologue,
+  typeCalibration,
+  waitRoute,
+} from "./helpers";
 import { seedProgress } from "./seed";
 
 test.setTimeout(10 * 60_000);
@@ -51,7 +61,8 @@ test("fresh profile: story, calibration, L1 tutorial cards in order, never over 
   await page.waitForSelector("#menu:not([hidden])");
   expect(await page.locator("[data-act=continue]").textContent()).toBe("Start game");
   await page.keyboard.press("Enter");
-  await waitRoute(page, "story");
+  await skipPrologue(page); // P3.5: Start game plays the prologue first; the full run is in prologueFlow.spec.ts
+  expect(await prologueFlag(page)).toBe(true);
 
   // 3 panels, any key advances
   await page.waitForTimeout(400);
@@ -152,8 +163,9 @@ test("returning profile skips the onboarding", async ({ page }) => {
   await page.waitForSelector("#menu:not([hidden])");
   expect(await page.locator("[data-act=continue]").textContent()).toBe("Continue");
   await page.keyboard.press("Enter");
-  await waitRoute(page, "map"); // straight to the map: no story, no calibration, no tutorial
+  await waitRoute(page, "map"); // straight to the map: no story, no calibration, no tutorial, no prologue
   expect((await save(page)).pace.calibrationWpm).toBeNull();
+  expect(await prologueFlag(page)).toBe(false); // never forced through the prologue, and nothing was written
 });
 
 test("Esc skips the story and the calibration; a skipped profile still reaches L1", async ({
@@ -162,7 +174,7 @@ test("Esc skips the story and the calibration; a skipped profile still reaches L
   await openApp(page, "api=off&audio=0&dev=1&onboard=1");
   await page.keyboard.press("Space");
   await page.keyboard.press("Enter");
-  await waitRoute(page, "story");
+  await skipPrologue(page);
   await page.keyboard.press("Escape");
   await waitRoute(page, "calibrate");
   await page.keyboard.press("Escape");

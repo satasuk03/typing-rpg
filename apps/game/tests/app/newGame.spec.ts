@@ -4,7 +4,8 @@
  * covered by the net e2e and `tests/net/saveSync.test.ts`.
  */
 import { test } from "@playwright/test";
-import { expect, openApp, save, waitRoute } from "./helpers";
+import type { AppDebug } from "../../src/app/app";
+import { expect, openApp, prologueFlag, route, save, waitProPhase, waitRoute } from "./helpers";
 import { seedProgress } from "./seed";
 
 const Q = "api=off&audio=0&dev=1";
@@ -48,5 +49,27 @@ test("New Game erases progress and it stays gone after a reload", async ({ page 
   await page.waitForSelector("#menu:not([hidden])");
   expect(await page.locator("[data-act=continue]").textContent()).toBe("Start game");
   expect(await page.locator("[data-act=new]").count()).toBe(0);
+  expect(run.errors).toEqual([]);
+});
+
+test("New Game with onboarding on erases the profile and the prologue plays again", async ({
+  page,
+}) => {
+  const run = await openApp(page, `${Q}&onboard=1`);
+  await seedProgress(page, { cleared: 3 });
+  await page.evaluate(() => (window.__app as AppDebug).store.markPrologueSeen());
+  await page.waitForTimeout(600);
+  await page.reload(); // the title builds its buttons from the save: reload so it offers "New game"
+  await waitRoute(page, "title");
+  expect(await prologueFlag(page)).toBe(true);
+  await page.keyboard.press("Space");
+  await page.waitForSelector("#menu:not([hidden])");
+  await page.locator("[data-act=new]").focus();
+  await page.keyboard.press("Enter");
+  await page.locator("[data-act=erase]").focus();
+  await page.keyboard.press("Enter");
+  await waitProPhase(page, "A"); // the reset cleared the #prologue flag: the first-run flow starts with the prologue
+  expect(await route(page)).toBe("prologue");
+  expect(await prologueFlag(page)).toBe(false);
   expect(run.errors).toEqual([]);
 });

@@ -14,14 +14,15 @@ import { HOW_TO_PLAY_CSS } from "../hud/howToPlay";
 import { injectUiTheme } from "../hud/uiTheme";
 import type { RunConfig } from "../level/runner";
 import type { ResultExtras } from "../level/screens";
-import { PlaySession } from "../level/session";
-import { introSeen, isFirstRun, type LevelCommit } from "../meta/ops";
+import { PlaySession, prologueLayoutId } from "../level/session";
+import { introSeen, isFirstRun, type LevelCommit, prologueSeen } from "../meta/ops";
 import type { SaveStore } from "../meta/save";
 import type { Net } from "../net";
 import type { QualityTier } from "../render";
 import { Backdrop, backdropLevelFor } from "./backdrop";
 import { defaultChapter, introChapterOf, needsWillowHint, WILLOW_HINT } from "./chapters";
 import { KeyNav, type NavScope } from "./nav";
+import { PROLOGUE_TIMELINES } from "./prologueTimelines";
 import { APP_CSS } from "./style";
 
 export interface Screen {
@@ -107,7 +108,7 @@ declare global {
 }
 
 export interface AppDebug {
-  route(): ScreenName | "play";
+  route(): ScreenName | "play" | "prologue";
   store: SaveStore;
   app: App;
   consoleErrors: string[];
@@ -127,7 +128,7 @@ export class App {
   readonly net: Net;
   readonly audio: AudioEngine | null;
   readonly bundle: ContentBundle;
-  route: ScreenName | "play" = "title";
+  route: ScreenName | "play" | "prologue" = "title";
   lastRun: LastRun | null = null;
   session: PlaySession | null = null;
   tier: QualityTier;
@@ -180,6 +181,11 @@ export class App {
    */
   beginFirstRun(): boolean {
     if (!this.onboardingEnabled || !isFirstRun(this.store.save)) return false;
+    // P3.5: a fresh profile starts with the prologue (Part A cutscene, Part B real sim, Part C cutscene), then the story card
+    if (!prologueSeen(this.store.save)) {
+      void this.playPrologue({ after: "story", replay: false });
+      return true;
+    }
     if (this.store.save.pace.calibrationWpm !== null) void this.play("ch1-l01");
     else this.go("story", {});
     return true;
@@ -281,7 +287,7 @@ export class App {
   rebuildBackdrop(): void {
     this.backdrop?.dispose();
     this.backdrop = null;
-    if (this.route !== "play") this.ensureBackdrop();
+    if (this.route !== "play" && this.route !== "prologue") this.ensureBackdrop();
   }
 
   /** PNG data URL of the procedural chest sprite (via the backdrop's RenderWorld), or "" when unavailable. */
@@ -492,6 +498,71 @@ export class App {
 
   consoleErrors: string[] = [];
 
+  private prologueBusy = false;
+
+  /**
+   * The prologue (P3.5): Part A cutscene -> Part B (the real sim, `prologueRunConfig`) -> Part C cutscene, in a prologue-mode
+   * PlaySession. Hold Esc for 1 s skips it from anywhere. `replay` (the title button) never writes the save; first-run mode
+   * writes only the `#prologue` flag, at the end or on a skip (never at the start: closing the tab mid-way replays it).
+   * Then it opens `after`: the story card (first run) or the title (replay).
+   */
+  async playPrologue(opt: { after: "story" | "title"; replay: boolean }): Promise<void> {
+    if (this.session || this.prologueBusy) return;
+    this.prologueBusy = true;
+    this.closeAllModals();
+    this.nav.setBase(null);
+    for (const d of this.disposers.splice(0)) d();
+    this.screen?.dispose?.();
+    this.screen?.root.remove();
+    this.screen = null;
+    this.root.style.display = "none";
+    this.backdrop?.dispose();
+    this.backdrop = null;
+    this.route = "prologue";
+    const bot = this.deps.bot;
+    const s = this.store.save.settings;
+    const q = new URLSearchParams(location.search);
+    const idle = Number(q.get("pidle"));
+    const hold = Number(q.get("phold"));
+    try {
+      this.session = await PlaySession.create({
+        glCanvas: this.deps.glCanvas,
+        hudCanvas: this.deps.hudCanvas,
+        levelId: prologueLayoutId(),
+        tier: this.tier,
+        audio: this.audio !== null,
+        fonts: this.deps.fonts,
+        audioEngine: this.audio ?? undefined,
+        hudSettings: {
+          effectsIntensity: s.effectsIntensity,
+          reducedFlash: s.reducedFlash,
+          reducedMotion: s.reducedMotion,
+        },
+        bot: bot ? { wpm: bot.wpm, accuracy: bot.accuracy, seed: bot.seed } : undefined,
+        prologue: {
+          replay: opt.replay,
+          timelines: PROLOGUE_TIMELINES,
+          idleScale: idle > 0 ? idle : undefined, // test-only: ?pidle=0.05 shortens the idle ladder (9 / 20 / 75 s)
+          holdMs: hold > 0 ? hold : undefined, // test-only: ?phold=6000 lengthens the Esc hold (stills mid-hold)
+          onDone: () => {
+            const sess = this.session;
+            this.session = null;
+            queueMicrotask(() => {
+              sess?.dispose();
+              window.__play = undefined;
+              this.root.style.display = "";
+              if (!opt.replay) this.store.markPrologueSeen();
+              this.go(opt.after, {});
+            });
+          },
+        },
+      });
+    } finally {
+      this.prologueBusy = false;
+    }
+    if (this.session) window.__play = this.session.debugApi(this.consoleErrors);
+  }
+
   private onFinished(result: LevelResult, cfg: RunConfig, leakDamage = 0): ResultExtras {
     const known = new Set(Object.keys(this.store.save.journal.firstSeen));
     const summary = this.store.applyResult(result, cfg);
@@ -507,7 +578,7 @@ export class App {
         );
       if (summary.chestGold > 0) notes.push(`+${summary.chestGold} gold from chests`);
       for (const id of summary.unlocked.actives)
-        notes.push(`<b>Skill unlocked</b>: ${b.actives.find((a) => a.id === id)?.name ?? id}`);
+        notes.push(`<b>Power regained</b>: ${b.actives.find((a) => a.id === id)?.name ?? id}`);
       for (const id of summary.unlocked.passives)
         notes.push(`<b>Passive unlocked</b>: ${b.passives.find((p) => p.id === id)?.name ?? id}`);
       for (const g of summary.gearGained)

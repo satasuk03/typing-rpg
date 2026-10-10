@@ -239,6 +239,10 @@ export class SaveStore {
   markIntroSeen(chapter: number): void {
     this.commit(ops.markIntroSeen(this.cur, chapter, this.now()));
   }
+  /** The prologue was finished or skipped in first-run mode (never called on a replay). */
+  markPrologueSeen(): void {
+    this.commit(ops.markPrologueSeen(this.cur, this.now()));
+  }
   patchSettings(patch: Parameters<typeof ops.patchSettings>[1]): void {
     this.commit(ops.patchSettings(this.cur, patch, this.now()));
   }

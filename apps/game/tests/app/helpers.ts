@@ -101,4 +101,51 @@ export async function typeCalibration(
   return typed;
 }
 
+/** Title -> "Start game" (or Continue): press a key, then Enter on the first menu button. */
+export async function pressStart(page: Page): Promise<void> {
+  await page.keyboard.press("Space");
+  await page.waitForSelector("#menu:not([hidden])");
+  await page.keyboard.press("Enter");
+}
+
+export interface ProState {
+  phase: string;
+  idleMs: number;
+  nudge: boolean;
+  ringHint: boolean;
+  cReason: string | null;
+  simStarted: boolean;
+}
+
+/** The prologue flow state (`__play.prologue()`), or null while the prologue session is not up. */
+export const proState = (page: Page): Promise<ProState | null> =>
+  page.evaluate(() => window.__play?.prologue?.() ?? null);
+
+/** Waits until the prologue session is up and in `phase` ("A" | "B" | "C"). */
+export async function waitProPhase(page: Page, phase: string, timeout = 120_000): Promise<void> {
+  await page.waitForFunction((p) => window.__play?.prologue?.().phase === p, phase, {
+    timeout,
+    polling: 100,
+  });
+}
+
+/** Holds Esc for `ms` (the skip needs 1000 ms), then releases. */
+export async function holdEsc(page: Page, ms = 1500): Promise<void> {
+  await page.keyboard.down("Escape");
+  await page.waitForTimeout(ms);
+  await page.keyboard.up("Escape");
+}
+
+/** From "Start game": skip the whole prologue with a held Esc and land on the story card (the flag is then set). */
+export async function skipPrologue(page: Page): Promise<void> {
+  await waitProPhase(page, "A");
+  await holdEsc(page);
+  await waitRoute(page, "story");
+}
+
+export const prologueFlag = (page: Page): Promise<boolean> =>
+  page.evaluate(
+    () => (window.__app as AppDebug).store.save.journal.firstSeen["#prologue"] !== undefined,
+  );
+
 export { expect };
