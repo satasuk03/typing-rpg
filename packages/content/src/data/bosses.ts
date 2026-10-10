@@ -112,7 +112,7 @@ export const NUL: BossDef = BossDef.parse({
   name: "Nul",
   title: "The Silent King",
   enemyId: "nul",
-  hp: 4800,
+  hp: 5050,
   hit: 380,
   attackPower: 16,
   plateLength: [4, 5],

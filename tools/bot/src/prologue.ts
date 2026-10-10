@@ -118,10 +118,7 @@ export function summarize(runs: readonly PrologueRun[], persona: PersonaId): Pro
   const castsMin: Record<string, number> = {};
   for (const id of ids) {
     castsMean[id] = mean(rs.map((r) => r.casts[id] ?? 0));
-    // Mending Light only casts once the hero has lost HP (sim rule: smart hp < 60%, forced "asap" hp < max), and the
-    // Aegis/Bulwark barriers plus guard words let a competent typist take no damage at all: judge it on the runs that were hurt.
-    const pool = id === "mendingLight" ? rs.filter((r) => r.minHpPct < 99.9) : rs;
-    castsMin[id] = pool.length === 0 ? 99 : Math.min(...pool.map((r) => r.casts[id] ?? 0));
+    castsMin[id] = Math.min(...rs.map((r) => r.casts[id] ?? 0));
   }
   const perMin = rs.map((r) =>
     r.typingS === null ? 0 : (Object.values(r.casts).reduce((a, b) => a + b, 0) * 60) / r.typingS,
@@ -235,7 +232,7 @@ export function prologueTable(g: PrologueGate): string {
   const ids = Object.keys(g.rows[0]?.castsMean ?? {});
   lines.push(
     "",
-    "casts per kit active (mean / min over runs; Mending min is over runs where the hero lost HP; typing window is judged on the persona MEAN)",
+    "casts per kit active (mean / min over runs; typing window is judged on the persona MEAN)",
   );
   lines.push(
     ...fmt(

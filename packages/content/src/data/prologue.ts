@@ -5,10 +5,10 @@ import { PrologueDef } from "../schemas.ts";
  * levels drive the map, unlocks and balance cells, none of which the prologue touches.
  * All prologue numbers live here (never in balance.ts). P1.3 tuned them with `pnpm bot --prologue` (tools/bot/src/prologue.ts).
  * Tuned numbers (power fantasy: the hero stays above 50% HP for most of the run): pace 30 (long guard windows), encounter hp
- * 1250 per wave, gruntHit 90, attackPower 16 (guard leak at its cap), castGapS 2.0, surge 16/18 s doubling every 3 s (bounds
- * the 20 WPM run), bossMinS 20. Nul (bosses.ts / enemies.ts): hp 4800, hit 380, interval 3 s, shield 9.
- * Mending Light only casts once the hero has lost HP (sim rule), and barriers plus guard words let 40/75 WPM typists take no
- * damage at all, so it is gated only on runs where the hero was hurt (tools/bot/src/prologue.ts).
+ * 1320 per wave, gruntHit 90, attackPower 16 (guard leak at its cap), castGapS 2.0, forceAfterS 2 (so Aegis goes asap before a
+ * Bulwark Streak barrier fills its cap), surge 16/18 s doubling every 3 s (bounds the 20 WPM run), bossMinS 20.
+ * Nul (bosses.ts / enemies.ts): hp 5050, hit 380, interval 3 s, shield 9.
+ * Interfaces v2.2.1: asap Mending Light casts at full HP on the prologue, so every kit active casts for a player who is never hit.
  *
  *  - segments: one "Servants" encounter of two waves (shade, wisp, shade / wisp, shade, wisp), then Nul + 2 adds.
  *    No walks (the cold open and the boss intro cover the pacing), no gimmicks, no elites (brand-new players, no Reveal).
@@ -114,7 +114,7 @@ export const PROLOGUE = PrologueDef.parse({
       kind: "encounter",
       encounter: {
         name: "Servants",
-        hp: 1250,
+        hp: 1320,
         gruntHit: 90,
         attackPower: 16,
         waves: [
@@ -149,7 +149,7 @@ export const PROLOGUE = PrologueDef.parse({
   gear: { archetype: "sword", tier: 3, rarity: "L", upgrade: 5 },
   chargeMult: 2.5,
   castGapS: 2.0,
-  forceAfterS: 4,
+  forceAfterS: 2,
   heroHpFloorPct: 25,
   surge: { encounterAfterS: 16, bossAfterS: 18, doubleEveryS: 3, maxMult: 16 },
   bossMinS: 20,

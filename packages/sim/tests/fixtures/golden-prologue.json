@@ -3,8 +3,8 @@
   "simVersion": 1,
   "goldens": {
     "perfect-clear": {
-      "state": "2a2b54f6",
-      "events": "5d4d7f3e",
+      "state": "dfb49592",
+      "events": "ba2c2600",
       "inputs": 101,
       "endTick": 1709,
       "outcome": "cleared",
@@ -13,8 +13,8 @@
       "heroHpM": 871063
     },
     "random-clear": {
-      "state": "a64a01a1",
-      "events": "658db13d",
+      "state": "8df86a50",
+      "events": "4106ffc4",
       "inputs": 124,
       "endTick": 1768,
       "outcome": "cleared",
