@@ -6,6 +6,7 @@ import {
   type TypingGolden,
   typingGoldens,
 } from "../tests/typingGolden.ts";
+import { type WillowGolden, willowGoldens } from "../tests/willowGolden.ts";
 
 (
   globalThis as unknown as {
@@ -14,6 +15,7 @@ import {
       typingGoldens: () => Record<string, TypingGolden>;
       combatGoldens: () => Record<string, CombatGolden>;
       trialGoldens: () => Record<string, TrialGolden>;
+      willowGoldens: () => Record<string, WillowGolden>;
     };
   }
 ).__parity = {
@@ -21,4 +23,5 @@ import {
   typingGoldens,
   combatGoldens,
   trialGoldens,
+  willowGoldens,
 };

@@ -234,6 +234,8 @@ export function addCombo(state: LevelState, delta: number, emit: Emit): void {
 
 // ---------------------------------------------------------------- key handling
 
+const isUpperAz = (c: string): boolean => c.length === 1 && c >= "A" && c <= "Z";
+
 const matches = (plate: PlateState, index: number, key: string): boolean => {
   const want = plate.text.charAt(index);
   return plate.fold ? want.toLowerCase() === key.toLowerCase() : want === key;
@@ -267,6 +269,19 @@ export function handleKey(state: LevelState, key: SimKey, hooks: TypingHooks, em
   }
   enc.targetPlateId = hit.id;
   emit({ type: "TargetAcquired", tick: state.tick, plateId: hit.id, ownerId: hit.ownerId });
+  const riddle = enc.boss?.riddle?.active;
+  if (hit.kind === "minigame" && riddle != null) {
+    // v2.0 Riddle of Leaves: acquiring a leaf is the player's pick (every time, also after an Escape and a re-pick)
+    const lane = riddle.leaves.findIndex((l) => l.plateId === hit.id);
+    if (lane >= 0)
+      emit({
+        type: "RiddleLeafPicked",
+        tick: state.tick,
+        riddleIndex: riddle.index,
+        plateId: hit.id,
+        lane,
+      });
+  }
   correctChar(state, hit, hooks, emit);
 }
 
@@ -315,6 +330,13 @@ function correctChar(state: LevelState, plate: PlateState, hooks: TypingHooks, e
     keyStreak: streak,
     keyStreakTier: streakTier,
     atbGainM: gainM,
+    // v2.0 capital accent: an uppercase letter typed exactly on an exact-case plate (set only when true). Chapter 2+ only,
+    // so a Ch1 level (whose sentences fold) keeps a byte-identical event stream even on a fixture with foldSentences off.
+    ...(!plate.fold &&
+    run.def.chapter > K.SENTENCE_FOLD_CASE_MAX_CHAPTER &&
+    isUpperAz(plate.text.charAt(idx))
+      ? { shifted: true }
+      : {}),
   });
   setKeyStreak(state, streak, emit);
   burst(state, emit);

@@ -12,6 +12,7 @@ export const RNG_STREAMS = [
   "loot",
   "trial",
   "meta",
+  "riddle", // v2.0: the Riddle of Leaves (appended; existing streams are keyed by name, so unchanged)
 ] as const;
 export type RngStream = (typeof RNG_STREAMS)[number];
 

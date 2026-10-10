@@ -115,6 +115,36 @@ export interface RubbleWord {
   landTick: Tick;
 }
 
+/** One leaf of the active riddle: its plate (null while a Second Wind has removed it) and text. The lane is the array index. */
+export interface RiddleLeaf {
+  plateId: PlateId | null;
+  text: string;
+}
+
+/**
+ * Riddle of Leaves state (interfaces 3.6, v2.0). Plain data. Present only on a riddle boss, from the start of phase 3;
+ * absent for the Golem, so Ch1 state hashes are unchanged.
+ */
+export interface RiddleState {
+  rng: RngState; // the `riddle` stream (exactly 5 draws per riddle)
+  index: number; // riddles started so far = the 0-based index of the next riddle
+  asked: string[]; // answer texts of the riddles started so far (an answer is never repeated)
+  /** The riddle on screen, or null between riddles. `leaves` are in lane order 0..2. */
+  active: {
+    index: number;
+    clue: string;
+    leaves: RiddleLeaf[];
+    answerSlot: number; // lane of the right leaf
+    deadline: Tick;
+    totalTicks: number;
+  } | null;
+  nextAt: Tick | null; // tick the next riddle starts (null while one is active or after the last)
+  rights: number;
+  wrongs: number;
+  timeouts: number;
+  last: { outcome: "right" | "wrong" | "timeout"; answerText: string } | null; // the previous riddle's result (view)
+}
+
 /** Ruin Golem script state (T1.5): phases, Doom Spells, the Falling Rubble minigame and the finisher. */
 export interface BossState {
   enemyId: EntityId;
@@ -133,6 +163,8 @@ export interface BossState {
   minigameActive: boolean;
   lastDoomText: string | null; // anti-repeat for consecutive Doom Spells
   rng: RngState; // the `boss` stream (doom sentences, rubble words and lanes)
+  /** v2.0: Riddle of Leaves state; absent unless the boss's phase-3 minigame is a riddle (and until phase 3 starts). */
+  riddle?: RiddleState;
 }
 
 export interface EncounterState {

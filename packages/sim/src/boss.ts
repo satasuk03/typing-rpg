@@ -24,6 +24,8 @@ import { K } from "./balance.ts";
 import {
   bossAttacksSuspended,
   doomEveryTicks,
+  riddleOf,
+  riddleTicks,
   rubbleFallTicks,
   rubbleFirstSpawnTicks,
   rubbleOf,
@@ -46,7 +48,14 @@ import { setPhase } from "./flow.ts";
 import { cancelAttack } from "./guard.ts";
 import { isTypable } from "./input.ts";
 import { below, deriveRng } from "./rng.ts";
-import type { BossState, EncounterState, EnemyState, PlateState } from "./state.ts";
+import type {
+  BossState,
+  EncounterState,
+  EnemyState,
+  PlateState,
+  RiddleLeaf,
+  RiddleState,
+} from "./state.ts";
 import type { LevelState, ResolvedBoss } from "./types.ts";
 import { addPlate, dropTarget, findPlate, removePlate, visibleFirstLetters } from "./typing.ts";
 import { FALLBACK_WORDS, firstLetter } from "./words.ts";
@@ -125,10 +134,15 @@ export function stepBoss(state: LevelState, emit: Emit): void {
       beginBreather(state, bs, boss, bs.phase === 1 ? 2 : 3, emit);
       return;
     }
-    if (bs.phase === 3 && bs.rubble.length === 0) {
+    // Falling Rubble: the wave in flight ends at the final gate. A riddle ignores the HP: it ends after `count` riddles.
+    if (bs.phase === 3 && bs.riddle === undefined && bs.rubble.length === 0) {
       finishMinigame(state, bs, boss, emit);
       return;
     }
+  }
+
+  if (bs.phase === 3 && bs.riddle !== undefined && bs.minigameActive) {
+    if (stepRiddle(state, bs, boss, def, bs.riddle, emit)) return;
   }
 
   if (bs.phase === 2 && bs.doom === null && bs.nextDoomTick !== null && t >= bs.nextDoomTick)
@@ -193,6 +207,28 @@ export function endBreather(state: LevelState, emit: Emit): void {
   resumeEncounter(state, emit);
   if (bs.phase === 2) {
     bs.nextDoomTick = t + doomEveryTicks(state, def);
+  } else if (bs.phase === 3 && def.phase3.minigame.kind === "riddle") {
+    // Riddle of Leaves (interfaces 3.6.1): the `riddle` stream is derived now; the first riddle is due after the gap.
+    const mg = riddleOf(def.phase3.minigame);
+    bs.minigameActive = true;
+    bs.riddle = {
+      rng: deriveRng(state.seed, "riddle", enc.index),
+      index: 0,
+      asked: [],
+      active: null,
+      nextAt: t + mg.gapTicks,
+      rights: 0,
+      wrongs: 0,
+      timeouts: 0,
+      last: null,
+    };
+    emit({
+      type: "MinigameStarted",
+      tick: t,
+      enemyId: bs.enemyId,
+      kind: "riddle",
+      lanes: mg.leaves,
+    });
   } else if (bs.phase === 3) {
     bs.minigameActive = true;
     bs.nextSpawnTick = t + rubbleFirstSpawnTicks(state);
@@ -339,6 +375,219 @@ function failDoom(
   bs.doom = null;
   bs.doomsResolved++;
   bs.nextDoomTick = state.tick + doomEveryTicks(state, def);
+}
+
+// ---------------------------------------------------------------- Riddle of Leaves (interfaces 3.6)
+
+type RiddleMg = Extract<ResolvedBoss["phase3"]["minigame"], { kind: "riddle" }>;
+type RiddleWord = NonNullable<LevelState["run"]["def"]["riddles"]>[number];
+
+/** Step 5 of a riddle phase: the timeout, the finisher after `count` riddles, then the next riddle. True = the hero went down. */
+function stepRiddle(
+  state: LevelState,
+  bs: BossState,
+  boss: EnemyState,
+  def: ResolvedBoss,
+  rd: RiddleState,
+  emit: Emit,
+): boolean {
+  const mg = riddleOf(def.phase3.minigame);
+  const t = state.tick;
+  if (rd.active !== null) {
+    if (t < rd.active.deadline) return false;
+    const enc = state.enc as EncounterState;
+    const target = findPlate(enc, enc.targetPlateId);
+    if (target !== null && rd.active.leaves.some((l) => l.plateId === target.id))
+      dropTarget(state, "plateChanged", emit);
+    return resolveRiddle(state, bs, boss, mg, rd, "timeout", null, emit);
+  }
+  if (rd.index >= mg.count) {
+    finishMinigame(state, bs, boss, emit);
+    return false;
+  }
+  if (rd.nextAt !== null && t >= rd.nextAt && !startRiddle(state, boss, mg, rd, emit))
+    finishMinigame(state, bs, boss, emit); // an empty candidate set (impossible with validated content): end early
+  return false;
+}
+
+/**
+ * Picks and shows a riddle: exactly 5 `below()` draws on the `riddle` stream (answer, decoy 1, decoy 2, then a 2-step
+ * Fisher-Yates shuffle), three distinct case-folded first letters, none colliding with another visible plate. False = a
+ * candidate set was empty.
+ */
+function startRiddle(
+  state: LevelState,
+  boss: EnemyState,
+  mg: RiddleMg,
+  rd: RiddleState,
+  emit: Emit,
+): boolean {
+  const enc = state.enc as EncounterState;
+  const t = state.tick;
+  const pool = state.run.def.riddles ?? [];
+  const forbidden = visibleFirstLetters(enc);
+  const fl = (w: RiddleWord): string => firstLetter(w.text);
+  const answers = pool.filter((w) => !rd.asked.includes(w.text) && !forbidden.includes(fl(w)));
+  if (answers.length === 0) return false;
+  const answer = answers[below(rd.rng, answers.length)] as RiddleWord;
+  const decoys1 = pool.filter(
+    (w) => w.text !== answer.text && !forbidden.includes(fl(w)) && fl(w) !== fl(answer),
+  );
+  if (decoys1.length === 0) return false;
+  const d1 = decoys1[below(rd.rng, decoys1.length)] as RiddleWord;
+  const decoys2 = decoys1.filter((w) => fl(w) !== fl(d1));
+  if (decoys2.length === 0) return false;
+  const d2 = decoys2[below(rd.rng, decoys2.length)] as RiddleWord;
+  const leaves = [answer, d1, d2];
+  for (const i of [2, 1]) {
+    const j = below(rd.rng, i + 1);
+    const tmp = leaves[i] as RiddleWord;
+    leaves[i] = leaves[j] as RiddleWord;
+    leaves[j] = tmp;
+  }
+  const total = riddleTicks(state, mg);
+  const deadline = t + total;
+  const ids = leaves.map(
+    (w, lane) =>
+      addPlate(
+        state,
+        {
+          ownerId: boss.id,
+          kind: "minigame",
+          text: w.text,
+          lane,
+          expiresAt: deadline,
+          totalTicks: total,
+        },
+        emit,
+      ).id,
+  );
+  const idx = rd.index;
+  rd.active = {
+    index: idx,
+    clue: answer.clue,
+    leaves: leaves.map((w, lane) => ({ plateId: ids[lane] as number, text: w.text })),
+    answerSlot: leaves.indexOf(answer),
+    deadline,
+    totalTicks: total,
+  };
+  rd.index++;
+  rd.asked.push(answer.text);
+  rd.nextAt = null;
+  emit({
+    type: "RiddleStarted",
+    tick: t,
+    enemyId: boss.id,
+    riddleIndex: idx,
+    riddleCount: mg.count,
+    clue: answer.clue,
+    leafPlateIds: [ids[0] as number, ids[1] as number, ids[2] as number],
+    deadlineTick: deadline,
+    totalTicks: total,
+  });
+  return true;
+}
+
+/** A leaf was completed (right or wrong). Called from the plate-completed hook, after WordCompleted and PlateRemoved. */
+export function answerRiddle(state: LevelState, plate: PlateState, emit: Emit): void {
+  const enc = state.enc as EncounterState;
+  const bs = enc.boss as BossState;
+  const rd = bs.riddle as RiddleState;
+  const act = rd.active;
+  if (act === null) return;
+  const lane = act.leaves.findIndex((l) => l.plateId === plate.id);
+  if (lane < 0) return;
+  const mg = riddleOf(bossDef(state).phase3.minigame);
+  resolveRiddle(
+    state,
+    bs,
+    bossEnemy(enc, bs),
+    mg,
+    rd,
+    lane === act.answerSlot ? "right" : "wrong",
+    plate,
+    emit,
+  );
+}
+
+/**
+ * Ends the active riddle with `outcome`. Event order (3.6.5-7): right/wrong = RiddleResolved, PlateRemoved{expired} for the
+ * leaves still up, then the Hit (right) or the hero's missHit (wrong); timeout = PlateRemoved{expired} x3, RiddleResolved,
+ * missHit. Returns true when the missHit downed the hero (the encounter froze).
+ */
+function resolveRiddle(
+  state: LevelState,
+  bs: BossState,
+  boss: EnemyState,
+  mg: RiddleMg,
+  rd: RiddleState,
+  outcome: "right" | "wrong" | "timeout",
+  picked: PlateState | null,
+  emit: Emit,
+): boolean {
+  const enc = state.enc as EncounterState;
+  const run = state.run;
+  const act = rd.active as NonNullable<RiddleState["active"]>;
+  const answer = act.leaves[act.answerSlot] as RiddleLeaf;
+  const resolved = {
+    type: "RiddleResolved" as const,
+    tick: state.tick,
+    enemyId: boss.id,
+    riddleIndex: act.index,
+    outcome,
+    pickedPlateId: picked === null ? null : picked.id,
+    answerPlateId: answer.plateId ?? 0,
+    answerText: answer.text,
+    answerLane: act.answerSlot,
+  };
+  const expireLeaves = (): void => {
+    for (const l of act.leaves) {
+      const p = findPlate(enc, l.plateId);
+      if (p !== null) removePlate(state, p, "expired", emit);
+    }
+  };
+  if (outcome === "timeout") {
+    expireLeaves();
+    emit(resolved);
+  } else {
+    emit(resolved);
+    expireLeaves();
+  }
+  rd.active = null;
+  rd.last = { outcome, answerText: answer.text };
+  rd.nextAt = state.tick + mg.gapTicks;
+  if (outcome === "right") {
+    rd.rights++;
+    bs.cleared++;
+    if (!boss.alive) return false;
+    const spec: DamageSpec = {
+      kind: "minigame",
+      origin: "minigame",
+      skillId: null,
+      damageType: null,
+      baseM: mulBp(run.heroAtkM, mg.clearAtkMultBp),
+      crit: false,
+      hitIndex: 0,
+      hitCount: 1,
+    };
+    dealDamage(state, boss, spec, emit);
+    return false;
+  }
+  if (outcome === "wrong") rd.wrongs++;
+  else rd.timeouts++;
+  bs.missed++;
+  const want = run.options.difficulty === "zen" ? 0 : mg.missHitM;
+  if (Math.min(want, run.heroHpM) <= 0) return false;
+  run.stats.hitsTaken++;
+  const died = damageHero(
+    state,
+    want,
+    { sourceId: boss.id, cause: "minigame", blocked: false },
+    emit,
+  );
+  if (!died) return false;
+  heroDown(state, emit);
+  return true;
 }
 
 // ---------------------------------------------------------------- Falling Rubble

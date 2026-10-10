@@ -64,14 +64,16 @@ export function applyWhatIf(def: ResolvedLevel, w: WhatIf, pace: number): Resolv
     const pfDoom = w.bossPace === 2 ? Math.max(1, pf) : pf;
     if (w.doomEveryS !== undefined) b.phase2.doomEveryTicks = r(w.doomEveryS * 60);
     if (w.minDoom !== undefined) b.phase2.minDoomSpells = w.minDoom;
-    if (b.phase3.minigame.kind !== "fallingRubble")
-      throw new Error("riddle minigame: not implemented (T1.3)");
-    if (w.spawnEveryS !== undefined) b.phase3.minigame.spawnEveryTicks = r(w.spawnEveryS * 60);
-    if (w.fallS !== undefined) b.phase3.minigame.fallTicks = r(w.fallS * 60);
-    if (w.missHit !== undefined) b.phase3.minigame.missHitM = r(w.missHit * 1000);
+    const mg = b.phase3.minigame;
+    if (w.missHit !== undefined) mg.missHitM = r(w.missHit * 1000);
     b.phase2.doomEveryTicks = r(b.phase2.doomEveryTicks * pfDoom);
-    b.phase3.minigame.spawnEveryTicks = r(b.phase3.minigame.spawnEveryTicks * pf);
-    b.phase3.minigame.fallTicks = r(b.phase3.minigame.fallTicks * pf);
+    // Falling Rubble only: the riddle timer (readTicks + answerTicks) is already scaled by the sim's boss-script pace factor
+    if (mg.kind === "fallingRubble") {
+      if (w.spawnEveryS !== undefined) mg.spawnEveryTicks = r(w.spawnEveryS * 60);
+      if (w.fallS !== undefined) mg.fallTicks = r(w.fallS * 60);
+      mg.spawnEveryTicks = r(mg.spawnEveryTicks * pf);
+      mg.fallTicks = r(mg.fallTicks * pf);
+    }
   }
   return d;
 }

@@ -21,6 +21,7 @@ import type {
   ResolvedEnemy,
   ResolvedEnemyRef,
   ResolvedLevel,
+  ResolvedRiddleWord,
   ResolvedSegment,
 } from "./types.ts";
 
@@ -58,7 +59,6 @@ const resolveEnemy = (d: EnemyDef): ResolvedEnemy => ({
 
 function resolveBoss(b: BossDef, levelGruntHitM: number | null): ResolvedBoss {
   const mg = b.phase3.minigame;
-  if (mg.kind !== "fallingRubble") throw new Error("riddle minigame: not implemented (T1.3)");
   const hpM = milli(b.hp);
   const hitM = milli(b.hit);
   return {
@@ -86,14 +86,27 @@ function resolveBoss(b: BossDef, levelGruntHitM: number | null): ResolvedBoss {
       minDoomSpells: b.phase2.minDoomSpells,
     },
     phase3: {
-      minigame: {
-        kind: mg.kind,
-        lanes: mg.lanes,
-        spawnEveryTicks: ticks(mg.spawnEveryS),
-        fallTicks: ticks(mg.fallS),
-        clearAtkMultBp: bp(mg.clearAtkMult),
-        missHitM: milli(mg.missHit),
-      },
+      minigame:
+        mg.kind === "riddle"
+          ? {
+              kind: "riddle",
+              count: mg.count,
+              leaves: mg.leaves,
+              readTicks: ticks(mg.readS),
+              answerTicks: ticks(mg.answerS),
+              gapTicks: ticks(mg.gapS),
+              clearAtkMultBp: bp(mg.clearAtkMult),
+              missHitM: milli(mg.missHit),
+              lengthRange: [mg.lengthRange[0], mg.lengthRange[1]],
+            }
+          : {
+              kind: mg.kind,
+              lanes: mg.lanes,
+              spawnEveryTicks: ticks(mg.spawnEveryS),
+              fallTicks: ticks(mg.fallS),
+              clearAtkMultBp: bp(mg.clearAtkMult),
+              missHitM: milli(mg.missHit),
+            },
       finisherText: b.phase3.finisherText,
     },
     breatherTicks: ticks(b.breatherS),
@@ -169,6 +182,25 @@ export function resolveLevel(
       (w) => w.uses.includes(use) && (sentence ? exactChapter(w) : upToChapter(w)),
     );
   const reviewBiomes = lv.reviewBiomes;
+  // v2.0 riddle pool (interfaces 3.6): word entries tagged `riddle`, chapter <= the level's, length inside the boss's
+  // lengthRange; deduped by text, bundle order; clue = entry.clue ?? entry.definition.
+  const resolveRiddles = (): ResolvedRiddleWord[] => {
+    const mg = (seen.boss as BossDef).phase3.minigame;
+    if (mg.kind !== "riddle") return [];
+    const out: ResolvedRiddleWord[] = [];
+    for (const w of bundle.words) {
+      if (!w.uses.includes("riddle") || w.kind !== "word" || !upToChapter(w)) continue;
+      if (w.text.length < mg.lengthRange[0] || w.text.length > mg.lengthRange[1]) continue;
+      if (out.some((o) => o.text === w.text)) continue;
+      out.push({ text: w.text, clue: w.clue ?? w.definition });
+    }
+    const initials = new Set(out.map((o) => o.text.charAt(0).toLowerCase()));
+    if (out.length < mg.count + 2 || initials.size < 3)
+      throw new SimError(
+        `resolveLevel: ${levelId} riddle pool has ${out.length} words / ${initials.size} first letters (need ${mg.count + 2} / 3)`,
+      );
+    return out;
+  };
   // SRS weak words (the 5% weak share): ctx.dueWeakWords are SRS keys in due order (srsDue). Each becomes the authored
   // plate text of its bundle entry; unknown keys (content changed), non-plate entries and words outside the level's
   // plateLength are skipped. De-duplicated, due order kept.
@@ -184,6 +216,7 @@ export function resolveLevel(
     if (entry !== undefined && fits(entry) && !weak.includes(entry.text)) weak.push(entry.text);
   }
   const boss = seen.boss === null ? null : resolveBoss(seen.boss, seen.gruntHitM);
+  const riddles = boss?.phase3.minigame.kind === "riddle" ? resolveRiddles() : undefined;
   return {
     levelId: lv.id,
     chapter: lv.chapter,
@@ -193,6 +226,7 @@ export function resolveLevel(
     segments,
     enemies,
     boss,
+    ...(riddles !== undefined ? { riddles } : {}),
     words: {
       current: plateWords(
         (w) => w.tier === lv.wordTier && w.kind === "word" && w.biomes.length === 0,

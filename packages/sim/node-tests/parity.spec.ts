@@ -15,6 +15,7 @@ import {
   type TypingGolden,
   typingGoldens,
 } from "../tests/typingGolden.ts";
+import { type WillowGolden, willowGoldens } from "../tests/willowGolden.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const readJson = <T>(rel: string): T =>
@@ -29,7 +30,12 @@ const trialGolden = readJson<{ goldens: Record<string, TrialGolden> }>(
   "../tests/fixtures/golden-trial.json",
 );
 
+const willowGolden = readJson<{ goldens: Record<string, WillowGolden> }>(
+  "../tests/fixtures/golden-willow.json",
+);
+
 type Parity = {
+  willowGoldens: () => Record<string, WillowGolden>;
   trialGoldens: () => Record<string, TrialGolden>;
   goldenHashes: () => Record<string, string>;
   typingGoldens: () => Record<string, TypingGolden>;
@@ -103,4 +109,18 @@ test("combat replays (reference bot: boss, shields, Second Wind): Chromium equal
   console.log("browser:", JSON.stringify(browser));
   expect(browser).toEqual(node);
   expect(browser).toEqual(typingGolden.combatGoldens);
+});
+
+test("Whispering Willow replays (reference bot: adds, Hush Spells, Riddle of Leaves, finisher): Chromium equals Node and the golden fixture", async ({
+  page,
+}) => {
+  await loadBundle(page);
+  const browser = await page.evaluate(() =>
+    (globalThis as unknown as { __parity: Parity }).__parity.willowGoldens(),
+  );
+  const node = willowGoldens();
+  console.log("node   :", JSON.stringify(node));
+  console.log("browser:", JSON.stringify(browser));
+  expect(browser).toEqual(node);
+  expect(browser).toEqual(willowGolden.goldens);
 });

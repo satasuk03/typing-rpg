@@ -1,0 +1,32 @@
+{
+  "description": "Reference-bot replays of the Whispering Willow fixture (tests/willowFixture.ts: phase-1 Shade+Mender adds, exact-case Hush Spells, 5 riddles, finisher), replayed through replay(): final-state hash and event-stream hash. Shared by the Node determinism test and the Chromium parity test.",
+  "simVersion": 1,
+  "goldens": {
+    "willow-45wpm": {
+      "state": "392eeecd",
+      "events": "c731507c",
+      "inputs": 284,
+      "endTick": 6570,
+      "outcome": "cleared",
+      "autoAttacks": 17,
+      "secondWindUsed": false,
+      "skillsCast": 0,
+      "riddlesRight": 5,
+      "riddlesWrong": 0,
+      "riddlesTimeout": 0
+    },
+    "willow-25wpm-wrong": {
+      "state": "8c71a4ee",
+      "events": "0a6db851",
+      "inputs": 292,
+      "endTick": 10289,
+      "outcome": "cleared",
+      "autoAttacks": 16,
+      "secondWindUsed": false,
+      "skillsCast": 0,
+      "riddlesRight": 4,
+      "riddlesWrong": 1,
+      "riddlesTimeout": 0
+    }
+  }
+}

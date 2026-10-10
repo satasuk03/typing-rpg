@@ -7,6 +7,7 @@ import { gatedAtFloor, heroImpactTarget } from "./attack.ts";
 import { K } from "./balance.ts";
 import {
   bossAttacksSuspended,
+  bossWordless,
   detachBossPlates,
   restoreBossPlates,
   shiftBossTimers,
@@ -573,7 +574,7 @@ export function resumeEncounter(state: LevelState, emit: Emit): void {
   }
   for (const e of enc.enemies) {
     if (!e.alive) continue;
-    if (!enc.finisherShown) assignWordPlate(state, e, emit);
+    if (!enc.finisherShown && !bossWordless(state, enc, e)) assignWordPlate(state, e, emit);
     e.guardResult = null;
     e.windupShown = false;
     e.nextImpact = null;
