@@ -9,6 +9,7 @@ import {
   tierPool,
   usePool,
 } from "./rules.ts";
+import { ruleCh2Vocab } from "./rules-ch2.ts";
 import { type ContentContext, runContentRules } from "./rules-content.ts";
 import { type Filters, type Issue, issue, type RuleInput } from "./types.ts";
 import { computeContentVersion, readWrittenVersion } from "./version.ts";
@@ -42,6 +43,7 @@ export function validateBundle(
   const issues: Issue[] = ruleSchema(bundle);
   const input = inputFromBundle(bundle);
   issues.push(...runAllRules(input, filters));
+  issues.push(...ruleCh2Vocab(input, filters));
   const context: ContentContext = opts.context ?? {
     layouts: loadLayouts(),
     sfxIds: loadSfxIds(),
