@@ -4,7 +4,7 @@
  * Levels run in real time with the browser bot at 30 WPM. Target: under 10 minutes.
  */
 import { test } from "@playwright/test";
-import { expect, openApp, save, typeCalibration, waitRoute } from "./helpers";
+import { expect, openApp, save, skipPrologue, typeCalibration, waitRoute } from "./helpers";
 
 test.setTimeout(25 * 60_000);
 
@@ -26,7 +26,7 @@ test("first session: fresh profile to the start of L1-3 in under 10 minutes (30 
   await page.keyboard.press("Space"); // press any key
   await page.waitForSelector("#menu:not([hidden])");
   await page.keyboard.press("Enter"); // Start game
-  await waitRoute(page, "story");
+  await skipPrologue(page); // P3.5: hold-Esc skips the prologue to the story card (the full prologue is in prologueFlow.spec.ts)
   await page.keyboard.press("Escape"); // skip the story card (a reader would take about 10 s for the 3 panels)
   await waitRoute(page, "calibrate");
   mark("story skipped");

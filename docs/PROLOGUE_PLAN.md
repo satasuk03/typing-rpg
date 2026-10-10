@@ -494,3 +494,7 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
     - apply fog density from `PrologueFx.out`;
     - keep `auraCollapse` active to the end of Part C.
   - Possible tweak: `hushBolt` lands about 440 ms after the damage. If that reads late, retrigger on windup.
+- **P3.5 merged.** prologueFlow 11/11 passed on main against the real Word Gate layout; the stills were re-captured there.
+  - **bossMinS:** P3.5 reported that it counts across encounters. The orchestrator checked: `combatTicks` resets at each `EncounterStarted` (`level.ts`), so the boss gets its own 20 s. **P4.1** measures the boss-segment duration in the browser at 40 and 75 WPM to confirm.
+  - **R1/P4.2 notes from the stills:** every grunt shows a "50%" guard-leak badge (attackPower 16). That is a lot of noise in a new player's first minute; consider hiding the leak badge in the prologue. The GOLD counter shows 0; consider hiding gold in prologue mode (P3.3).
+  - **P3.6 wiring:** swap `PROLOGUE_TIMELINES` in `app/prologueTimelines.ts`; replace the placeholder `drain()` in `session.ts` with the real `UNWRITTEN` blend; route the hud, vfx and music cues (only sfx is routed now). Mount P3.3's HUD skip ring and nudge in place of `app/prologueOverlay.ts`.

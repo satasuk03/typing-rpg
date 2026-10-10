@@ -28,6 +28,7 @@ export function titleScreen(app: App, _arg: ScreenArg): Screen {
     <div class="title-menu" id="menu" hidden>
       <button class="hd-btn primary block" data-act="continue" data-autofocus>${progress ? "Continue" : "Start game"}</button>
       ${progress ? `<button class="hd-btn block" data-act="new">New game</button>` : ""}
+      <button class="hd-btn block" data-act="prologue">Prologue</button>
       <button class="hd-btn block" data-act="trial">Typing Trial</button>
       <button class="hd-btn block" data-act="settings">Settings</button>
     </div>
@@ -64,6 +65,11 @@ export function titleScreen(app: App, _arg: ScreenArg): Screen {
       app.go("map", {});
     },
     new: () => confirmNew(app),
+    // replay: plays Parts A to C, writes nothing, ends on the title
+    prologue: () => {
+      app.sfx("uiConfirm");
+      void app.playPrologue({ after: "title", replay: true });
+    },
     trial: () => openTrial(),
     settings: () => {
       app.from = "title";
