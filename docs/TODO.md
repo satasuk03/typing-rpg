@@ -3,6 +3,7 @@
 The slice is done: every DoD line is met and the PO signed off on "typing feels juicy" on 2026-10-10. These items are for a later session. For context, read `docs/HANDOFF.md` and `docs/STATUS.md`.
 
 ## Needs the PO
+- **Frontend:** deployed on 2026-10-10. Every push to `main` deploys it to https://satasuk03.github.io/typing-rpg/ (`.github/workflows/deploy-pages.yml`). The workflow runs typecheck, lint and unit tests first. It is local-only: there is no `VITE_API_URL`, so saves stay in IndexedDB and there's no leaderboard.
 - **Deploy the backend.**
   - **Cloudflare IDs:** create the D1 database and the KV namespace, then replace the placeholder `database_id` and KV id in `workers/api/wrangler.toml`.
   - **Secrets:** `wrangler secret put JWT_SECRET` and `wrangler secret put TICKET_SECRET`.
