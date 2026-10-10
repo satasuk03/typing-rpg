@@ -10,7 +10,7 @@ import type { ActiveSkillDef, PassiveDef } from "../schemas.ts";
  * sound (apps/game/src/audio/types.ts SFX_IDS; tools/content checks it).
  * `unlockLevel` is the level whose first clear unlocks the skill (absent = part of the starter kit).
  * Ch2 (v2.0.3): Reveal (active, ch2-l03) and Calm Mind (passive, ch2-l05). Scholar (ch2-l07) is deferred, see interfaces ICP v2.0.3.
- * Starter kit: actives Fireball + Aegis (the HUD mock's pair), passives Clean Cut + Steady Hands + Iron Will.
+ * Starter kit: Fireball + Clean Cut.
  */
 export const ACTIVES: ActiveSkillDef[] = [
   {
@@ -28,6 +28,7 @@ export const ACTIVES: ActiveSkillDef[] = [
     iconId: "icon.skill.aegis",
     vfxId: "vfx.skill.aegis",
     sfxId: "guard",
+    unlockLevel: "ch1-l01",
   },
   {
     id: "slashWave",
@@ -93,13 +94,15 @@ export const PASSIVES: PassiveDef[] = [
     description: "Your first typo in each fight does not crack your combo.",
     tag: "precision",
     iconId: "icon.passive.steadyHands",
+    unlockLevel: "ch1-l04",
   },
   {
     id: "ironWill",
     name: "Iron Will",
-    description: "Blocking a hit leaves you almost unharmed.",
+    description: "Blocked hits deal 15% damage instead of 20%.",
     tag: "defense",
     iconId: "icon.passive.ironWill",
+    unlockLevel: "ch1-l06",
   },
   {
     id: "openingGambit",

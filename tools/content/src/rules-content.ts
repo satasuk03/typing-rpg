@@ -513,11 +513,24 @@ export function ruleSkills(b: ContentBundle, sfxIds: readonly string[] | null): 
   }
   const starterA = b.actives.filter((a) => a.unlockLevel === undefined).map((a) => a.id as string);
   const starterP = b.passives.filter((p) => p.unlockLevel === undefined);
-  if (starterA.length < 2) out.push(issue("skills", "error", "starter kit needs >= 2 actives"));
-  if (!starterA.includes("fireball") || !starterA.includes("aegis")) {
-    out.push(issue("skills", "error", "starter kit must include fireball and aegis (HUD mock)"));
+  // PO 2026-10-10: the starter kit is 1 active (Fireball) + 1 passive; every Ch1 unlock lands before the L10 boss.
+  if (starterA.length !== 1 || starterA[0] !== "fireball") {
+    out.push(issue("skills", "error", "starter kit must be exactly one active: fireball"));
   }
-  if (starterP.length < 3) out.push(issue("skills", "error", "starter kit needs >= 3 passives"));
+  if (starterP.length !== 1)
+    out.push(issue("skills", "error", "starter kit must be exactly one passive"));
+  for (const s of [...b.actives, ...b.passives]) {
+    const u = s.unlockLevel;
+    if (u?.startsWith("ch1-") && u >= "ch1-l10") {
+      out.push(
+        issue(
+          "skills",
+          "error",
+          `${s.id} unlocks at ${u}: Ch1 skills must unlock before the L10 boss`,
+        ),
+      );
+    }
+  }
   return out;
 }
 
