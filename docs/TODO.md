@@ -44,6 +44,7 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
 - **Ch1 flipped-normal fix:** this proposal is tracked there too (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt
+- **Rare next-letter contrast dip at ch2-l10:** ring 2.19 / cell 2.20 against limits of 3 / 4.5. It happened in 1 of ~145 samples, under load, in `tests/level/typing-fx-ch2.spec.ts` run 1, and didn't recur in ~14 later runs. `fxProbe.ts` now saves a forensic still on any contrast violation, so look at that the next time it trips.
 - ~~**Re-measure on a quiet machine with no agents running.**~~ Done 2026-10-10: 0.41 ms/key, and the Ch2 frame budget is 16/16 at vsync (`docs/perf.md`). `apps/game/tests/hud/typingPerf.spec.ts` read 0.65 ms/key against the 0.45 budget during T3.1, but `main` read 0.649 under the same load, so no regression is proven. Get a quiet-machine number before Ch2 sign-off.
 - **Ch2 HUD follow-ups:** the 250 ms slide-in for the riddle panel, gold trim on elite-owned plates, and possibly a ✚ pulse on the healer's word plate (art §5).
 - The `tools/content` validator has no riddle-boss pool rule yet; it's only a comment. T4.3 should add it.
