@@ -46,6 +46,7 @@ import {
 } from "./pops";
 import type { HudSettings } from "./settings";
 import { DEFAULT_HUD_SETTINGS, normalizeSettings } from "./settings";
+import { getSkillIcon } from "./skillIcons";
 import type { PlatePalette } from "./theme";
 import {
   contrastRatio,
@@ -148,6 +149,9 @@ interface Ghost {
 }
 
 const FRAME_SAMPLES = 240;
+
+/** Size (design px) of the cracked-shield glyph beside a leak damage pop. */
+const LEAK_GLYPH = 32;
 
 export class Hud {
   readonly fx = new EffectLayers();
@@ -629,12 +633,15 @@ export class Hud {
         break;
       case "GuardBlocked":
         this.pops.spawn("block", "BLOCK", { kind: "hero" });
+        this.spawnLeakPop(e.leakDamage, e.tick);
         break;
       case "GuardParried":
         this.pops.spawn("parry", "PARRY!", { kind: "hero" });
+        this.spawnLeakPop(e.leakDamage, e.tick);
         break;
       case "HeroDamaged":
-        if (!e.blocked) {
+        // a leaking Parry already showed its crimson leak pop on the same tick: no second red number
+        if (!e.blocked && e.tick !== this.leakPopTick) {
           this.pops.spawn("hurt", `-${e.damage}`, { kind: "hero" });
           this.hurtFlash = 1;
         }
@@ -781,7 +788,7 @@ export class Hud {
     for (const e of view.enemies) {
       if (!e.alive || e.isBoss || introHold) continue;
       const f = this.anchorDesign(e, "feet");
-      avoid.push(enemyBarsRect(f.x, f.y));
+      avoid.push(enemyBarsRect(f.x, f.y, (e.leakBp ?? 0) > 0));
     }
     for (const r of this.reserved) {
       avoid.push({ x: r.x / this.s, y: r.y / this.s, w: r.w / this.s, h: r.h / this.s });
@@ -1116,6 +1123,15 @@ export class Hud {
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
+  private leakPopTick = -1;
+  /** v1.9: crimson "guarded, but some got through" pop (the cracked-shield glyph is drawn with it). */
+  private spawnLeakPop(leakDamage: number | undefined, tick: number): void {
+    if (!((leakDamage ?? 0) > 0)) return;
+    this.leakPopTick = tick;
+    this.pops.spawn("leak", `-${leakDamage}`, { kind: "hero" });
+    this.hurtFlash = Math.max(this.hurtFlash, 0.35);
+  }
+
   private entriesBoxes(): Rect[] {
     const out: Rect[] = [];
     for (const en of this.entries.values()) out.push(en.box);
@@ -1162,6 +1178,11 @@ export class Hud {
         weight = "900";
         break;
       }
+      case "leak":
+        y -= p.age * 22;
+        sz = 34 * punch;
+        weight = "900";
+        break;
       case "chip":
         y -= p.age * 30;
         sz = (p.text === "IMMUNE" ? 15 : 18 * p.size) * punch;
@@ -1202,7 +1223,7 @@ export class Hud {
     text = "";
     const immune = p.kind === "chip" && p.text === "IMMUNE";
     const isTag = immune || ["weak", "perfect", "block", "parry", "tag"].includes(p.kind);
-    const w = isTag ? tw + 28 : tw + sz * 0.3;
+    const w = isTag ? tw + 28 : tw + sz * 0.3 + (p.kind === "leak" ? LEAK_GLYPH + 6 : 0);
     const h = isTag ? sz + 14 : sz * 1.15;
     return { x, y, w, h, punch };
   }
@@ -1245,6 +1266,35 @@ export class Hud {
         }
         c.fillStyle = g;
         c.fillText(p.text, 0, 0);
+        c.restore();
+        break;
+      }
+      case "leak": {
+        const sz = 34 * punch;
+        c.save();
+        c.translate(x, y);
+        c.font = `900 ${sz}px ${FONT_DISP}`;
+        const tw = c.measureText(p.text).width;
+        const left = -(tw + LEAK_GLYPH + 6) / 2;
+        c.imageSmoothingEnabled = false;
+        c.drawImage(
+          getSkillIcon("crackedShield").color,
+          Math.round(left),
+          Math.round(-LEAK_GLYPH / 2),
+          LEAK_GLYPH,
+          LEAK_GLYPH,
+        );
+        c.textAlign = "left";
+        c.textBaseline = "middle";
+        c.lineJoin = "round";
+        c.strokeStyle = "#120408";
+        c.lineWidth = sz * 0.2;
+        c.strokeText(p.text, left + LEAK_GLYPH + 6, 0);
+        const g = c.createLinearGradient(0, -sz / 2, 0, sz / 2);
+        g.addColorStop(0, "#ff9a9a");
+        g.addColorStop(1, "#c8102e");
+        c.fillStyle = g;
+        c.fillText(p.text, left + LEAK_GLYPH + 6, 0);
         c.restore();
         break;
       }

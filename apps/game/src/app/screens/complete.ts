@@ -1,4 +1,6 @@
 /** Chapter complete: shown after the L10 clear (the Ruin Golem). Totals from the save. */
+
+import { leakHintNote } from "../../level/screens";
 import { totalStars } from "../../meta/ops";
 import type { App, Screen, ScreenArg } from "../app";
 import { actions, el, fmt } from "../dom";
@@ -33,6 +35,7 @@ export function completeScreen(app: App, _arg: ScreenArg): Screen {
         <div><span class="hd-eyebrow">Typed</span><b>${fmt(s.lifetime.words)} words</b></div>
       </div>
       ${run ? `<p class="hd-dim" style="font-size:12px;margin-top:10px">Last clear: ${(run.result.stats.netWpmX100 / 100) | 0} WPM at ${(run.result.stats.accuracyBp / 100).toFixed(1)}% accuracy.</p>` : ""}
+      ${leakHintNote(run?.leakDamage ?? 0) ? `<p class="hd-dim" id="comp-leak" style="font-size:12px;margin-top:6px">${leakHintNote(run?.leakDamage ?? 0)}</p>` : ""}
       <div class="hd-rule"></div>
       <p class="hd-sub" style="margin-bottom:12px">Chapter II is still being written. Replay levels for stars, upgrade your gear, or test your speed.</p>
       <div class="btns"><button class="hd-btn primary" data-act="map" data-autofocus>Back to map</button>

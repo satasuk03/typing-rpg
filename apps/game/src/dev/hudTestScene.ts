@@ -277,7 +277,11 @@ export function start(glCanvas: HTMLCanvasElement): void {
   window.addEventListener("resize", resize);
   resize();
 
-  const driver = new MockDriver({ scenario, wpm });
+  const driver = new MockDriver({
+    scenario,
+    wpm,
+    leakBp: Math.round(Number(q.get("leak") ?? 0) * 100) || 0,
+  });
   const DT = 1 / 60;
   const stepOnce = (renderFrame: boolean): void => {
     const ev = driver.step();

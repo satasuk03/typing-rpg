@@ -357,12 +357,48 @@ export function drawSkill(p: PanelCtx, sk: SkillView, charge: number): void {
 // ---------------------------------------------------------------- enemies
 
 export const ENEMY_BAR_W = 88;
-export const enemyBarsRect = (fx: number, fy: number): Rect => ({
-  x: fx - 74,
-  y: fy + 8,
-  w: 156,
-  h: 48,
-});
+export const enemyBarsRect = (fx: number, fy: number, leak = false): Rect =>
+  leak
+    ? { x: fx - 74, y: fy - 6, w: 156, h: 62 }
+    : {
+        x: fx - 74,
+        y: fy + 8,
+        w: 156,
+        h: 48,
+      };
+
+/** v1.9 guard leak: "20%" when the enemy's typed guard lets damage through, else null (no badge at all). */
+export function leakBadgeLabel(e: { leakBp?: number }): string | null {
+  const bp = e.leakBp ?? 0;
+  return bp > 0 ? `${Math.max(1, Math.round(bp / 100))}%` : null;
+}
+
+export const LEAK_BADGE_H = 18;
+
+/** Cracked-shield pill (pixel icon + leak %). `x` is the right edge, `cy` the vertical centre (design px). */
+export function drawLeakBadge(c: Ctx, label: string, x: number, cy: number): void {
+  const sz = 13;
+  c.font = `700 ${sz}px ${FONT_UI}`;
+  const tw = c.measureText(label).width;
+  const w = ICON_PX + 8 + tw + 4;
+  const x0 = x - w;
+  const y0 = cy - LEAK_BADGE_H / 2;
+  c.save();
+  c.fillStyle = "rgba(10,6,14,0.92)";
+  c.fillRect(x0 - 1, y0 - 1, w + 2, LEAK_BADGE_H + 2);
+  c.fillStyle = "#3a0c18";
+  c.fillRect(x0, y0, w, LEAK_BADGE_H);
+  c.fillStyle = "rgba(255,90,90,0.35)";
+  c.fillRect(x0, y0, w, 2);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(
+    getSkillIcon("crackedShield").color,
+    Math.round(x0 + 3),
+    Math.round(cy - ICON_PX / 2),
+  );
+  c.restore();
+  txt(c, label, x0 + 3 + ICON_PX + 3, cy + 1, sz, "#ff9a8a", { w: 700, stroke: false });
+}
 
 export interface EnemyBarState {
   hpFrac: number;
@@ -395,6 +431,8 @@ export function drawEnemyBars(
     { edge: "rgba(0,0,0,0)" },
   );
   if (e.shieldMax > 0) shieldBadge(c, x - 58, y + 6, String(e.shield), broken, 13);
+  const leak = leakBadgeLabel(e);
+  if (leak) drawLeakBadge(c, leak, x + 44, fy + 2);
   e.weaknesses.forEach((wk, i) => {
     damageIcon(c, wk.type, x + 58 + i * 20, y + 6, 6, wk.revealed);
   });
@@ -475,6 +513,8 @@ export function drawBossPlate(p: PanelCtx, v: LevelView, e: EnemyView, st: Enemy
       stroke: false,
     });
   if (e.shieldMax > 0) shieldBadge(c, r.x + 30, r.y + 46, String(e.shield), broken, 17);
+  const leak = leakBadgeLabel(e);
+  if (leak) drawLeakBadge(c, leak, r.x + r.w - 12, r.y + 18);
   e.weaknesses.forEach((wk, i) => {
     damageIcon(c, wk.type, r.x + r.w - 40 + (i - 0.5) * 22, r.y + 46, 7, wk.revealed);
   });

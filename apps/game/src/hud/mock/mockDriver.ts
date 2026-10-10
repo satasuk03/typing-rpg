@@ -20,6 +20,11 @@ export type MockScenario = "forest" | "cave" | "boss" | "stress";
 export interface MockOpts {
   scenario: MockScenario;
   wpm: number;
+  /**
+   * v1.9 guard leak preview in bp (0..5000), `?scene=hud-test&leak=20`: every enemy shows the cracked-shield badge and
+   * a guarded hit lets that share through (leak pop on Block/Parry). 0 = no badge (the default, levels 1-9 look).
+   */
+  leakBp?: number;
   seed?: number;
   /** Typo probability per key (default 0.06 at <= 50 wpm, 0.04 above). */
   typoRate?: number;
@@ -640,25 +645,44 @@ export class MockDriver {
       ) {
         const res = this.guardResult.get(e.id);
         this.guardResult.delete(e.id);
+        const leakBp = this.opts.leakBp ?? 0;
+        const leaked = Math.round((dmg * leakBp) / 10000);
         if (res === "parry") {
-          this.emit({ type: "GuardParried", tick: this.tick, enemyId: e.id, counterDamage: 26 });
+          this.emit({
+            type: "GuardParried",
+            tick: this.tick,
+            enemyId: e.id,
+            counterDamage: 26,
+            leakBp,
+            leakDamage: leaked,
+          });
           this.emit({
             type: "EnemyAttack",
             tick: this.tick,
             enemyId: e.id,
             outcome: "parried",
-            damage: 0,
+            damage: leaked,
           });
+          if (leaked > 0) this.leakHeroDamage(e.id, leaked, false);
           this.hit(e, 26, "counter", { crit: false });
         } else {
-          this.emit({ type: "GuardBlocked", tick: this.tick, enemyId: e.id, damage: dmg });
+          const total = leaked + Math.round((dmg - leaked) * 0.5);
+          this.emit({
+            type: "GuardBlocked",
+            tick: this.tick,
+            enemyId: e.id,
+            damage: total,
+            leakBp,
+            leakDamage: leaked,
+          });
           this.emit({
             type: "EnemyAttack",
             tick: this.tick,
             enemyId: e.id,
             outcome: "blocked",
-            damage: dmg,
+            damage: total,
           });
+          if (leaked > 0) this.leakHeroDamage(e.id, total, true);
         }
       } else {
         if (gp) this.removePlate(gp, "expired");
@@ -707,6 +731,21 @@ export class MockDriver {
       e.cycleStart = this.tick;
     }
   }
+  /** Guard leak: the HP the hero really loses on a guarded hit (a Block reports `blocked: true`, as the sim does). */
+  private leakHeroDamage(sourceId: number, damage: number, blocked: boolean): void {
+    this.heroHp = Math.max(25, this.heroHp - damage);
+    this.emit({
+      type: "HeroDamaged",
+      tick: this.tick,
+      sourceId,
+      cause: "attack",
+      damage,
+      hpAfter: this.heroHp,
+      maxHp: this.heroMax,
+      blocked,
+    });
+  }
+
   private guardResult = new Map<number, "block" | "parry">();
 
   // ------------------------------------------------------------ typing
@@ -1148,6 +1187,8 @@ export class MockDriver {
         guardTicksLeft: gp?.expiresAt ? Math.max(0, gp.expiresAt - t) : 0,
         guardTotalTicks: gp?.total ?? 0,
         guardResult: null,
+        attackPowerBp: (this.opts.leakBp ?? 0) > 0 ? 12500 : 10000,
+        leakBp: this.opts.leakBp ?? 0,
         shield: e.shield,
         shieldMax: e.shieldMax,
         weaknesses: e.weak.map((w) => ({ ...w })),
