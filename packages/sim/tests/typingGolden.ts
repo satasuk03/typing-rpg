@@ -82,7 +82,7 @@ const SCENARIO_RUN: Partial<Record<Scenario, { seed: number; pace: number }>> = 
   "golem-40wpm": { seed: 4242, pace: 40 },
   // T6.1: the starter kit at 20 WPM guarding 60% of the attacks (the Beginner persona's calibrated attempt rate); the seed
   // is one of the ~10-15% of Beginner boss runs that need a Second Wind mid-boss and still clear.
-  "golem-20wpm-sw": { seed: 4246, pace: 20 },
+  "golem-20wpm-sw": { seed: 4249, pace: 20 },
 };
 
 const withKit = (

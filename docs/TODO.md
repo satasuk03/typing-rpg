@@ -14,8 +14,6 @@ The slice is done: every DoD line is met and the PO signed off on "typing feels 
 ## Cleanup round (no PO input needed)
 - **Journal translations:** add them to the SaveBlob (`journal.notes`). This needs a `@hd2d/shared` schema bump and an interfaces.md entry.
 - **New Game reset:** New Game resets only the local save, so a cloud merge can bring old progress back. Reset or tombstone the cloud save too.
-- **L10 vocab:** add the "hollow" words for L10; the content validator currently warns about it.
-- **Stale docs/tools:** the level `generate.mjs` is out of date (the JSON is the source of truth), so update or delete it. Spec §10.2 pool sizes are old (the real ones are A 576 / B 192).
 - **Visual nits:**
   - P3-3: the title screen's "Press any key" pulse should stay at alpha 0.55–1.0 and get a 2 px dark stroke (`src/app/screens/title.ts`).
   - In crowded frames a small enemy's BREAK pop can sit about 290 px from its head; the 160 px clamp only applies to the boss.
