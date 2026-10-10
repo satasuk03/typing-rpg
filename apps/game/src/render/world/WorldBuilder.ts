@@ -456,6 +456,9 @@ export function buildWorld(
       flicker: l.flicker,
     });
   }
+  for (const g of layout.glows) {
+    world.addGlow(g.x, g.y, g.z, g.size, g.color, g.intensity, g.foreground);
+  }
   for (const r of layout.godRays) {
     world.addGodRay(r.x, r.y, r.z, r.w, r.h, r.rotZ, r.color, r.intensity);
   }

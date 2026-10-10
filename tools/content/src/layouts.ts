@@ -12,6 +12,13 @@ export interface Layout {
   name: string;
   biome: string;
   encounters: LayoutEncounter[];
+  /** From here down: read from the Entities layer (empty when the file has none). */
+  chapter: number;
+  anchors: string[];
+  cameras: string[];
+  groundKind: string;
+  backdropKinds: string[];
+  segmentBiomes: string[];
 }
 
 export const LAYOUT_DIR = new URL("../../../apps/game/src/assets/levels/", import.meta.url);
@@ -20,13 +27,26 @@ interface LdtkField {
   __identifier: string;
   __value: unknown;
 }
-interface LdtkFile {
-  levels?: { fieldInstances?: LdtkField[] }[];
+interface LdtkEntity {
+  __identifier: string;
+  fieldInstances?: LdtkField[];
 }
+interface LdtkFile {
+  levels?: {
+    fieldInstances?: LdtkField[];
+    layerInstances?: { __type?: string; entityInstances?: LdtkEntity[] }[];
+  }[];
+}
+
+const fieldsOf = (e: { fieldInstances?: LdtkField[] }): Record<string, unknown> =>
+  Object.fromEntries((e.fieldInstances ?? []).map((x) => [x.__identifier, x.__value]));
 
 export function parseLayout(json: unknown, source: string): Layout {
   const lvl = (json as LdtkFile).levels?.[0];
-  const f = Object.fromEntries((lvl?.fieldInstances ?? []).map((x) => [x.__identifier, x.__value]));
+  const f = fieldsOf(lvl ?? {});
+  const ents = lvl?.layerInstances?.find((l) => l.__type === "Entities")?.entityInstances ?? [];
+  const named = (kind: string, key: string): string[] =>
+    ents.filter((e) => e.__identifier === kind).map((e) => String(fieldsOf(e)[key] ?? ""));
   if (typeof f.id !== "string" || !Array.isArray(f.encounters)) {
     throw new Error(`${source}: not a recognised world layout (missing id/encounters fields)`);
   }
@@ -34,6 +54,12 @@ export function parseLayout(json: unknown, source: string): Layout {
     id: f.id,
     name: String(f.name ?? ""),
     biome: String(f.biome ?? ""),
+    chapter: Number(f.chapter ?? 0),
+    anchors: named("Anchor", "name"),
+    cameras: named("Camera", "name"),
+    groundKind: named("Ground", "kind")[0] ?? "forest",
+    backdropKinds: named("Backdrop", "kind"),
+    segmentBiomes: named("Segment", "biome"),
     encounters: (f.encounters as LayoutEncounter[]).map((e) => ({
       index: Number(e.index),
       slots: Number(e.slots),

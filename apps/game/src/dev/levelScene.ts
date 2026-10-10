@@ -1,6 +1,7 @@
 /**
  * DEV-ONLY data-driven level scene:
- *   ?scene=level&id=ch1-l03&pose=walk|battle:1|boss[&at=<x>][&tier=0|1|2][&freeze=1][&hero=0][&raw=1]
+ *   ?scene=level&id=ch1-l03&pose=walk|battle:1|boss[&at=<x>][&tier=0|1|2][&freeze=1][&hero=0][&raw=1][&anchors=1]
+ * Works for every layout JSON (Ch1 and Ch2; Ch2 needs no LevelDef). `anchors=1` overlays every named anchor (dev QA).
  *
  * Builds the level from `src/assets/levels/<id>.json` through the WorldBuilder, drops the hero (and
  * placeholder monsters on the slot anchors) and frames the camera with the layout's camera hints.
@@ -42,6 +43,31 @@ const PLACEHOLDERS: readonly { key: string; scale: number; flyY: number }[] = [
   { key: "monster.slimeP", scale: 1.35, flyY: 0 },
 ];
 
+/** Same value as `HERO_CAVE_RIM` in level/stage.ts (not exported there). */
+const HERO_CAVE_RIM = 0.6;
+
+/**
+ * Chapter 2 boss stand-in (the real Willow sprite is T2.3's; this only fills the arena in the viewer): the willow core prop at
+ * the boss anchor and frond curtains, as offsets from it. Dev viewer only.
+ */
+const WILLOW_STANDIN: readonly { key: string; dx: number; y: number; dz: number; scale: number }[] =
+  [
+    { key: "prop.ch2.willowCore", dx: 0, y: 0, dz: 0, scale: 1 },
+    { key: "prop.ch2.fronds.silver.0", dx: -4.6, y: 9.3, dz: 0.35, scale: 1.25 },
+    { key: "prop.ch2.fronds.silver.1", dx: -3.7, y: 9.9, dz: 0.5, scale: 1.15 },
+    { key: "prop.ch2.fronds.silver.2", dx: 3.7, y: 9.8, dz: 0.5, scale: 1.2 },
+    { key: "prop.ch2.fronds.silver.3", dx: 4.8, y: 9.2, dz: 0.35, scale: 1.3 },
+  ];
+
+const ANCHOR_COLORS: Readonly<Record<string, string>> = {
+  hero: "#4cf",
+  slot: "#fc4",
+  boss: "#f55",
+  marker: "#8f8",
+  start: "#fff",
+  end: "#fff",
+};
+
 function parsePose(raw: string | null): PoseName {
   if (raw === "boss" || (raw?.startsWith("battle:") ?? false)) return raw as PoseName;
   return "walk";
@@ -70,7 +96,12 @@ export function start(canvas: HTMLCanvasElement): void {
   };
 
   const heroAt = (x: number, z: number, anim: "walk" | "idle"): void => {
-    const a = world.addActor("hero", anim, { rim: 1.3, blobW: 1.25 });
+    // Ch2 (night moods, caveK > 0) uses the game's hero cave-rim lift (level/stage.ts HERO_CAVE_RIM); Ch1 views stay as they were.
+    const a = world.addActor("hero", anim, {
+      rim: 1.3,
+      blobW: 1.25,
+      ...(layout.chapter >= 2 ? { caveRim: HERO_CAVE_RIM } : {}),
+    });
     const frames = world.source.frames("hero", anim);
     a.setFrame(frames[anim === "walk" ? 1 : 0] ?? (frames[0] as NonNullable<(typeof frames)[0]>));
     a.place(x, 0, z);
@@ -104,8 +135,20 @@ export function start(canvas: HTMLCanvasElement): void {
       const enc = handle.encounter(index);
       heroAt(enc.hero.x, enc.hero.z, "idle");
       enc.slots.forEach((s, i) => {
+        const ch2Boss = layout.chapter >= 2 && enc.def.boss;
+        if (ch2Boss && s.kind === "boss") {
+          for (const w of WILLOW_STANDIN) {
+            const prop = world.addProp(w.key, s.x + w.dx, w.y, s.z + w.dz, {
+              scale: w.scale,
+              rim: 1.2,
+              emis: w.y > 0 ? 1.8 : 2.4,
+            });
+            actors.push({ dispose: () => world.remove(prop) });
+          }
+          return;
+        }
         const p =
-          pose === "boss" || enc.def.boss
+          !ch2Boss && (pose === "boss" || enc.def.boss)
             ? { key: "monster.golem", scale: 1.6, flyY: 0 }
             : (PLACEHOLDERS[i % PLACEHOLDERS.length] as (typeof PLACEHOLDERS)[number]);
         monsterAt(p.key, p.scale, s.x, p.flyY, s.z);
@@ -119,6 +162,30 @@ export function start(canvas: HTMLCanvasElement): void {
     return pose;
   };
 
+  /** Dev QA overlay: every named anchor projected onto the frame (`&anchors=1`). */
+  const overlay = q.get("anchors") === "1" ? document.createElement("div") : null;
+  if (overlay) {
+    overlay.style.cssText =
+      "position:fixed;inset:0;pointer-events:none;font:11px monospace;z-index:9";
+    document.body.appendChild(overlay);
+  }
+  const drawAnchors = (): void => {
+    if (!overlay) return;
+    overlay.replaceChildren();
+    const rect = canvas.getBoundingClientRect();
+    for (const name of handle.anchorNames()) {
+      const a = handle.getAnchor(name);
+      const p = world.camera.project(a.x, a.y ?? 0, a.z);
+      if (Math.abs(p.x) > 1 || Math.abs(p.y) > 1) continue;
+      const special = name.startsWith("riddle") || name.startsWith("boss.");
+      const col = special ? "#f6f" : (ANCHOR_COLORS[a.kind] ?? "#fff");
+      const d = document.createElement("div");
+      d.style.cssText = `position:absolute;left:${rect.left + ((p.x + 1) / 2) * rect.width}px;top:${rect.top + ((1 - p.y) / 2) * rect.height}px;color:${col};text-shadow:0 0 3px #000,0 0 3px #000`;
+      d.textContent = `● ${name}`;
+      overlay.appendChild(d);
+    }
+  };
+
   const atParam = q.get("at");
   let pose: string = applyPose(
     q.get("pose") ?? "walk",
@@ -130,7 +197,10 @@ export function start(canvas: HTMLCanvasElement): void {
     for (let i = 0; i < n; i++) {
       handle.update(dt, world.camera.pose.x);
       world.update(dt, 0);
-      if (i === n - 1) world.render();
+      if (i === n - 1) {
+        world.render();
+        drawAnchors();
+      }
     }
   };
 
@@ -166,6 +236,7 @@ export function start(canvas: HTMLCanvasElement): void {
     handle.update(dt, world.camera.pose.x);
     world.update(dt, 0);
     world.render();
+    drawAnchors();
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

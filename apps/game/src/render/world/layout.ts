@@ -23,6 +23,7 @@ export const LAYOUT_BIOMES = [
   "hollow",
   "boss",
   "hushwood",
+  "fen",
   "grove",
 ] as const;
 export type LayoutBiome = (typeof LAYOUT_BIOMES)[number];
@@ -158,6 +159,17 @@ export interface RayFieldDef {
   seed: number;
 }
 
+/** A soft additive halo (lantern bloom): the layout twin of `RenderWorld.addGlow`. */
+export interface GlowDef {
+  x: number;
+  y: number;
+  z: number;
+  size: number;
+  color: V3;
+  intensity: number;
+  foreground: boolean;
+}
+
 export interface RuneDef {
   x: number;
   z: number;
@@ -186,7 +198,7 @@ export interface GroundDef {
   /** x range over which the ground dithers from forest dirt/grass to cave slabs. */
   caveFrom: number;
   caveTo: number;
-  /** Ground look: forest/cave dither (default), `leaf` litter (hushwood) or `roots` arena (grove). */
+  /** Ground look: forest/cave dither (default), `leaf` litter (hushwood), `fen` boardwalk over water or `roots` arena (grove). */
   kind: GroundKind;
   /** World x/z the `roots` ground radiates from (the boss). */
   arena: V2;
@@ -223,6 +235,8 @@ export interface AnchorDef {
   /** 1-based encounter index for hero/slot/boss anchors. */
   encounter?: number;
   slot?: number;
+  /** Optional height (m) for anchors that mark a point in the air (plates at the Willow's face, riddle leaves). */
+  y?: number;
 }
 
 export interface EncounterDef {
@@ -260,6 +274,7 @@ export interface LevelLayout {
   props: PropDef[];
   scatters: ScatterDef[];
   lights: LightDef[];
+  glows: GlowDef[];
   godRays: GodRayDef[];
   rayFields: RayFieldDef[];
   runes: RuneDef[];
@@ -361,13 +376,23 @@ const FIELDS = {
   Ground: z.strictObject({
     caveFrom: num,
     caveTo: num,
-    kind: z.enum(["forest", "leaf", "roots"]).default("forest"),
+    kind: z.enum(["forest", "leaf", "fen", "roots"]).default("forest"),
     arenaX: num.default(0),
     arenaZ: num.default(0),
   }),
   Wall: z.strictObject({ cy: num, height: num.positive(), z: num, edgeX: num }),
   Backdrop: z.strictObject({
-    kind: z.enum(["sky", "mountains", "treeline", "skyNight", "mountainsNight", "treelineNight"]),
+    kind: z.enum([
+      "sky",
+      "mountains",
+      "treeline",
+      "skyNight",
+      "mountainsNight",
+      "treelineNight",
+      "skyDusk",
+      "mountainsDusk",
+      "treelineDusk",
+    ]),
     width: num.positive(),
     height: num.positive(),
     pos: vec3,
@@ -410,6 +435,13 @@ const FIELDS = {
     scatter: num.min(0).default(0),
     flicker: z.boolean().default(false),
   }),
+  Glow: z.strictObject({
+    y: num,
+    size: num.positive(),
+    color: vec3pos,
+    intensity: num.positive(),
+    foreground: z.boolean().default(false),
+  }),
   GodRay: z.strictObject({
     y: num,
     w: num.positive(),
@@ -445,6 +477,7 @@ const FIELDS = {
     kind: z.enum(["start", "end", "hero", "slot", "boss", "marker"]),
     encounter: z.number().int().positive().optional(),
     slot: z.number().int().min(0).optional(),
+    y: num.optional(),
   }),
   WalkPath: z.strictObject({ points: z.array(vec2).min(2) }),
   Camera: z.strictObject({
@@ -546,6 +579,7 @@ export function parseLevelLayout(raw: unknown): LevelLayout {
     props: [],
     scatters: [],
     lights: [],
+    glows: [],
     godRays: [],
     rayFields: [],
     runes: [],
@@ -633,6 +667,11 @@ export function parseLevelLayout(raw: unknown): LevelLayout {
         out.lights.push({ ...p, x: x0, z: z0 });
         break;
       }
+      case "Glow": {
+        const p = parseFields("Glow", f, where, id);
+        out.glows.push({ ...p, x: x0, z: z0 });
+        break;
+      }
       case "GodRay": {
         const p = parseFields("GodRay", f, where, id);
         out.godRays.push({ ...p, x: x0, z: z0 });
@@ -662,6 +701,7 @@ export function parseLevelLayout(raw: unknown): LevelLayout {
           z: z0,
           ...(p.encounter !== undefined ? { encounter: p.encounter } : {}),
           ...(p.slot !== undefined ? { slot: p.slot } : {}),
+          ...(p.y !== undefined ? { y: p.y } : {}),
         });
         break;
       }
