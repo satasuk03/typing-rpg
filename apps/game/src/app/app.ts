@@ -20,7 +20,7 @@ import type { SaveStore } from "../meta/save";
 import type { Net } from "../net";
 import type { QualityTier } from "../render";
 import { Backdrop } from "./backdrop";
-import { introChapterOf } from "./chapters";
+import { introChapterOf, needsWillowHint, WILLOW_HINT } from "./chapters";
 import { KeyNav, type NavScope } from "./nav";
 import { APP_CSS } from "./style";
 
@@ -328,6 +328,30 @@ export class App {
     return close;
   }
 
+  private showWillowHint(levelId: string, opt: { skipIntro?: boolean }): void {
+    const box = document.createElement("div");
+    box.className = "hd-panel app-pick willow-hint";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", "Loadout hint");
+    box.innerHTML = `<h2 class="hd-h">Before the Willow</h2>
+      <p>${WILLOW_HINT}</p>
+      <div style="display:flex;gap:10px;margin-top:14px"><button class="hd-btn" data-act="hint-loadout">Open loadout</button>
+      <button class="hd-btn primary" data-act="hint-play" data-autofocus>Play anyway</button></div>
+      <p class="hd-dim" style="margin-top:10px;font-size:12px">Enter play &middot; Esc skip this hint</p>`;
+    let goLoadout = false;
+    // closing the hint (button, Esc) starts the level unless the player asked for the loadout
+    const close = this.openModal(box, () => {
+      if (goLoadout) this.go("loadout", {});
+      else void this.play(levelId, { ...opt, skipHint: true });
+    });
+    box.addEventListener("click", (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>("[data-act]");
+      if (!t) return;
+      goLoadout = t.dataset.act === "hint-loadout";
+      close();
+    });
+  }
+
   private closeAllModals(): void {
     for (const m of [...this.modalStack].reverse()) {
       this.nav.pop(m.scope);
@@ -342,8 +366,16 @@ export class App {
 
   // ---------------------------------------------------------------------------------------- play
 
-  async play(levelId: string, opt: { skipIntro?: boolean } = {}): Promise<void> {
+  async play(
+    levelId: string,
+    opt: { skipIntro?: boolean; skipHint?: boolean } = {},
+  ): Promise<void> {
     if (this.session) return;
+    // Q2: a short, skippable loadout hint before the Willow when Aegis is not equipped (once per run start)
+    if (!opt.skipHint && !this.deps.bot && needsWillowHint(this.store.save, levelId)) {
+      this.showWillowHint(levelId, opt);
+      return;
+    }
     // the first level of a chapter above 1 opens with its typed intro card (T3.4)
     const introCh = opt.skipIntro ? null : introChapterOf(this.bundle, levelId);
     if (introCh !== null) {

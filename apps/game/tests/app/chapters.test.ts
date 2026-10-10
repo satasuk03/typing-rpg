@@ -1,6 +1,7 @@
 // T1.1 client plumbing: levelUnlocked by id, frontier chapter on load and after a result, caseAssist -> LevelOptions.
 import { contentBundle } from "@hd2d/content";
 import { describe, expect, it } from "vitest";
+import { needsWillowHint, WILLOW_HINT } from "../../src/app/chapters";
 import { levelUnlocked, newSave, type Save, withFrontier } from "../../src/meta/ops";
 import { SaveStore } from "../../src/meta/save";
 import { ApiClient, AuthManager, MemoryStore, SaveSync } from "../../src/net/index.ts";
@@ -86,5 +87,28 @@ describe("caseAssist wiring", () => {
     expect("caseAssist" in off.options).toBe(false);
     const on = (await open(true)).runConfig("ch1-l01", { seed: 1 });
     expect(on.options.caseAssist).toBe(true);
+  });
+});
+
+describe("Q2 Willow loadout hint", () => {
+  const save = (unlocked: string[], equipped: (string | null)[]): Save => {
+    const s = newSave(1000, 7, two);
+    s.unlocks.actives = unlocked;
+    s.loadout.actives = equipped as Save["loadout"]["actives"];
+    return s;
+  };
+  it("shows only on ch2-l10 with Aegis unlocked and not equipped", () => {
+    expect(needsWillowHint(save(["aegis"], [null, null]), "ch2-l10")).toBe(true);
+    expect(needsWillowHint(save(["aegis"], ["fireball", null]), "ch2-l10")).toBe(true);
+    expect(needsWillowHint(save(["aegis"], ["aegis", null]), "ch2-l10")).toBe(false);
+    expect(needsWillowHint(save(["aegis"], [null, "aegis"]), "ch2-l10")).toBe(false);
+    expect(needsWillowHint(save([], [null, null]), "ch2-l10")).toBe(false);
+    expect(needsWillowHint(save(["aegis"], [null, null]), "ch2-l09")).toBe(false);
+    expect(needsWillowHint(save(["aegis"], [null, null]), "ch1-l10")).toBe(false);
+  });
+  it("uses the PO wording", () => {
+    expect(WILLOW_HINT).toBe(
+      "The Willow's adds hit hard. A defensive skill such as Aegis helps here.",
+    );
   });
 });

@@ -66,6 +66,8 @@ export interface MockOpts {
   fading?: boolean;
   /** v2.0 `?heals=1`: the healer heals the first enemy every 1.5 s (`EnemyHealed`), needs `healer=1` for the badge. */
   heals?: boolean;
+  /** Review stills: overrides the chapter reported in the view (default 2 with fading/heals, else 1). */
+  chapter?: number;
 }
 
 const RIDDLES: { clue: string; leaves: [string, string, string]; answer: number }[] = [
@@ -1343,7 +1345,7 @@ export class MockDriver {
       phaseProgress:
         this.phase === "combat" ? 1 : Math.min(1, Math.max(0, 1 - (this.phaseEnd - t) / 150)),
       levelId: `mock-${this.opts.scenario}`,
-      chapter: this.opts.fading || this.opts.heals ? 2 : 1,
+      chapter: this.opts.chapter ?? (this.opts.fading || this.opts.heals ? 2 : 1),
       isBossLevel: this.opts.scenario === "boss",
       encounterIndex: this.opts.scenario === "cave" ? 1 : this.opts.scenario === "boss" ? 2 : 0,
       encounterCount: 3,

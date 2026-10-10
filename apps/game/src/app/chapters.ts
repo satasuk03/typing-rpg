@@ -54,3 +54,14 @@ export const introLines = (bundle: ContentBundle, chapter: number): WordEntry[] 
       w.uses.includes("intro") && (biome === undefined || (w.biomes as string[]).includes(biome)),
   );
 };
+
+/** Q2: the Willow (ch2-l10) pre-level hint level and the skill it recommends. */
+export const WILLOW_LEVEL = "ch2-l10";
+export const WILLOW_HINT =
+  "The Willow's adds hit hard. A defensive skill such as Aegis helps here.";
+
+/** True when starting `levelId` should first show the Willow loadout hint (Aegis unlocked but not equipped). */
+export const needsWillowHint = (save: Save, levelId: string): boolean =>
+  levelId === WILLOW_LEVEL &&
+  save.unlocks.actives.includes("aegis") &&
+  !save.loadout.actives.includes("aegis");

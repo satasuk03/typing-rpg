@@ -3,7 +3,7 @@
  * (no clicks, no mouse). Asserts that focus moves, Enter activates, Escape goes back, and the focus ring is visible.
  */
 import { test } from "@playwright/test";
-import { expect, focused, openApp, route, waitRoute } from "./helpers";
+import { expect, focused, openApp, route, toMap, waitRoute } from "./helpers";
 import { seedProgress } from "./seed";
 
 const ringVisible = (page: import("@playwright/test").Page): Promise<boolean> =>
@@ -184,4 +184,45 @@ test("Escape on the map returns to the title", async ({ page }) => {
   await waitRoute(page, "map");
   await page.keyboard.press("Escape");
   await waitRoute(page, "title");
+});
+
+test("Q2: Willow loadout hint is keyboard-operable, skippable and shows once per run start", async ({
+  page,
+}) => {
+  await openApp(page);
+  await seedProgress(page, { cleared: 3, caches: 0 });
+  await page.evaluate(() => {
+    const dev = (window as unknown as { __dev: { mutate(fn: (s: never) => void): void } }).__dev;
+    dev.mutate(((s: { loadout: { actives: (string | null)[] } }) => {
+      s.loadout.actives = ["fireball", null];
+    }) as never);
+  });
+  await toMap(page);
+  const play = (): Promise<void> =>
+    page.evaluate(() => {
+      void (
+        window as unknown as { __app: { app: { play(id: string): Promise<void> } } }
+      ).__app.app.play("ch2-l10");
+    });
+  await play();
+  await page.waitForSelector(".willow-hint");
+  await expect.poll(() => focused(page)).toBe("hint-play");
+  // keyboard: move to "Open loadout" and confirm -> the loadout screen, no run started
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => focused(page)).toBe("hint-loadout");
+  await page.keyboard.press("Enter");
+  await waitRoute(page, "loadout");
+  expect(await page.locator(".willow-hint").count()).toBe(0);
+  // Esc on the hint skips it and starts the level; the hint does not come back within that run start
+  await page.keyboard.press("Escape");
+  await waitRoute(page, "map");
+  await play();
+  await page.waitForSelector(".willow-hint");
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(
+    () => (window as unknown as { __app: { route(): string } }).__app.route() === "play",
+    undefined,
+    { timeout: 60_000 },
+  );
+  expect(await page.locator(".willow-hint").count()).toBe(0);
 });
