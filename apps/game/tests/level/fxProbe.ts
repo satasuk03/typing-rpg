@@ -195,10 +195,17 @@ export async function playAndProbe(
       rep.checked++;
       rep.minRing = Math.min(rep.minRing, s.contrastRing);
       rep.minCell = Math.min(rep.minCell, s.contrastCell);
-      if (s.contrastRing < 3 || s.contrastCell < 4.5)
+      if (s.contrastRing < 3 || s.contrastCell < 4.5) {
         rep.violations.push(
           `tick ${s.tick} (${s.kind}): next-letter contrast ring ${s.contrastRing.toFixed(2)} cell ${s.contrastCell.toFixed(2)}`,
         );
+        // forensic detail for the flake: what was on screen, plus a still
+        const t = s.snapshot.plates.find((p) => p.isTarget);
+        rep.violations.push(
+          `DETAIL contrast tick ${s.tick} phase ${s.phase} target ${JSON.stringify(t ? { id: t.id, kind: t.kind, text: t.text, rect: t.rect, faded: t.faded, nextAlpha: t.nextAlpha, shake: t.shake, letters: t.letters.length } : null)} pops ${JSON.stringify(s.snapshot.popRects)} texts ${JSON.stringify(s.snapshot.popTexts)} banners ${JSON.stringify(s.snapshot.bannerRects)}`,
+        );
+        await page.screenshot({ path: `tests/level/__shots__/contrast-violation-${s.tick}.png` });
+      }
     }
     if (onSample) await onSample(s);
     await page.waitForTimeout(500);
