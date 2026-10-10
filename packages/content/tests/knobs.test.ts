@@ -41,7 +41,7 @@ describe("CHAPTER_KNOBS", () => {
     expect(k.eliteAttackPower).toBe(1.25);
     expect(k.bossAttackPower).toBe(1.3);
     expect(k.bossAddsAttackPower).toBe(1.25);
-    expect([k.encHpMult, k.hitMult, k.bossLevelHitMult]).toEqual([1.1, 1.05, 0.75]);
+    expect([k.encHpMult, k.hitMult, k.bossLevelHitMult]).toEqual([1.1, 1.05, 0.71]);
   });
   test("Ch2 Willow: riddle numbers follow their rules (T5.1)", () => {
     const willow = contentBundle.bosses.find((b) => b.id === "whispering-willow");
