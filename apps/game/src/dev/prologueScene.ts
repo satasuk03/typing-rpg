@@ -44,6 +44,11 @@ function desaturate(base: BiomeMood): BiomeMood {
 export function start(canvas: HTMLCanvasElement): void {
   const q = new URLSearchParams(location.search);
   const part = q.get("part") ?? "cutscene";
+  // P3.2: `part=vfx` fires each prologue VFX cue in isolation (render/vfx/prologue/devScene.ts)
+  if (part === "vfx") {
+    void import("../render/vfx/prologue/devScene").then((m) => m.start(canvas, q));
+    return;
+  }
   if (part !== "cutscene") throw new Error(`prologue scene: unknown part "${part}"`);
   const id = q.get("id") ?? "ch1-l04";
   const tierParam = Number(q.get("tier") ?? "0");

@@ -1,0 +1,1 @@
+part B cluster @ tier 0 (1280x720 Metal, hud + wpm-90 bot + typing VFX + every part B cue): avg=16.67 ms p95=16.70 ms max=16.80 ms over 900 frames

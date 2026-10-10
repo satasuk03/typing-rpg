@@ -1,0 +1,3 @@
+clusterB tier 0: avg=16.67 ms p95=16.80 ms max=16.80 ms over 900 frames
+clusterC tier 0: avg=16.67 ms p95=16.70 ms max=16.80 ms over 900 frames
+clusterC tier 2: avg=16.67 ms p95=16.80 ms max=16.80 ms over 900 frames

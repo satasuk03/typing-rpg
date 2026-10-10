@@ -1,0 +1,25 @@
+inkRise	loads=0.0000%	reseek=0.0077%
+skyTear-open	loads=0.0000%	reseek=0.0105%
+skyTear-close	loads=0.0000%	reseek=0.0000%
+hushBolt-flight	loads=0.0000%	reseek=0.0077%
+hushBolt-impact	loads=0.0000%	reseek=0.0077%
+ward	loads=0.0000%	reseek=0.0000%
+ward-ripple	loads=0.0000%	reseek=0.0000%
+surgeAura-x2	loads=0.0000%	reseek=0.7676%
+surgeAura-x16	loads=0.0000%	reseek=0.7567%
+catchFireball-hold	loads=0.0000%	reseek=0.0003%
+catchFireball-grey	loads=0.0000%	reseek=0.0001%
+catchFireball-crumble	loads=0.0000%	reseek=0.0001%
+inkWrite	loads=0.0000%	reseek=0.0087%
+theftStream-1-fireball	loads=0.0000%	reseek=0.0090%
+theftStream-3-slashwave	loads=0.0000%	reseek=0.0000%
+theftStream-6-frost	loads=0.0000%	reseek=0.0000%
+auraCollapse-narrow	loads=0.0000%	reseek=0.0331%
+auraCollapse-snap	loads=0.0000%	reseek=0.0331%
+gateDarken	loads=0.0000%	reseek=0.0000%
+letterVortex	loads=0.0000%	reseek=0.0000%
+silenceFog	loads=0.0000%	reseek=0.0000%
+ember	loads=0.0000%	reseek=0.0000%
+clusterB-densest	loads=0.0000%	reseek=0.4610%
+clusterC-densest	loads=0.0000%	reseek=0.0000%
+worst=0.0105%

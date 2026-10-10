@@ -1,0 +1,6 @@
+part B at max FX, wpm 90, 24 s, sample every 0.5 s, quality tier 0
+samples=48  HUD invariant violations=0
+world light the cues add inside every plate rect inflated by 40 px (luma 0..1): max=0.1936  worst sample mean=0.00582
+keep-out gate: checked=1761 dimmed=39
+events={"LevelStarted":1,"EnemySpawned":2,"EncounterStarted":1,"BossIntroStarted":2,"PlateShown":9,"TargetAcquired":10,"CharCorrect":110,"SentenceWordDone":21,"EnemyAttackWindup":4,"GuardWordShown":4,"TargetDropped":2,"BurstWpm":3,"WordCompleted":8,"PlateRemoved":8,"GuardWordTyped":3,"DoomSpellCompleted":4,"Hit":13,"AtbFilled":4,"AutoAttack":4,"ShieldDamaged":5,"GuardParried":3,"EnemyAttack":3,"FinisherShown":1,"ComboTierChanged":1,"FinisherCompleted":1,"EnemyDeath":1,"GoldGained":1,"SkillCharged":1,"EncounterCleared":1,"WaveStarted":1,"SkillCast":1}
+diag={"additive":112,"normal":6,"glyphs":0,"cards":2,"quads":7,"dropped":0,"live":2,"keepOut":{"checked":1761,"dimmed":39}}  aura visual tier=4
