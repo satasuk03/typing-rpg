@@ -31,8 +31,8 @@ export const CHAPTER_KNOBS: Readonly<Record<number, ChapterKnobs>> = {
   },
   // Ch2: the P values are from the plan (§1.3, §4.3). The three multipliers are PLACEHOLDERS (T4.3 rough pass: the bot clears every level; Beginner boss 72%) until T5.1 solves them.
   2: {
-    encHpMult: 1.2,
-    hitMult: 1.25,
+    encHpMult: 1.1,
+    hitMult: 1.05,
     bossLevelHitMult: 0.9,
     gruntAttackPower: 1.07,
     eliteAttackPower: 1.25,

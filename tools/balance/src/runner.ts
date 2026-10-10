@@ -37,35 +37,68 @@ export interface Job {
   seeds: number;
   noise: boolean;
   whatif?: WhatIf;
-  /** starter (default): the Ch1 starter kit. bare: Fireball only, Clean Cut + Steady Hands (no Aegis, no Iron Will). */
-  kit?: "starter" | "bare" | "ch2";
+  /**
+   * Absent = defaultKit(chapter). starter: the Ch1 starter kit. bare: Fireball only, Clean Cut + Steady Hands (no Aegis,
+   * no Iron Will). ch2: "the Ch2 player" (starter kit + the Ch2 unlocks once unlocked). ch2-aegis: ch2 but Aegis kept.
+   */
+  kit?: Kit;
   /** free (default): scrambled/faded words are decoded for free. realistic: the T6.2 reading model (bot.ts). */
   gimmicks?: GimmickMode;
   /** T1.5 gear offset (the --gear value): par (default) | par-N | armor+N | weapon+N | all+N. See gear.ts. */
   gear?: string;
 }
 
-/** Ch1 starter kit (content skills.ts, no unlockLevel): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will, par gear. */
+export type Kit = "starter" | "bare" | "ch2" | "ch2-aegis";
+export const KITS: readonly Kit[] = ["starter", "bare", "ch2", "ch2-aegis"];
+
+/**
+ * The balance default kit per chapter (T5.1). Ch1: the starter kit (byte-identical). Ch2 and later: "the Ch2 player", the
+ * starter kit with each Ch2 unlock slotted in from the level after its unlocking first clear (docs/balance-ch2.md §1).
+ */
+export const defaultKit = (chapter: number): Kit => (chapter >= 2 ? "ch2" : "starter");
+
+/** Level order key: chapter x 100 + index (an id that does not parse sorts first). */
+const levelKey = (levelId: string): number => {
+  const p = parseLevelId(levelId);
+  return p === null ? 0 : p.chapter * 100 + p.index;
+};
+
+/**
+ * True when skill `id` is in play when `levelId` starts: no `unlockLevel` (starter kit), or its unlockLevel was
+ * first-cleared earlier (a level's own unlock arrives with its first clear, so it is not in play on that level's first
+ * try). `levelId` undefined = after the whole chapter (every unlock in play). Reads content skills.ts, so it cannot drift.
+ */
+export function unlockedBefore(id: string, levelId: string | undefined): boolean {
+  const d = [...contentBundle.actives, ...contentBundle.passives].find((x) => x.id === id);
+  if (d === undefined) throw new Error(`unknown skill ${id}`);
+  if (d.unlockLevel === undefined || levelId === undefined) return true;
+  return levelKey(d.unlockLevel) < levelKey(levelId);
+}
+
+/**
+ * The balance loadout: par gear (+ the --gear offset) and a kit.
+ *  - starter: the Ch1 starter kit (content skills.ts, no unlockLevel): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will.
+ *  - bare: Fireball, Clean Cut + Steady Hands (the solve-hits reference build: no barrier, no reduced block damage).
+ *  - ch2: "the Ch2 player" (balance-ch2.md §1). Reveal takes Aegis's slot once unlocked (ch2-l03 clear, so from L4), Calm
+ *    Mind takes Steady Hands's (ch2-l05 clear, so from L6). Fireball stays: it is the only damage active (skill share).
+ *  - ch2-aegis: ch2 with Aegis kept (sensitivity only: the player who never equips Reveal).
+ * `levelId` gates the Ch2 unlocks (undefined = both in play).
+ */
 export function starterLoadout(
-  kit: "starter" | "bare" | "ch2" = "starter",
+  kit: Kit = "starter",
   chapter = 1,
   gear?: string,
+  levelId?: string,
 ): Loadout {
   const l = applyGear(parLoadout(chapter), parseGear(gear));
-  l.actives =
-    kit === "bare"
-      ? ["fireball", null]
-      : kit === "ch2"
-        ? ["fireball", "reveal"]
-        : ["fireball", "aegis"];
-  // ch2 (v2.0.3): the Ch2 unlocks in play. Reveal replaces Aegis (it deals no damage, so the skill share is carried by
-  // Fireball alone), Calm Mind replaces Steady Hands. Not used by the default report, only by --kit ch2.
+  const ch2 = kit === "ch2" || kit === "ch2-aegis";
+  const reveal = kit === "ch2" && unlockedBefore("reveal", levelId);
+  const calm = ch2 && unlockedBefore("calmMind", levelId);
+  l.actives = kit === "bare" ? ["fireball", null] : ["fireball", reveal ? "reveal" : "aegis"];
   l.passives =
     kit === "bare"
       ? ["cleanCut", "steadyHands", null]
-      : kit === "ch2"
-        ? ["cleanCut", "calmMind", "ironWill"]
-        : ["cleanCut", "steadyHands", "ironWill"];
+      : ["cleanCut", calm ? "calmMind" : "steadyHands", "ironWill"];
   return l;
 }
 
@@ -98,6 +131,7 @@ export function runJob(job: Job): RunRecord[] {
     const attempt = drawAttempt(persona, seed, job.noise);
     const w = job.whatif ?? {};
     if (w.guard !== undefined) attempt.guardAttempt = Math.min(1, attempt.guardAttempt * w.guard);
+    if (w.readWpm !== undefined) attempt.readWpm = w.readWpm;
     const level = applyWhatIf(d, w, attempt.pace);
     const options: LevelOptions = {
       pace: attempt.pace,
@@ -114,7 +148,12 @@ export function runJob(job: Job): RunRecord[] {
     out.push(
       playLevel({
         def: level,
-        loadout: starterLoadout(job.kit, chapterOfLevel(job.levelId), job.gear),
+        loadout: starterLoadout(
+          job.kit ?? defaultKit(chapterOfLevel(job.levelId)),
+          chapterOfLevel(job.levelId),
+          job.gear,
+          job.levelId,
+        ),
         seed,
         attempt,
         options,

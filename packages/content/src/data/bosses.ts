@@ -75,7 +75,7 @@ export const WHISPERING_WILLOW: BossDef = BossDef.parse({
       kind: "riddle",
       count: 5,
       leaves: 3,
-      readS: 4,
+      readS: 9,
       answerS: 6,
       gapS: 1.5,
       clearAtkMult: 5,
