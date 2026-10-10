@@ -2,12 +2,13 @@
 
 | | |
 |---|---|
-| **Doc version** | **2.0** (2026-10-10, Chapter 2 "The Hushwood") |
+| **Doc version** | **2.0.1** (2026-10-10, Chapter 2 "The Hushwood") |
 | **SIM_VERSION** | `1` (v2.0 does not bump it: every new rule is gated by new content, Ch1 and the Trial replay identically, §13.1) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **2.0.1** (2026-10-10): T1.2 change proposals approved by the orchestrator. Healer, §3.5: (a) the next heal is due `healTicks` after the tick the heal actually fired, so there's no catch-up burst after a Break or Frost Lock deferral; (b) healers stop once `enc.finisherShown` is set, as attacks do; (c) `EnemyView.healer.ticksLeft` is null while Broken or Frost-Locked or once `maxHeals` is used up, and `healsLeft` is null when `maxHeals` is 0. Only effective heals count toward `maxHeals`.
 - **2.0** (2026-10-10): proposed (plan C0.1, `docs/CH2_PLAN.md` with the PO answers). The Chapter 2 contracts. Every change is **additive and optional**; the full spec is §13, and the blocks in §3–§6 and §8–§9 are updated in place (new lines are marked `v2.0`). The blocks are also re-synced with the code shipped in v1.5–v1.9 (`ResolvedStar`, `parArmorBp`, `foldSentences`, guard-leak fields, boss view fields), so C0.3 can copy them verbatim.
   - **Ch1 stays byte-identical** (§13.1): every new `Resolved*`/state/options key is *absent* (not `null`, not `undefined`) unless content uses the feature. Ch1 events, results, balance cells and bot output do not change; the only state-hash change is `def.contentVersion`, which T1.1 pins in the golden harness.
   - **Content (§6):** `Biome` + `hushwood | fen | grove`. `WordEntry.uses` + `riddle | intro`, plus `chapter?` (scopes sentence pools) and `clue?` (riddle text). `EnemyRef.attackPower?` and `elite?`. `EnemyDef.heal?` (the healer). `MinigameDef` becomes a discriminated union with a `riddle` variant. `LevelDef.reviewBiomes?`. Per-chapter knob table `CHAPTER_KNOBS` (§13.6).
@@ -655,7 +656,7 @@ There is no random variance (`DMG_VARIANCE = 0`, D31).
 **Per-ref Attack Power.** `EnemyState.attackPowerBp` = `ref.attackPowerBp ?? <encounter attackPowerBp>` (normal waves), or `ref.attackPowerBp ?? boss.phase1.addsAttackPowerBp ?? BP` (boss adds). The boss itself keeps `ResolvedBoss.attackPowerBp`. The leak formula is unchanged (v1.9).
 
 **Healer** (an `EnemyDef` with `heal`; its archetype stays `grunt`, so it still attacks on the grunt timer). All of the following is integer and RNG-free:
-- **Cadence (pace-scaled like attacks):** `healTicks = mulBp(mulBp(heal.everyTicks, PACE_FACTOR_BP[pace]), PRESET_INTERVAL_MULT_BP[difficulty])`, at least 1. The first heal is due at `max(spawnTick, typingFromTick) + healTicks`, and each next one is due `healTicks` after the previous due tick fired. There is no random start offset, so nothing is drawn.
+- **Cadence (pace-scaled like attacks):** `healTicks = mulBp(mulBp(heal.everyTicks, PACE_FACTOR_BP[pace]), PRESET_INTERVAL_MULT_BP[difficulty])`, at least 1. The first heal is due at `max(spawnTick, typingFromTick) + healTicks`, and each next one is due `healTicks` after the tick the previous heal actually fired (v2.0.1: no catch-up burst after a deferral). Healers stop once `enc.finisherShown` is set. There is no random start offset, so nothing is drawn.
 - **Deferral:** a heal that falls due while the healer is Broken (`brokenUntil`) or Frost-Locked (`frozenUntil`) is deferred to the tick that status ends. Encounter freezes (Second Wind, boss breather) shift the due tick like every other enemy timer. Zen does **not** stop heals, because healing is not an attack.
 - **Targets:** the *other* living, non-boss enemies of the current encounter with `hpM < maxHpM`. They are sorted by HP fraction ascending (`a.hpM * b.maxHpM < b.hpM * a.maxHpM`, integer cross-multiplication), then by slot. The first `maxTargets` are healed. The boss is never healed, and a healer never heals itself.
 - **Amount and cap:** `min(mulBp(target.maxHpM, fracBp), target.maxHpM − target.hpM)`. HP never goes above max. If no target qualifies, the heal is spent with no event and the cadence continues. With `maxHeals > 0`, the healer stops after that many *effective* heals (heals that restored HP) in the encounter.
