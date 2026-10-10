@@ -31,5 +31,6 @@ This is a browser game for practicing English typing, made in an Octopath-style 
 ## Agent policy
 - Workers use Sonnet (`model: "sonnet"`).
 - Deep reasoning, design reviews and the Reviewer role use Opus (`model: "opus"`).
+- Haiku (`model: "haiku"`) is only for mechanical, no-judgment coding: boilerplate, renames, formatting, simple repetitive edits.
 - **At most 3 agents run at the same time.**
 - Don't use any orchestration skill. The orchestrator session uses the Agent tool directly.
