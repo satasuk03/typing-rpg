@@ -14,8 +14,8 @@ layout JSON --parseLevelLayout (zod)--> LevelLayout --buildWorld(layout, renderW
   comes from the layout.
 - Dev scene: `?scene=level&id=ch1-l03&pose=walk|battle:1|boss[&at=<x>][&tier=0|1|2][&freeze=1]`
   (`src/dev/levelScene.ts`).
-- `src/assets/levels/generate.mjs` is an authoring helper that writes the ten Chapter 1 files. The JSON
-  files are the source of truth and may be edited by hand or in LDtk.
+- The level JSON files in `src/assets/levels/` are the source of truth; edit them by hand or in LDtk.
+  (The old `generate.mjs` authoring script was deleted because it was stale.)
 
 ## Why LDtk (and not Tiled)
 

@@ -483,8 +483,8 @@ No plate needs typing during it. `EnemyDeath` and its `Hit` are deferred through
 | HUD rings and rays | 12 rings, 48 rays | 3 PERFECT rings + 16 rays, × 2 |
 | HUD guard glyphs | 12 | 10 |
 | HUD note glints | 8 | 6 |
-| world pool A (additive, instanced) | 384 | T4 motes 30/s × 1.6 s ≈ 48, plus bolt trails 4/frame × 16 frames ≈ 64, plus shards and sparks |
-| world pool B (normal blend) | 64 | smoke puffs |
+| world pool A (additive, instanced) | 576 | T4 motes 30/s × 1.6 s ≈ 48, plus bolt trails 4/frame × 16 frames ≈ 64, plus shards and sparks |
+| world pool B (normal blend) | 192 | smoke puffs |
 | world fx quads (Glow, Star, Ring, Beam, Guard, Fireball) | 14 meshes, toggled `visible` | aura glow, blade glow, 2 orbit stars, flare, beam, barrier, ring, 4 bolts, 2 spare |
 | typing-owned dynamic lights | ≤ 3 concurrent (1 held aura + 2 flash slots) | keeps ≥ 11 of the 16 light slots for torches and T2.3 |
 
@@ -511,7 +511,7 @@ No plate needs typing during it. `EnemyDeath` and its `Hit` are deferred through
 |---|---|---|---|
 | `q` multiplier (spark counts, ember and mote rates, speed lines) | 1.0 | 0.8 | 0.55 |
 | streak trail samples | 6 | 5 | 4 |
-| world pool A cap used | 384 | 288 | 192 |
+| world pool A cap used | 576 | 432 | 288 |
 | held aura light | yes | yes | no |
 | prismatic conic border | yes | yes | swapped for a 2-stop linear gradient |
 | target-plate border shadowBlur | yes | yes | no (a 2 px brighter stroke instead) |
