@@ -2,12 +2,18 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.7** (2026-10-10) |
+| **Doc version** | **1.8** (2026-10-10) |
 | **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **1.8** (2026-10-10): proposed (cleanup round). Save blob **schemaVersion 2** (§9.1).
+  - New fields: `journal.notes: Record<wordKey, string>` (player translations; was device-local IndexedDB, now synced) and top-level `resetEpoch: number` (New Game generation, default 0).
+  - Limits: a note is 1..120 chars, a key 1..64 chars, at most 2000 notes (empty text deletes the note); `resetEpoch` is an int 0..1,000,000. The Worker still stores the blob opaquely (it cannot parse the compressed blob) and enforces only the existing 256 KiB decoded cap; the worst case (2000 x 120 chars) fits that cap. The client enforces the shape via `SaveBlob`.
+  - Migration: `MIGRATIONS[1]` adds `journal.notes = {}` and `resetEpoch = 0`; v1 blobs (local, base, cloud) load unchanged otherwise. The one-time client import moves the old IndexedDB key `journal.translations` into `journal.notes`. A v1 client meeting a v2 cloud blob goes read-only ("please refresh"), per the existing rule.
+  - Merge: **the higher `resetEpoch` wins wholesale** (the other side's progress, wallet, gear, journal and notes are dropped; settings stay local; no `needsUserChoice`). Equal epochs merge as before. `journal.notes` merges per key, three-way against `base`: a side that changed a key wins (local if both did), deletes propagate, no `base` = union with local winning.
+  - New Game (`SaveStore.reset`) writes a fresh profile at `resetEpoch + 1`. No API change and no endpoint: the next sync PUT replaces the cloud save, and offline the bumped epoch stays in the local blob, so a later sync cannot revive the old generation. Residual: two devices that each reset offline from the same epoch tie and merge normally.
 - **1.7** (2026-10-10): PO decision 2026-10-09, recorded by the orchestrator. §3.3 key streak: a typo drops the streak **one VFX tier** (tier ≥ 2 → `KEY_STREAK_TIERS[tier−2]`, else 0) instead of resetting to 0; thresholds 10/25/50/100 unchanged. `KeyStreakTierChanged` on a typo may now have `to > 0`, so consumers must not assume a downward change means 0. Same rule in Trial (streak is not in the score or the claim). VFX/audio only: balance output byte-identical. SIM_VERSION stays 1 (pre-release; golden typing/trial fixtures regenerated). Implemented in `typing.ts` (`keyStreakAfterTypo`) and `trial.ts`.
 - **1.6** (2026-10-09): T6.1 and T3.1 notes, recorded by the orchestrator.
   - `BALANCE.BOSS_SCRIPT_PACE_SCALE = true` (approved): rubble spawn, first spawn and fall time are × the pace factor `(35/Pace)^0.7`, and the Doom cadence is × max(1, factor). Identical at Pace 35. `SIM_VERSION` stays 1 (pre-release).
@@ -1169,7 +1175,7 @@ import { z } from "zod";
 import { Rarity } from "@hd2d/content";
 import type { LoadoutSource } from "@hd2d/sim";
 
-export const SAVE_SCHEMA_VERSION = 1;
+export const SAVE_SCHEMA_VERSION = 2;
 const U32 = z.number().int().min(0).max(0xffffffff);
 const Vol = z.number().min(0).max(1);
 const Mode = z.enum(["smart", "asap"]);
@@ -1213,7 +1219,15 @@ export const SaveBlobV1 = z.object({
   replays: z.object({ day: z.string(), count: z.number().int() }),
   lifetime: z.object({ words: z.number().int(), chars: z.number().int(), typos: z.number().int() }),
 });
-export const SaveBlob = SaveBlobV1;                         // alias to the latest version
+export const JOURNAL_NOTE_MAX_CHARS = 120, JOURNAL_NOTES_MAX = 2000, JOURNAL_NOTE_KEY_MAX = 64;
+export const JournalNotes = z.record(z.string().min(1).max(JOURNAL_NOTE_KEY_MAX), z.string().min(1).max(JOURNAL_NOTE_MAX_CHARS)).refine((r) => Object.keys(r).length <= JOURNAL_NOTES_MAX);
+/** v2 (doc v1.8): adds journal.notes (player translations) and resetEpoch (New Game generation). */
+export const SaveBlobV2 = SaveBlobV1.omit({ schemaVersion: true, journal: true }).extend({
+  schemaVersion: z.literal(2),
+  resetEpoch: z.number().int().min(0).max(1_000_000),
+  journal: z.object({ firstSeen: z.record(z.string(), z.number().int()), notes: JournalNotes }),
+});
+export const SaveBlob = SaveBlobV2;                         // alias to the latest version
 export type SaveBlob = z.infer<typeof SaveBlob>;
 /** Compile-time proof that a save can feed buildLoadout. */
 export const saveIsLoadoutSource = (s: SaveBlob): LoadoutSource => s;
@@ -1230,6 +1244,7 @@ export declare function mergeSaves(base: SaveBlob | null, local: SaveBlob, serve
 - A blob with a **newer** version than the client knows puts the client in read-only mode: it never PUTs, and it shows "please refresh".
 
 **Sync and merge (409).**
+- **New Game generation (v1.8):** if `local.resetEpoch !== server.resetEpoch`, the side with the higher epoch wins wholesale (settings stay local) and none of the rules below apply. `SaveStore.reset()` bumps the epoch, so old-generation data can never win a merge, online or offline.
 - The client stores the **last-synced server blob** (`base`) in IndexedDB next to its revision.
 - On a 409 it runs `mergeSaves(base, local, server.blob)`, then PUTs the merged blob with `If-Match` set to the server revision.
 - **Monotonic fields, per field:**
@@ -1238,6 +1253,7 @@ export declare function mergeSaves(base: SaveBlob | null, local: SaveBlob, serve
   - **`starChestsClaimed`: per-chapter set union** (so no milestone can be claimed twice).
   - `unlocks`: union.
   - `journal.firstSeen`: min per key.
+  - `journal.notes` (v1.8): per-key three-way merge against `base` (a changed side wins, local on a double change, deletes propagate; no `base` = union, local wins).
   - `lifetime`, `playtimeSec`: max.
   - `accuracyDaily`: union by day, keeping the higher accuracy.
 - **SRS:**

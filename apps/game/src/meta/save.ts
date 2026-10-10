@@ -15,6 +15,7 @@ import {
   type GearSlot,
   type WeaponArchetype,
 } from "@hd2d/content";
+import { JOURNAL_NOTE_MAX_CHARS, JOURNAL_NOTES_MAX } from "@hd2d/shared";
 import { computePace, type LevelOptions, type LevelResult, resolveLevel, srsDue } from "@hd2d/sim";
 import { freshSeed } from "../level/config";
 import type { RunConfig } from "../level/runner";
@@ -75,6 +76,7 @@ export class SaveStore {
     }
     const store = new SaveStore(net, local, o);
     if (fresh) await store.persist();
+    await store.importLegacyTranslations();
     return store;
   }
 
@@ -238,24 +240,48 @@ export class SaveStore {
     this.commit(ops.setCalibration(this.cur, wpm, this.now()));
   }
 
-  /** New game: replaces the local profile with a fresh one. (A later cloud merge is monotonic: see gaps in the T3.2 report.) */
+  /**
+   * New game: replaces the profile with a fresh one at `resetEpoch + 1`. The merge (`mergeSaves`) lets the higher
+   * epoch win wholesale, so the cloud copy (or another device) at the old epoch can never bring old progress back,
+   * online or offline; the next sync overwrites the cloud save with the fresh one.
+   */
   reset(): void {
-    this.commit(ops.newSave(this.now(), this.seed(), this.bundle));
+    const fresh = ops.newSave(this.now(), this.seed(), this.bundle);
+    fresh.resetEpoch = this.cur.resetEpoch + 1;
+    fresh.settings = structuredClone(this.cur.settings);
+    this.commit(fresh);
   }
 
   // ---------------------------------------------------------------------------------------- journal notes
 
-  /**
-   * Player translations for the Word Journal. The SaveBlob v1 schema has no field for them (z.object strips
-   * unknown keys), so they live in the same IndexedDB store, local to the device, until a schema bump.
-   */
-  async translations(): Promise<Record<string, string>> {
-    return (await this.net.store.get<Record<string, string>>("journal.translations")) ?? {};
+  /** Player translations for the Word Journal: `journal.notes` in the SaveBlob (synced; capped by the schema). */
+  translations(): Record<string, string> {
+    return { ...this.cur.journal.notes };
   }
-  async setTranslation(wordKey: string, text: string): Promise<void> {
-    const all = await this.translations();
-    if (text.trim() === "") delete all[wordKey];
-    else all[wordKey] = text.slice(0, 120);
-    await this.net.store.set("journal.translations", all);
+  setTranslation(wordKey: string, text: string): boolean {
+    const t = text.trim() === "" ? "" : text.slice(0, JOURNAL_NOTE_MAX_CHARS);
+    const cur = this.cur.journal.notes;
+    if ((cur[wordKey] ?? "") === t) return false;
+    const notes = { ...cur };
+    if (t === "") delete notes[wordKey];
+    else if (Object.keys(notes).length >= JOURNAL_NOTES_MAX && !(wordKey in notes)) return false;
+    else notes[wordKey] = t;
+    return this.commit({
+      ...this.cur,
+      journal: { ...this.cur.journal, notes },
+      updatedAtMs: this.now(),
+    });
+  }
+
+  /** One-time import of v1-era device-local translations (IndexedDB `journal.translations`) into the blob. */
+  private async importLegacyTranslations(): Promise<void> {
+    const legacy = await this.net.store
+      .get<Record<string, string>>("journal.translations")
+      .catch(() => undefined);
+    if (!legacy) return;
+    for (const [k, v] of Object.entries(legacy)) {
+      if (typeof v === "string" && !(k in this.cur.journal.notes)) this.setTranslation(k, v);
+    }
+    await this.net.store.delete("journal.translations").catch(() => undefined);
   }
 }

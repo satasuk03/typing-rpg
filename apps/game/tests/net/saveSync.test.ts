@@ -254,11 +254,11 @@ describe("SaveSync", () => {
     const server = new FakeServer();
     const c = client(server);
     await c.auth.accessToken();
-    const future = { ...blankSave(), schemaVersion: 2 };
+    const future = { ...blankSave(), schemaVersion: 3 } as never;
     server.saves.set("user-1", {
       revision: 5,
       blob: await encodeSaveWire(future),
-      summary: { schemaVersion: 2, levelMax: 0, stars: 0, playtimeSec: 0 },
+      summary: { schemaVersion: 3, levelMax: 0, stars: 0, playtimeSec: 0 },
       updatedAt: 1,
     });
     await c.sync.setLocal(withGold(1));
@@ -315,5 +315,70 @@ describe("SaveSync", () => {
     const r = await c.sync.sync();
     expect(r.status).toBe("synced");
     expect((await serverBlob(server, "user-2")).wallet.gold).toBe(9);
+  });
+});
+
+describe("New Game epoch (cloud tombstone)", () => {
+  const played = (): SaveBlob =>
+    withGold(500, (s) => {
+      s.playtimeSec = 5000;
+      s.progress.levels["ch1-l01"] = {
+        cleared: true,
+        stars: [true, true, true],
+        bestTicks: 10,
+        attempts: 4,
+      };
+    });
+  const fresh = (epoch: number): SaveBlob => withGold(0, (s) => (s.resetEpoch = epoch));
+
+  test("reset while OFFLINE: old cloud progress never returns once the device syncs later", async () => {
+    const server = new FakeServer();
+    const a = client(server);
+    await a.sync.setLocal(played());
+    expect((await a.sync.sync()).status).toBe("synced");
+    server.failNext = 99; // New Game while the API is unreachable
+    await a.sync.setLocal(fresh(1));
+    expect((await a.sync.sync()).status).toBe("offline");
+    server.failNext = 0; // reload (same store), back online
+    const b = client(server, a.store);
+    expect((await b.sync.sync()).status).toBe("synced");
+    const cloud = await serverBlob(server, "user-1");
+    expect(cloud.resetEpoch).toBe(1);
+    expect(cloud.progress.levels).toEqual({});
+    expect(cloud.wallet.gold).toBe(0);
+    expect((await b.sync.getLocal())?.progress.levels).toEqual({});
+  });
+
+  test("a stale dirty local (old epoch, more playtime) cannot overwrite the reset cloud save", async () => {
+    const server = new FakeServer();
+    const a = client(server);
+    await a.sync.setLocal(played());
+    await a.sync.sync();
+    await a.sync.setLocal(fresh(1));
+    expect((await a.sync.sync()).status).toBe("synced");
+    const stale = played();
+    stale.playtimeSec = 99_999;
+    stale.wallet.gold = 9999;
+    await a.store.set("save.local", stale);
+    await a.store.set("save.dirty", true);
+    await a.store.set("save.base", played());
+    expect((await a.sync.sync()).status).toBe("synced");
+    const cloud = await serverBlob(server, "user-1");
+    expect(cloud.resetEpoch).toBe(1);
+    expect(cloud.wallet.gold).toBe(0);
+    expect(cloud.progress.levels).toEqual({});
+  });
+
+  test("a second device with old-epoch progress adopts the reset cloud save", async () => {
+    const server = new FakeServer();
+    const a = client(server);
+    await a.sync.setLocal(fresh(2));
+    await a.sync.sync();
+    const identity = await a.store.get<{ deviceId: string; deviceSecret: string }>("auth.identity");
+    const b = client(server, new MemoryStore(), identity);
+    await b.sync.setLocal(played());
+    expect((await b.sync.sync()).merged).toBe(true);
+    expect((await serverBlob(server, "user-1")).resetEpoch).toBe(2);
+    expect((await b.sync.getLocal())?.progress.levels).toEqual({});
   });
 });

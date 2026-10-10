@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
   CHOICE_PLAYTIME_SEC,
+  decodeSaveWire,
+  encodeSaveWire,
   jsonEqual,
   mergeSaves,
   migrateSave,
@@ -19,7 +21,7 @@ describe("fixtures", () => {
   )) {
     test(f, () => {
       const raw = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", f), "utf8"));
-      expect(migrateSave(raw).schemaVersion).toBe(1);
+      expect(migrateSave(raw).schemaVersion).toBe(2);
     });
   }
 });
@@ -33,7 +35,7 @@ describe("migrateSave / summarize", () => {
     expect(() => migrateSave({ ...b, schemaVersion: 0 })).toThrow();
     expect(() => migrateSave({ ...b, wallet: { gold: -1 } })).toThrow();
     try {
-      migrateSave({ ...b, schemaVersion: 2 });
+      migrateSave({ ...b, schemaVersion: 3 });
       expect.unreachable();
     } catch (e) {
       expect(e).toBeInstanceOf(SaveVersionError);
@@ -61,8 +63,91 @@ describe("migrateSave / summarize", () => {
       bestTicks: null,
       attempts: 1,
     };
-    expect(summarize(b)).toEqual({ schemaVersion: 1, levelMax: 201, stars: 4, playtimeSec: 99 });
+    expect(summarize(b)).toEqual({ schemaVersion: 2, levelMax: 201, stars: 4, playtimeSec: 99 });
     expect(summarize(blankSave()).levelMax).toBe(0);
+  });
+});
+
+describe("schema v2: journal notes + resetEpoch", () => {
+  test("a v1 blob (no notes, no epoch) migrates with empty notes and epoch 0", () => {
+    const v2 = blankSave();
+    const { resetEpoch: _e, ...rest } = v2;
+    const v1 = { ...rest, schemaVersion: 1, journal: { firstSeen: { hello: 3 } } };
+    const m = migrateSave(v1);
+    expect(m.schemaVersion).toBe(2);
+    expect(m.resetEpoch).toBe(0);
+    expect(m.journal).toEqual({ firstSeen: { hello: 3 }, notes: {} });
+  });
+
+  test("notes round-trip through the wire codec", async () => {
+    const b = blankSave();
+    b.journal.notes = { hello: "hola", wörd: "palabra ✓" };
+    const back = migrateSave(await decodeSaveWire(await encodeSaveWire(b)));
+    expect(back.journal.notes).toEqual(b.journal.notes);
+  });
+
+  test("limits: note length, key length, count", () => {
+    const b = blankSave();
+    expect(() =>
+      migrateSave({ ...b, journal: { ...b.journal, notes: { a: "x".repeat(121) } } }),
+    ).toThrow();
+    expect(() => migrateSave({ ...b, journal: { ...b.journal, notes: { a: "" } } })).toThrow();
+    expect(() =>
+      migrateSave({ ...b, journal: { ...b.journal, notes: { ["k".repeat(65)]: "x" } } }),
+    ).toThrow();
+    const many = Object.fromEntries(Array.from({ length: 2001 }, (_, i) => [`k${i}`, "x"]));
+    expect(() => migrateSave({ ...b, journal: { ...b.journal, notes: many } })).toThrow();
+    const ok = Object.fromEntries(
+      Array.from({ length: 2000 }, (_, i) => [`k${i}`, "x".repeat(120)]),
+    );
+    expect(migrateSave({ ...b, journal: { ...b.journal, notes: ok } }).journal.notes).toEqual(ok);
+  });
+
+  test("notes merge three-way: a changed side wins, deletes propagate, no base = union", () => {
+    const base = blankSave();
+    base.journal.notes = { a: "1", b: "2", c: "3" };
+    const l = structuredClone(base);
+    const s = structuredClone(base);
+    l.journal.notes.a = "L";
+    delete l.journal.notes.b;
+    s.journal.notes.c = "S";
+    s.journal.notes.d = "new";
+    expect(mergeSaves(base, l, s).merged.journal.notes).toEqual({ a: "L", c: "S", d: "new" });
+    const lo = blankSave();
+    lo.journal.notes = { a: "L" };
+    const se = blankSave();
+    se.journal.notes = { a: "S", z: "Z" };
+    expect(mergeSaves(null, lo, se).merged.journal.notes).toEqual({ a: "L", z: "Z" });
+  });
+
+  test("a higher resetEpoch (New Game) beats an older-generation blob, whichever side it is on", () => {
+    const old = blankSave();
+    old.playtimeSec = 99_999;
+    old.wallet.gold = 5000;
+    old.progress.levels["ch1-l01"] = {
+      cleared: true,
+      stars: [true, true, true],
+      bestTicks: 1,
+      attempts: 9,
+    };
+    old.journal.firstSeen = { hello: 1 };
+    old.journal.notes = { hello: "hola" };
+    const fresh = blankSave();
+    fresh.resetEpoch = 1;
+    fresh.settings.effectsIntensity = 0.5;
+    old.settings.effectsIntensity = 0.9;
+    for (const [l, s] of [
+      [fresh, old],
+      [old, fresh],
+    ] as const) {
+      const m = mergeSaves(old, l, s);
+      expect(m.needsUserChoice).toBe(false);
+      expect(m.merged.resetEpoch).toBe(1);
+      expect(m.merged.progress.levels).toEqual({});
+      expect(m.merged.wallet.gold).toBe(0);
+      expect(m.merged.journal).toEqual({ firstSeen: {}, notes: {} });
+      expect(m.merged.settings.effectsIntensity).toBe(l.settings.effectsIntensity);
+    }
   });
 });
 

@@ -77,7 +77,8 @@ export function newSave(nowMs: number, seed: number, bundle: ContentBundle = con
   const actives = bundle.actives.filter((a) => a.unlockLevel === undefined).map((a) => a.id);
   const passives = bundle.passives.filter((p) => p.unlockLevel === undefined).map((p) => p.id);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    resetEpoch: 0,
     createdAtMs: nowMs,
     updatedAtMs: nowMs,
     playtimeSec: 0,
@@ -107,7 +108,7 @@ export function newSave(nowMs: number, seed: number, bundle: ContentBundle = con
     cachePity: { ...NEW_PITY },
     metaRng: deriveRng(seed >>> 0, "meta") as [number, number, number, number],
     srs: structuredClone(NEW_SRS),
-    journal: { firstSeen: {} },
+    journal: { firstSeen: {}, notes: {} },
     replays: { day: "", count: 0 },
     lifetime: { words: 0, chars: 0, typos: 0 },
   };
