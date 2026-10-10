@@ -480,3 +480,4 @@ P1. Any P1 blocks P3.2.
   2. The driest ruins ground with few tufts. A gold, dry ground material goes to the polish backlog.
   3. The measured `UNWRITTEN` numbers (contrast 1.0, storm fog density) replace the plan targets.
 - **Part B mock: damage pops must not sit on Nul's mask or face.** P3.3 and R1 check this.
+- **R0 F1 (2026-10-10):** the B2 boss-intro camera is y **2.45 → 2.65** (it was 2.9 → 3.1). fov 21, pitch 7 and dist 18 are unchanged. Targets: the nib and hem sit ≥ 16 px above the bottom letterbox bar, and the crown tip is at y ≥ 112 (at 1280×720).

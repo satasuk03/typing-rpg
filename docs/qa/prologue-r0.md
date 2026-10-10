@@ -128,3 +128,9 @@ There are no P1 fixes. Every item can be done by a Sonnet worker. "After" number
 | `r0-twoshot-storm-l05.jpg` | the repeat on the `ch1-l05` boss slot |
 | `r0-twoshot-unwritten.jpg` | the item 6c/6d frame, UNWRITTEN battle pose |
 | `r0-b2-unwritten.jpg` | B2 in UNWRITTEN (fg off) |
+
+## Orchestrator follow-up (2026-10-10)
+- **F9:** the orchestrator is the second reviewer. Nul and the Shade read as distinct in all three 25% thumbnails (bone mask, gold crown and staff against a hooded blob). Closed.
+- **F1:** applied to `docs/vfx/prologue-art-direction.md` (B2 camera y 2.45 → 2.65).
+- **F5:** forwarded to P2.2 (Word Gate) as acceptance criteria.
+- **F2, F3, F4, F6, F7, F8:** go to the Nul sprite polish task, bundled with P2.3.
