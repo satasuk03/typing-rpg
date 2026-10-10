@@ -3,7 +3,11 @@ import { PrologueDef } from "../schemas.ts";
 /**
  * The Prologue "The Unwriting" (docs/PROLOGUE_PLAN.md, interfaces v2.2 §3.7 and §14.2). One object, not a LevelDef:
  * levels drive the map, unlocks and balance cells, none of which the prologue touches.
- * All prologue numbers live here (never in balance.ts). They are STARTING VALUES from plan §2.1; P1.3 tunes them with the bot.
+ * All prologue numbers live here (never in balance.ts). P1.3 tuned them with `pnpm bot --prologue` (tools/bot/src/prologue.ts).
+ * Tuned numbers (the plan §2.1 starting values did not hurt the hero at all, so the barrier/parry kit starved Mending Light
+ * and the damage passives): encounter hp 900 per wave, Nul hp 3500 (bosses.ts), bossMinS 20 s;
+ * pace 120 and castGapS 2.6 so enemy attacks outnumber Aegis/Bulwark barriers and one cast reads at a time; attackPower 16
+ * (guard leak at its 50% cap); gruntHit 200, Nul hit 450, Nul interval 1 s and shield 9 (enemies.ts).
  *
  *  - segments: one "Servants" encounter of two waves (shade, wisp, shade / wisp, shade, wisp), then Nul + 2 adds.
  *    No walks (the cold open and the boss intro cover the pacing), no gimmicks, no elites (brand-new players, no Reveal).
@@ -100,7 +104,7 @@ export const PROLOGUE = PrologueDef.parse({
   id: "prologue",
   layoutId: "prologue",
   biome: "ruins",
-  pace: 25,
+  pace: 120,
   seed: 0x0a11ce,
   words: PROLOGUE_WORDS,
   guardWords: PROLOGUE_GUARD_WORDS,
@@ -109,9 +113,9 @@ export const PROLOGUE = PrologueDef.parse({
       kind: "encounter",
       encounter: {
         name: "Servants",
-        hp: 150,
-        gruntHit: 4,
-        attackPower: 1,
+        hp: 900,
+        gruntHit: 200,
+        attackPower: 16,
         waves: [
           [{ enemy: "hush-shade" }, { enemy: "lantern-wisp" }, { enemy: "hush-shade" }],
           [{ enemy: "lantern-wisp" }, { enemy: "hush-shade" }, { enemy: "lantern-wisp" }],
@@ -143,9 +147,9 @@ export const PROLOGUE = PrologueDef.parse({
   },
   gear: { archetype: "sword", tier: 3, rarity: "L", upgrade: 5 },
   chargeMult: 2.5,
-  castGapS: 1.5,
+  castGapS: 2.6,
   forceAfterS: 4,
   heroHpFloorPct: 25,
   surge: { encounterAfterS: 18, bossAfterS: 20, doubleEveryS: 4, maxMult: 16 },
-  bossMinS: 12,
+  bossMinS: 20,
 });

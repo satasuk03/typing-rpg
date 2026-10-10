@@ -17,6 +17,7 @@ import {
   hash,
   type LevelOptions,
   type LevelResult,
+  type LevelState,
   type Loadout,
   type PlateView,
   type ResolvedLevel,
@@ -123,6 +124,8 @@ export interface PlayArgs {
    * "realistic" (T6.2): see GIMMICK_MODEL.
    */
   gimmicks?: GimmickMode;
+  /** Optional observer (tools/bot --prologue): called with the live state and every batch of events. Never affects the run. */
+  observe?: (state: LevelState, events: readonly SimEvent[]) => void;
 }
 
 export type GimmickMode = "free" | "realistic";
@@ -180,6 +183,7 @@ export function playLevel(a: PlayArgs): RunRecord {
   let endTick = 0;
 
   const collect = (ev: readonly SimEvent[]): void => {
+    a.observe?.(state, ev);
     for (const e of ev) {
       switch (e.type) {
         case "EncounterStarted":

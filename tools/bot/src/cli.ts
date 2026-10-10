@@ -3,6 +3,7 @@
 // failure. --quick = 5 seeds (check.sh). Each chapter is gated separately (own targets/boss), so Ch1 rows never change.
 import { MAIN_PERSONAS } from "@hd2d/balance";
 import { type GateResult, gimmickDeltas, pct, runGate, table } from "./index.ts";
+import { prologueTable, runPrologueGate } from "./prologue.ts";
 
 const args = process.argv.slice(2);
 const opt = (n: string): string | undefined => {
@@ -16,6 +17,7 @@ const chapterArg = opt("--chapter") ?? "all";
 const chapters = chapterArg === "all" ? [1, 2] : [Number(chapterArg)];
 const gimmicks = (opt("--gimmicks") ?? "free") as "free" | "realistic";
 const compare = args.includes("--compare-gimmicks");
+const prologueOnly = args.includes("--prologue"); // only the prologue gate (P1.3); the default run = chapters + prologue
 
 const show = (title: string, g: GateResult, secs: number): void => {
   console.log(
@@ -25,8 +27,20 @@ const show = (title: string, g: GateResult, secs: number): void => {
   console.log(table(g.cells, MAIN_PERSONAS));
 };
 
+const showPrologue = (): string[] => {
+  const t0 = Date.now();
+  // 0.5 s for 60 runs: always 20 seeds (also under --quick) unless --seeds is given explicitly
+  const n = opt("--seeds") === undefined ? 20 : seeds;
+  const g = runPrologueGate(n);
+  console.log(
+    `\nprologue gate: ${n} seeds x ${MAIN_PERSONAS.length} personas, ${g.runs.length} runs, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+  );
+  console.log(prologueTable(g));
+  return g.failures.map((x) => `[prologue] ${x}`);
+};
+
 let failures: string[] = [];
-for (const chapter of chapters) {
+for (const chapter of prologueOnly ? [] : chapters) {
   const t0 = Date.now();
   const g = await runGate({ seeds, workers, gimmicks, chapter });
   show(
@@ -40,7 +54,9 @@ for (const chapter of chapters) {
   ];
 }
 
-if (compare) {
+if (chapterArg === "all" || prologueOnly) failures = [...failures, ...showPrologue()];
+
+if (compare && !prologueOnly) {
   const t1 = Date.now();
   const otherMode = gimmicks === "free" ? "realistic" : "free";
   const chapter = chapters[0] ?? 1;
