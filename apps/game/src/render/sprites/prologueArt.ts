@@ -176,7 +176,7 @@ export function renderNulRaw(pose, opts = {}) {
       const q = clamp(dx / (dx < 0 ? hwB : hwF), -1, 1);
       let l = 2.7 - q * 0.5 + (vv / 46) * 0.7 + (hash(x >> 1, y >> 1) - 0.5) * 0.35 + (bayer(x, y) - 0.5) * 0.45;
       const fold = Math.sin(q * 4.4 + (1 - vv / 46) * 1.9);
-      if (fold > 0.8) l -= 1.2; else if (fold > 0.5 && fold < 0.72) l += 1.7 * (0.5 + 0.5 * vv / 42);
+      if (fold > 0.8) l -= 1.2; else if (fold > 0.42 && fold < 0.78) l += 2.3 * (0.55 + 0.45 * vv / 42);
       if (vv > 40) l += 0.6;
       if (v < 8.5) l -= 0.25;
       l = clamp(l, 1.6, 5);
@@ -336,7 +336,7 @@ export function renderNulRaw(pose, opts = {}) {
     for (let x = Math.ceil(xl - 0.5); x <= Math.floor(xr - 0.5); x++) {
       const dxn = clamp((x + 0.5 - (mc + tilt)) / (hw || 1), -1, 1), nx = dxn * 0.75, ny = -s * 0.6, nz = 0.75, nl = Math.hypot(nx, ny, nz);
       const dot = (nx * -0.45 + ny * 0.55 + nz * 0.7) / nl; // light from upper-left, in front
-      let l = 3.2 + dot * 3.8 + (bayer(x, row) - 0.5) * 0.9;
+      let l = 3.2 + dot * 3.8 + (bayer(x, row) - 0.5) * 0.45;
       if (s < -0.78) l += 0.35; // forehead catches the light
       if (Math.abs(dxn) > 0.84 || Math.abs(s) > 0.9) l -= 1.3; // a darker rim keeps the oval crisp
       R.set(x, row, pick(BONE, clamp(l, 1.4, 6.4)), PART.mask);
@@ -348,16 +348,18 @@ export function renderNulRaw(pose, opts = {}) {
   // two thin horizontal eye slits at u 54: 3 + 3 px with a 2 px gap (3/4 view: the far one is 2 px). Full emissive.
   const eyeRow = rowU(54 + lift), fc = Math.round(mc + mAng * 1);
   const flash = pose.eye >= 1;
-  const slit = (x0, x1) => {
+  const slit = (x0, x1, capL, capR) => {
     for (let x = x0; x <= x1; x++) {
       const centre = x === Math.round((x0 + x1) / 2);
       R.ed(x, eyeRow, flash ? EYE[4] : centre ? EYE[4] : EYE[2], PART.eye, 1, 0, 0, 1);
       if (R.id(x, eyeRow + 1) === PART.mask) { R.set(x, eyeRow + 1, BONE[2], PART.mask); R.g(x, eyeRow + 1, BONE[2], 0.25); }
     }
-    if (pose.eye === 2) { for (let x = x0 - 1; x <= x1 + 1; x++) { R.g(x, eyeRow - 1, EYE[1], 0.55); R.g(x, eyeRow + 1, EYE[1], 0.55); } R.g(x0 - 1, eyeRow, EYE[3], 1); R.g(x1 + 1, eyeRow, EYE[3], 1); }
+    // intro[3] flare (F4): halos stay on x0..x1 and only the OUTER end caps glow, so the 2 gap columns between the slits stay glow-free
+    if (pose.eye === 2) { for (let x = x0; x <= x1; x++) { R.g(x, eyeRow - 1, EYE[1], 0.55); R.g(x, eyeRow + 1, EYE[1], 0.55); } if (capL) R.g(x0 - 1, eyeRow, EYE[3], 1); if (capR) R.g(x1 + 1, eyeRow, EYE[3], 1); }
   };
-  slit(fc - 3, fc - 2); // far eye (2 px)
-  slit(fc + 1, fc + 3); // near eye (3 px)
+  slit(fc - 3, fc - 2, true, false); // far eye (2 px)
+  slit(fc + 1, fc + 3, false, true); // near eye (3 px)
+  if (pose.eye === 2) for (let x = fc - 1; x <= fc; x++) { const i = (eyeRow * W + x) * 4; R.glw[i] = R.glw[i + 1] = R.glw[i + 2] = R.glw[i + 3] = 0; } // the 2 gap px on the eye row: no glow at all
   // the mask strap: a 1 px gold line from the mask's far edge toward the back of the head
   { let x0 = 999; for (const [x, r] of maskRows) if (r === eyeRow && x < x0) x0 = x; for (let k = 1; k <= 3; k++) R.sn(x0 - k, eyeRow, GOLD[k === 3 ? 1 : 2], PART.crown, -0.5, 0, 0.8); }
 
@@ -401,7 +403,7 @@ export function renderNulRaw(pose, opts = {}) {
   for (let gi = 0; gi < gl; gi++) {
     const glyph = GLYPHS[(gi * 3 + 1) % GLYPHS.length], front = gi % 5 === 4;
     const age = (((pose.gAge + gi * 0.8) % 4) + 4) % 4 / 4; // 0..1, 2.5 tx per frame
-    const vBase = 1.5 + (gi % 3) * 0.6, u = vBase + age * 9 + lift * 0.4;
+    const vBase = 1.5 + (gi % 3) * 0.6, u = vBase + age * 7 + lift * 0.4;
     const { hwB } = profile(clamp(u - lift, 0, 40), pose);
     const baseX = front ? CX + pose.dx + 19 + (gi % 3) * 3 : CX + pose.dx - hwB - 5 - (gi % 4) * 3.2 - age * 3;
     for (let r = 0; r < 5; r++) for (let c = 0; c < 3; c++) {
@@ -435,6 +437,7 @@ function finishRaw(R, opts) {
       O.part[y * ow + mx] = part[sy * W + sx];
     } else if (doOutline && (A(sx - 1, sy) || A(sx + 1, sy) || A(sx, sy - 1) || A(sx, sy + 1))) {
       O.col[mo] = OUT[0]; O.col[mo + 1] = OUT[1]; O.col[mo + 2] = OUT[2]; O.col[mo + 3] = 255;
+      O.nrm[mo] = doFlip ? 127 : 128; O.nrm[mo + 1] = 128; O.nrm[mo + 2] = 255; O.nrm[mo + 3] = 255; // F8: flat (0,0,1), x mirrored like the rest; 0,0,0,0 used to decode to (-1,-1,-1)
     }
   }
   return O;

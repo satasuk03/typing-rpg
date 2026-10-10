@@ -243,9 +243,65 @@ function world(canvas: HTMLCanvasElement, q: URLSearchParams): void {
   step(20);
 }
 
+const HERO_OLD = ["idle", "walk", "raise", "slash", "cast", "hurt", "win"] as const;
+const HERO_NEW = ["kneel", "rise", "reach", "swordOut"] as const;
+
+/** FNV-1a over a frame's colour + glow pixels and its geometry: the P2.3 "every old hero frame is byte-identical" pin. */
+function frameHash(f: SpriteFrame): string {
+  let h = 0x811c9dc5;
+  const mix = (v: number): void => { h = Math.imul(h ^ (v & 255), 0x01000193) >>> 0; };
+  for (const v of [f.w, f.h, f.ax, f.ay]) { mix(v); mix(v >> 8); }
+  for (const im of [f.img, f.glow]) {
+    if (!im) { mix(1); continue; }
+    const w = (im as Img).width, hh = (im as Img).height;
+    const c = document.createElement("canvas"); c.width = w; c.height = hh;
+    const x = c.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+    x.drawImage(im as Img, 0, 0);
+    const d = x.getImageData(0, 0, w, hh).data;
+    for (let i = 0; i < d.length; i++) mix(d[i] as number);
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** `view=hero`: the hero frame hashes (numbers.heroHashes) and a strip: new anims beside the existing idle + walk. */
+function heroSheet(canvas: HTMLCanvasElement): void {
+  const src = new ProceduralSpriteSource();
+  const hashes: Record<string, string[]> = {};
+  for (const a of [...HERO_OLD, ...HERO_NEW]) {
+    try { hashes[a] = src.frames("hero", a).map(frameHash); } catch { /* anim not drawn yet */ }
+  }
+  const W = 1280, H = 470, S = 5;
+  canvas.width = W; canvas.height = H;
+  const g = canvas.getContext("2d") as CanvasRenderingContext2D;
+  g.imageSmoothingEnabled = false;
+  const gr = g.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, "#3a2850"); gr.addColorStop(0.55, "#c0703a"); gr.addColorStop(1, "#4a3020");
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.font = "14px monospace"; g.fillStyle = "#fff";
+  g.fillText("HERO 5x, shared foot line. Row 1: existing idle + walk. Row 2: P2.3 kneel, rise, reach, swordOut", 12, 20);
+  const rows: [number, string[]][] = [[215, ["idle", "walk"]], [445, [...HERO_NEW]]];
+  for (const [base, anims] of rows) {
+    g.fillStyle = "rgba(255,255,255,0.4)"; g.fillRect(0, base, W, 1);
+    let x = 10;
+    for (const a of anims) {
+      let fr: readonly SpriteFrame[] = [];
+      try { fr = src.frames("hero", a); } catch { /* none */ }
+      fr.forEach((f, i) => {
+        g.drawImage(f.img as Img, x, base - f.ay * S, f.w * S, f.h * S);
+        g.fillStyle = "#fff"; g.font = "11px monospace"; g.fillText(`${a} ${i}`, x + 4, base + 14);
+        x += f.w * S * 0.56;
+      });
+      x += 10;
+    }
+  }
+  window.__nulSheet = { ready: true, numbers: { heroHashes: hashes } };
+  (window as unknown as { __renderTest: unknown }).__renderTest = { ready: true, step: () => undefined };
+}
+
 export function start(canvas: HTMLCanvasElement): void {
   const q = new URLSearchParams(location.search);
   const view = q.get("view") ?? "frames";
+  if (view === "hero") { heroSheet(canvas); return; }
   if (view === "world") world(canvas, q);
   else sheet(canvas, view);
 }

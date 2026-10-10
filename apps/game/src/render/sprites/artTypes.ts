@@ -12,7 +12,7 @@ export type HeroCutsceneAnimKey = "kneel" | "rise" | "reach" | "swordOut"; // ad
 
 /** Typed surface of the (untyped, ported) procedural art module. */
 export interface ProceduralArt {
-  HERO: Record<HeroAnim, SpriteFrame[]>;
+  HERO: Record<HeroAnim | HeroCutsceneAnimKey, SpriteFrame[]>;
   MSPR: Record<MonsterArt, { idle: SpriteFrame[]; atk: SpriteFrame[] }>;
   CHEST: { closed: SpriteFrame; open: SpriteFrame };
   BD_MTN: HTMLCanvasElement;
