@@ -12,6 +12,7 @@
 
 import type { QualityTier } from "../render";
 import { isQualityTier, RenderWorld } from "../render";
+import { blendMood, STORM_GOLD, UNWRITTEN } from "../render/biomes";
 import {
   buildWorld,
   levelIds,
@@ -30,6 +31,8 @@ declare global {
       ready: boolean;
       /** Move the camera + hero to another pose and re-render. */
       setPose(pose: string, at?: number): void;
+      /** Show / hide the hero (silhouette probes) and re-render. */
+      setHeroVisible(v: boolean): void;
     };
   }
 }
@@ -58,6 +61,13 @@ const WILLOW_STANDIN: readonly { key: string; dx: number; y: number; dz: number;
     { key: "prop.ch2.fronds.silver.2", dx: 3.7, y: 9.8, dz: 0.5, scale: 1.2 },
     { key: "prop.ch2.fronds.silver.3", dx: 4.8, y: 9.2, dz: 0.35, scale: 1.3 },
   ];
+
+/** Prologue (`id=prologue`) stand-ins: Hush Shades and Wisps on the servant slots, Nul on the boss slot (P2.2 stills). */
+const PROLOGUE_SERVANTS: readonly { key: string; scale: number; flyY: number }[] = [
+  { key: "monster.shade", scale: 1.1, flyY: 0 },
+  { key: "monster.wisp", scale: 1.2, flyY: 1.2 },
+  { key: "monster.shade", scale: 1.1, flyY: 0 },
+];
 
 const ANCHOR_COLORS: Readonly<Record<string, string>> = {
   hero: "#4cf",
@@ -95,6 +105,7 @@ export function start(canvas: HTMLCanvasElement): void {
     actors = [];
   };
 
+  let heroActor: { visible: boolean } | null = null;
   const heroAt = (x: number, z: number, anim: "walk" | "idle"): void => {
     // Ch2 (night moods, caveK > 0) uses the game's hero cave-rim lift (level/stage.ts HERO_CAVE_RIM); Ch1 views stay as they were.
     const a = world.addActor("hero", anim, {
@@ -107,6 +118,7 @@ export function start(canvas: HTMLCanvasElement): void {
     a.place(x, 0, z);
     world.shadowFor(a, x, z);
     actors.push(a);
+    heroActor = a;
   };
 
   const monsterAt = (key: string, scale: number, x: number, y: number, z: number): void => {
@@ -114,6 +126,20 @@ export function start(canvas: HTMLCanvasElement): void {
     a.place(x, y, z);
     world.shadowFor(a, x, z);
     actors.push(a);
+  };
+
+  /** `&mood=unwritten|mid` (prologue stills): force the drained mood; the segment's own mood would otherwise win every frame. */
+  const moodName = q.get("mood");
+  const forced =
+    layout.id !== "prologue"
+      ? null
+      : moodName === "unwritten"
+        ? UNWRITTEN
+        : moodName === "mid"
+          ? blendMood(STORM_GOLD, UNWRITTEN, 0.5)
+          : null;
+  const applyForcedMood = (): void => {
+    if (forced) world.setMood(forced, "ruins");
   };
 
   const applyPose = (poseRaw: string, at?: number): string => {
@@ -135,6 +161,16 @@ export function start(canvas: HTMLCanvasElement): void {
       const enc = handle.encounter(index);
       heroAt(enc.hero.x, enc.hero.z, "idle");
       enc.slots.forEach((s, i) => {
+        if (layout.id === "prologue") {
+          const nul = enc.def.boss && s.kind === "boss";
+          const p = nul
+            ? { key: "monster.nul", scale: 1.0, flyY: 0 }
+            : (PROLOGUE_SERVANTS[
+                i % PROLOGUE_SERVANTS.length
+              ] as (typeof PROLOGUE_SERVANTS)[number]);
+          monsterAt(p.key, p.scale, s.x, p.flyY, s.z);
+          return;
+        }
         const ch2Boss = layout.chapter >= 2 && enc.def.boss;
         if (ch2Boss && s.kind === "boss") {
           for (const w of WILLOW_STANDIN) {
@@ -154,9 +190,15 @@ export function start(canvas: HTMLCanvasElement): void {
         monsterAt(p.key, p.scale, s.x, p.flyY, s.z);
       });
     }
+    if (layout.id === "prologue" && q.get("sword") === "1") {
+      const sw = handle.getAnchor("sword");
+      const prop = world.addProp("prop.prologue.sword", sw.x, 0, sw.z, { rim: 1.2 });
+      actors.push({ dispose: () => world.remove(prop) });
+    }
     world.camera.setTarget(cam);
     world.camera.snap();
     handle.update(1 / 60, cam.x);
+    applyForcedMood();
     world.update(1 / 60);
     handle.warmUp(3, cam.x);
     return pose;
@@ -196,6 +238,7 @@ export function start(canvas: HTMLCanvasElement): void {
   const step = (n: number, dt = 1 / 60): void => {
     for (let i = 0; i < n; i++) {
       handle.update(dt, world.camera.pose.x);
+      applyForcedMood();
       world.update(dt, 0);
       if (i === n - 1) {
         world.render();
@@ -211,6 +254,10 @@ export function start(canvas: HTMLCanvasElement): void {
       return pose;
     },
     ready: true,
+    setHeroVisible(v) {
+      if (heroActor) heroActor.visible = v;
+      step(1);
+    },
     setPose(p, at) {
       pose = applyPose(p, at);
       step(2);
@@ -234,6 +281,7 @@ export function start(canvas: HTMLCanvasElement): void {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     handle.update(dt, world.camera.pose.x);
+    applyForcedMood();
     world.update(dt, 0);
     world.render();
     drawAnchors();
