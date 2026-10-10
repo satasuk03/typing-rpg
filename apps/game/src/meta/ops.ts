@@ -600,6 +600,24 @@ export function setPassive(
   return s;
 }
 
+/**
+ * Reserved `journal.firstSeen` keys that are flags, not words ("#" never starts a word key). They ride the existing
+ * min-merge and cloud sync, so "chapter intro seen" needs no save schema change. The Journal only lists keys that are
+ * bundle words, so a flag key never shows there.
+ */
+export const introSeenKey = (chapter: number): string => `#intro:ch${chapter}`;
+export const isFlagKey = (k: string): boolean => k.startsWith("#");
+export const introSeen = (save: Save, chapter: number): boolean =>
+  save.journal.firstSeen[introSeenKey(chapter)] !== undefined;
+
+export function markIntroSeen(save: Save, chapter: number, nowMs: number): Save {
+  if (introSeen(save, chapter)) return save;
+  const s = clone(save);
+  s.journal.firstSeen[introSeenKey(chapter)] = s.srs.levelsPlayed;
+  s.updatedAtMs = nowMs;
+  return s;
+}
+
 export function patchSettings(
   save: Save,
   patch: Partial<Omit<Save["settings"], "volumes">> & {

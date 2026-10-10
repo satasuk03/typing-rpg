@@ -98,6 +98,7 @@ export function settingsScreen(app: App, _arg: ScreenArg): Screen {
           },
           st.caseMode,
         )}
+        ${sw("caseAssist", "Ignore capitals", "Accessibility. From Chapter II, sentences count a capital as its lowercase letter, so you never need Shift. Free: stars and rewards do not change.", st.caseAssist === true)}
         ${seg<"story" | "standard" | "hard" | "zen">(
           {
             key: "difficulty",
@@ -197,7 +198,7 @@ export function settingsScreen(app: App, _arg: ScreenArg): Screen {
       draw();
     },
     switch: (t) => {
-      const k = t.dataset.k as "reducedFlash" | "reducedMotion" | "autoUnlock";
+      const k = t.dataset.k as "reducedFlash" | "reducedMotion" | "autoUnlock" | "caseAssist";
       const next = !app.store.save.settings[k];
       keep = `sw-${k}`;
       app.store.patchSettings({ [k]: next });

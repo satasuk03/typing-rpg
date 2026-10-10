@@ -235,6 +235,10 @@ export class SaveStore {
   setPassive(slot: 0 | 1 | 2, id: string | null): boolean {
     return this.commit(ops.setPassive(this.cur, slot, id, this.now()));
   }
+  /** The chapter intro card was typed once (skippable from now on). */
+  markIntroSeen(chapter: number): void {
+    this.commit(ops.markIntroSeen(this.cur, chapter, this.now()));
+  }
   patchSettings(patch: Parameters<typeof ops.patchSettings>[1]): void {
     this.commit(ops.patchSettings(this.cur, patch, this.now()));
   }
