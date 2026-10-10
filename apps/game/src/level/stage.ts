@@ -30,12 +30,15 @@ const WILLOW_SCALE = 1.15;
 const DAWN_SEC = 2.0;
 /** ... starting this long after the Willow is freed, so the warm rings and flashes of the finale land on the dark grove (K2 keep-out). */
 const DAWN_DELAY = 1.3;
+/** Riddle phase: the Willow takes no pale hit wash (a held dark-violet tint instead) and a small rim cap (a pale body is a lost boss). */
+const WILLOW_RIDDLE_DARKEN = 0.8;
+const WILLOW_RIDDLE_RIM_CAP = 0.02;
 /** P2-2 / 3.7: the moon on the Willow's face, per face state: [r, g, b, intensity]. */
 const FACE_LIGHT: Readonly<Record<string, readonly [number, number, number, number]>> = {
   intro: [0.55, 0.65, 1.0, 0.2],
   p1: [0.7, 0.85, 1.25, 1.0],
   spell: [0.6, 0.55, 1.1, 0.6],
-  riddle: [0.85, 1.0, 0.9, 0.9],
+  riddle: [0.6, 0.9, 1.0, 0.45],
   // freed: the dawn crossfade carries the warm key; a face light here clipped the K2 plate keep-out probe in the demo
   freed: [1.0, 0.85, 0.5, 0.0],
 };
@@ -510,7 +513,8 @@ export class LevelStage {
     if (who === "hero") this.hero?.setRimFlash(amount, rgb);
     else {
       const e = this.foes.get(who);
-      e?.actor.setRimFlash(e.states ? Math.min(amount, WILLOW_RIM_CAP) : amount, rgb);
+      const cap = e?.wLast === "riddle" ? WILLOW_RIDDLE_RIM_CAP : WILLOW_RIM_CAP;
+      e?.actor.setRimFlash(e?.states ? Math.min(amount, cap) : amount, rgb);
     }
   }
 
@@ -765,6 +769,11 @@ export class LevelStage {
     if (f) {
       e.actor.setFrame(f);
       e.frame = f;
+    }
+    if (e.states && e.wLast === "riddle") {
+      // no pale hit wash; instead a held dark-violet tint keeps the body a value step under the lit backdrop
+      flash = WILLOW_RIDDLE_DARKEN;
+      flashCol = [0.02, 0.01, 0.06];
     }
     e.actor.setFlash(flash, flashCol);
     e.actor.place(e.baseX + dx, e.flyY + bob, e.baseZ + dz);

@@ -94,21 +94,33 @@ async function probe(page: Page): Promise<Probe | null> {
   });
 }
 
-async function strip(page: Page, name: string, n = FRAMES): Promise<void> {
+async function strip(page: Page, name: string, n = FRAMES, hudOff = false): Promise<number[]> {
+  const ratios: number[] = [];
   for (let i = 0; i < n; i++) {
     const pr = await probe(page);
-    await page.screenshot({
-      path: path.join(outDir, `${TAG}-${name}-${String(i).padStart(2, "0")}.png`),
-    });
+    const f = path.join(outDir, `${TAG}-${name}-${String(i).padStart(2, "0")}`);
+    await page.screenshot({ path: `${f}.png` });
+    if (hudOff) {
+      // the same GL frame with the HUD canvas hidden (the sign-off still #25 trick)
+      await page.evaluate(() => {
+        (document.getElementById("hud") as HTMLElement).style.visibility = "hidden";
+      });
+      await page.screenshot({ path: `${f}-nohud.png` });
+      await page.evaluate(() => {
+        (document.getElementById("hud") as HTMLElement).style.visibility = "";
+      });
+    }
     console.log(`WF ${TAG} ${name} ${i} ${JSON.stringify(pr)}`);
+    if (pr) ratios.push(pr.ratio);
   }
+  return ratios;
 }
 
 test("Willow moments", async ({ page }) => {
   fs.mkdirSync(outDir, { recursive: true });
   const errors = await openPlay(page, "level=ch2-l10&seed=7&wpm-bot=60&difficulty=story");
   const done = new Set<string>();
-  const want = (process.env.MOMENTS ?? "p1,spell,riddle,freed").split(",");
+  const want = (process.env.MOMENTS ?? "p1,spell,riddle,riddle0,freed").split(",");
   const seenRiddle = { n: 0 };
   const t0 = Date.now();
   while (Date.now() - t0 < 800_000 && want.some((w) => !done.has(w))) {
@@ -121,6 +133,7 @@ test("Willow moments", async ({ page }) => {
         boss: boss ? { alive: boss.alive, frac: boss.hpFrac } : null,
         doom: v.doom !== null,
         riddle: v.minigame?.kind === "riddle",
+        riddleLive: v.minigame?.kind === "riddle" && !!v.minigame.riddle,
         resolved: p.seen().RiddleResolved ?? 0,
         completed: p.seen().FinisherCompleted ?? 0,
         result: p.result() !== null,
@@ -143,6 +156,16 @@ test("Willow moments", async ({ page }) => {
       await page.waitForTimeout(900);
       done.add("spell");
       await strip(page, "spell");
+    }
+    // P1 (riddle visible): the riddle STATE itself, from its first frame to well past the 0.5 s of the sign-off still, before any answer
+    if (st.riddleLive && st.resolved === 0 && !done.has("riddle0") && want.includes("riddle0")) {
+      done.add("riddle0");
+      const r = await strip(page, "riddle0", Number(process.env.R0_FRAMES ?? 16), true);
+      // riddle-phase luma gate: the boss keeps a value step against the backdrop on EVERY consecutive frame (P1-3 held ~1.8; floor 1.65)
+      console.log(
+        `RIDDLE_RATIO min=${Math.min(...r).toFixed(2)} mean=${(r.reduce((a, b) => a + b, 0) / r.length).toFixed(2)}`,
+      );
+      if (TAG === "after") expect(Math.min(...r)).toBeGreaterThanOrEqual(1.65);
     }
     if (st.resolved > seenRiddle.n) {
       seenRiddle.n = st.resolved;

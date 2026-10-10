@@ -45,7 +45,13 @@ import {
   popAlpha,
   popScale,
 } from "./pops";
-import { activeRiddle, drawRiddlePanel, riddlePanelRect, riddleSlide } from "./riddlePanel";
+import {
+  activeRiddle,
+  drawRiddlePanel,
+  RIDDLE_TRUNK_HALF,
+  riddlePanelRect,
+  riddleSlide,
+} from "./riddlePanel";
 import type { HudSettings } from "./settings";
 import { DEFAULT_HUD_SETTINGS, normalizeSettings } from "./settings";
 import { getSkillIcon } from "./skillIcons";
@@ -839,10 +845,29 @@ export class Hud {
     else avoid.push(TOP_LABEL_RECT(W));
     // v2.0 riddle panel: a hard keep-out for every plate, pop and tag (null while there is no live riddle)
     const riddle = introHold ? null : activeRiddle(view);
-    this.riddleRectDesign = riddle ? riddlePanelRect(W, !!boss) : null;
+    // the Willow-aware riddle layout needs the real projector (the mock fallback anchors are not the boss)
+    const bossHead = boss && this.projector ? this.anchorDesign(boss, "head") : null;
+    this.riddleRectDesign = riddle ? riddlePanelRect(W, !!boss, bossHead?.x) : null;
     if (!riddle) this.riddleShownAt = null;
     else if (this.riddleShownAt === null) this.riddleShownAt = this.time;
     if (this.riddleRectDesign) avoid.push({ ...this.riddleRectDesign });
+    // the riddle leaf plates never cover the Willow: its trunk column and the root collar are keep-outs for the layout
+    const riddleLeft =
+      !!riddle &&
+      !!bossHead &&
+      !!this.riddleRectDesign &&
+      this.riddleRectDesign.x + this.riddleRectDesign.w <= bossHead.x - RIDDLE_TRUNK_HALF;
+    if (riddleLeft && boss && bossHead) {
+      const bossFeet = this.anchorDesign(boss, "feet");
+      const top = bossHead.y - 50;
+      avoid.push({
+        x: bossHead.x - RIDDLE_TRUNK_HALF,
+        y: top,
+        w: RIDDLE_TRUNK_HALF * 2,
+        h: Math.max(0, bossFeet.y - 20 - top),
+      });
+      avoid.push({ x: bossHead.x - 170, y: bossFeet.y - 70, w: 340, h: 70 });
+    }
     const isRiddle = view.minigame?.kind === "riddle";
     for (const e of view.enemies) {
       if (!e.alive || e.isBoss || introHold) continue;
@@ -879,6 +904,14 @@ export class Hud {
         ax = W * (0.22 + (0.56 * (p.lane + 0.5)) / Math.max(1, minLanes));
         // riddle leaves stay put (the clue is being read); rubble falls with its timer
         ay = isRiddle ? H * 0.6 : 150 + (1 - tl) * (H * 0.55);
+        if (riddleLeft && this.riddleRectDesign && bossHead) {
+          // the leaves stack in a column left of the Willow, under the clue panel (the trunk and face stay clear)
+          const rr = this.riddleRectDesign;
+          ax =
+            Math.min(rr.x + rr.w * 0.7, bossHead.x - RIDDLE_TRUNK_HALF - 16 - g.w / 2) -
+            p.lane * 12;
+          ay = rr.y + rr.h + 12 + (p.lane + 1) * (g.h + 6);
+        }
       }
       const priority = p.kind === "guard" || p.kind === "doom" || p.kind === "secondWind" ? 0 : 1;
       boxes.push({ id: p.id, w: g.w, h: g.h, ax, ay, priority });

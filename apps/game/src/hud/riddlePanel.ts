@@ -15,9 +15,25 @@ export const RIDDLE_PANEL_W = 620;
 export const RIDDLE_PANEL_H = 124;
 const PAD = 16;
 
-/** Design-px rect: under the boss plate (its +22 pop margin included), else near the top. */
-export function riddlePanelRect(W: number, hasBoss: boolean): Rect {
+/** Half-width (design px) kept clear around the Willow's trunk/face column, and the gap the panel leaves to it. */
+export const RIDDLE_TRUNK_HALF = 80;
+const RIDDLE_TRUNK_GAP = 14;
+/** Top of the left-anchored panel: below the hero panel (design y 17..123) so the two never touch. */
+const RIDDLE_LEFT_Y = 138;
+const RIDDLE_LEFT_MIN_X = 24;
+
+/**
+ * Design-px rect. With the boss's x (the Willow) the panel sits LEFT of its trunk, under the hero panel, so the face and trunk
+ * stay visible through the whole riddle phase; without it (or when it would not fit) it is centred under the boss plate
+ * (its +22 pop margin included), else near the top.
+ */
+export function riddlePanelRect(W: number, hasBoss: boolean, bossX?: number): Rect {
   const bp = bossPlateRect(W);
+  if (hasBoss && bossX !== undefined) {
+    const x = Math.round(bossX - RIDDLE_TRUNK_HALF - RIDDLE_TRUNK_GAP - RIDDLE_PANEL_W);
+    if (x >= RIDDLE_LEFT_MIN_X)
+      return { x, y: RIDDLE_LEFT_Y, w: RIDDLE_PANEL_W, h: RIDDLE_PANEL_H };
+  }
   const y = hasBoss ? bp.y + bp.h + 30 : 24;
   return { x: Math.round(W / 2 - RIDDLE_PANEL_W / 2), y, w: RIDDLE_PANEL_W, h: RIDDLE_PANEL_H };
 }
