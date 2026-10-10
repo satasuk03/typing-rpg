@@ -68,6 +68,7 @@ export type ResolvedSegment =
       name: string;
       hpPoolM: Milli;
       gruntHitM: Milli;
+      attackPowerBp: Bp; // v1.9: Attack Power P as a multiple of the chapter par armor score (BP = 1.0 = no leak at par)
       waves: ResolvedEnemyRef[][];
     }
   | { kind: "boss"; bossId: string };
@@ -89,6 +90,7 @@ export interface ResolvedBoss {
   enemyId: string;
   hpM: Milli;
   hitM: Milli;
+  attackPowerBp: Bp; // v1.9: the boss's P (x par armor)
   plateLength: [min: number, max: number];
   phase1: {
     endAtHpBp: Bp;
@@ -102,6 +104,8 @@ export interface ResolvedBoss {
      */
     addsHpPoolM?: Milli;
     addsGruntHitM?: Milli;
+    /** v1.9: P of the phase-1 adds (x par armor). Absent = BP (no leak at par). */
+    addsAttackPowerBp?: Bp;
   };
   phase2: { endAtHpBp: Bp; doomEveryTicks: number; minDoomSpells: number };
   phase3: {
@@ -146,6 +150,7 @@ export interface ResolvedLevel {
   tierMixBp: { current: Bp; review: Bp; biome: Bp; weak: Bp }; // 6000/2000/1500/500; an empty pool's weight goes to current
   plateLength: [min: number, max: number];
   goldTotal: number; // levelGold(chapter, index); options.goldMultBp applies on top
+  parArmorBp: Bp; // v1.9: itemScoreBp of the chapter par armor (the unit of Attack Power P)
   parHpM: Milli; // computeHeroStats(parLoadout(chapter)).maxHp (Doom Spell damage base)
   star3: ResolvedStar; // StarChallenge with parTime.slack converted to integer bp (the sim hashes integers only)
   parRefTicks: number;

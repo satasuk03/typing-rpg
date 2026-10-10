@@ -2,12 +2,19 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.8** (2026-10-10) |
+| **Doc version** | **1.9** (2026-10-10) |
 | **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **1.9** (2026-10-10): proposed (PO "not every attack is fully blocked", option G of `docs/qa/block-chance-analysis.md`). **Guard leak**: deterministic, no RNG, `SIM_VERSION` stays 1 (pre-release), `CONTENT_VERSION` changes.
+  - Formula (integers, bp): `G` = the hero's Guard Rating = `itemScoreBp` of the equipped armor (`guardRatingBp(loadout)`). `P` = `mulBp(parArmorBp(chapter), enemy.attackPowerBp)`. `leakBp = clamp(10000 - floor(G*10000/P), 0, GUARD_LEAK_CAP_BP 5000)`. A typed guard always succeeds. **Parry:** the hit becomes `hit x leak`; the counter and `PARRY_ATB` are unchanged. **Block:** `hit x leak + (hit - hit x leak) x blockMult` (the leak applies first, BLOCK_MULT or Iron Will on the rest). An unguarded hit is unchanged. **Barrier:** it absorbs the leaked damage of a Parry (consuming a charge) as it absorbs a normal hit; a Parry with leak 0 never touches the barrier, and a Block with a barrier is still absorbed whole, as before.
+  - Events (§4, additive; typed optional so the existing HUD mocks still compile, the sim always sets them): `GuardBlocked` and `GuardParried` gain `leakBp?: number` (0..5000) and `leakDamage?: number` (display HP actually leaked after any barrier; for a Block `damage` is still the total). `EnemyAttack.damage` of a parried attack is now the leaked damage.
+  - View (§5, additive, optional-typed, always set by the sim): `HeroView.guardRatingBp?: number` (G, score bp, 10000 = 1.0); `EnemyView.attackPowerBp?: number` (P in score bp) and `EnemyView.leakBp?: number` (preview, 0 = no cracked-shield badge).
+  - Sim types (additive): `ResolvedLevel.parArmorBp`, `ResolvedEncounter(segment).attackPowerBp`, `ResolvedBoss.attackPowerBp`, `ResolvedBoss.phase1.addsAttackPowerBp?`, `EnemyState.attackPowerBp`. `BALANCE.GUARD_LEAK_CAP = 0.5`.
+  - Content (§6, additive with defaults, so old data parses unchanged): `EncounterDef.attackPower` (default 1), `BossDef.attackPower` (default 1), `BossDef.phase1.addsAttackPower` (default 1); all are multiples of the chapter par armor score. Ch1: L1-L9 = 1 (no leak); the Ruin Golem and its phase-1 adds = 1.25 (leak 20% at par, ~3% at +3, 0 at +5). L10's pre-boss waves stay at 1. `BOSS_LEVEL_HIT_MULT` 1.3 -> 1.15 (doc suggested 1.235; see `docs/balance-ch1.md` §9).
+  - Anti-cheat / parity: the Worker re-sim and the Node/Chromium parity run the same sim, so nothing changes in the ticket or the trial log format (a Trial has no enemy attacks). `golden-typing.json` is regenerated (new event fields and enemy state); `golem-20wpm-sw` keeps seed 4249 (still a mid-boss Second Wind clear).
 - **1.8** (2026-10-10): proposed (cleanup round). Save blob **schemaVersion 2** (§9.1).
   - New fields: `journal.notes: Record<wordKey, string>` (player translations; was device-local IndexedDB, now synced) and top-level `resetEpoch: number` (New Game generation, default 0).
   - Limits: a note is 1..120 chars, a key 1..64 chars, at most 2000 notes (empty text deletes the note); `resetEpoch` is an int 0..1,000,000. The Worker still stores the blob opaquely (it cannot parse the compressed blob) and enforces only the existing 256 KiB decoded cap; the worst case (2000 x 120 chars) fits that cap. The client enforces the shape via `SaveBlob`.

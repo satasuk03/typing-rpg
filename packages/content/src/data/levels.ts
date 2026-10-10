@@ -50,7 +50,9 @@ export const HIT_MULT = 1.34;
  * 20 WPM Beginner's first-try boss clear lands at ~85% (target 80-90%); the Aegis/Iron Will knobs alone cannot get there
  * (even no Aegis at all gives ~96%).
  */
-export const BOSS_LEVEL_HIT_MULT = 1.3;
+export const BOSS_LEVEL_HIT_MULT = 1.15; // v1.9: 1.3 -> 1.15 pays for the Ruin Golem and L10 adds guard leak (doc suggested 1.235; the measured 86% needs 1.15, see balance-ch1.md)
+/** v1.9 guard leak: Attack Power P (x par armor) of the Ruin Golem and its phase-1 adds: 20% leak at par gear, 3% at +3, 0 at +5. */
+export const BOSS_ATTACK_POWER = 1.25;
 const r1 = (x: number): number => Math.round(x * 100) / 100;
 /** L10 hits: authored value x BOSS_LEVEL_HIT_MULT. */
 export const bossLevelHit = (authored: number): number => r1(authored * BOSS_LEVEL_HIT_MULT);
@@ -67,7 +69,7 @@ const walk = (first: boolean): Segment => ({
 });
 const enc = (name: string, hp: number, gruntHit: number, ...waves: EnemyRef[][]): Segment => ({
   kind: "encounter",
-  encounter: { name, hp, gruntHit, waves } satisfies EncounterDef,
+  encounter: { name, hp, gruntHit, attackPower: 1, waves } satisfies EncounterDef,
 });
 
 /** walk, enc, walk, enc, ... (heal on every walk after the first). */

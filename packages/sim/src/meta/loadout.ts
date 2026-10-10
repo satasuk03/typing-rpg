@@ -43,6 +43,12 @@ export function parLoadout(chapter: number): Loadout {
   };
 }
 
+/** itemScoreBp of the chapter par armor: the unit of enemy Attack Power P (v1.9 guard leak). */
+export const parArmorBp = (chapter: number): number => scoreOf(parLoadout(chapter).armor);
+
+/** Hero Guard Rating G (bp) = the equipped armor item score (v1.9). */
+export const guardRatingBp = (loadout: Loadout): number => scoreOf(loadout.armor);
+
 /** Par max HP of chapter c in milli (ResolvedLevel.parHpM: the Doom Spell damage base). */
 export const parHpM = (chapter: number): Milli => computeHeroStats(parLoadout(chapter)).maxHp;
 

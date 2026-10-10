@@ -71,6 +71,7 @@ function randomDef(seed: number): ResolvedLevel {
       name: `E${i}`,
       hpPoolM: 20_000 + below(r, 300_000),
       gruntHitM: 1000,
+      attackPowerBp: 10_000,
       waves,
     });
   }

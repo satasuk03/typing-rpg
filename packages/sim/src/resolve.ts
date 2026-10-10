@@ -14,7 +14,7 @@ import { K } from "./balance.ts";
 import { SimError } from "./errors.ts";
 import { bp, milli, mulDiv } from "./fixed.ts";
 import { canonicalContentJson, fnv1a32 } from "./hash.ts";
-import { levelGold, parHpM, resolveStar3 } from "./meta/index.ts";
+import { levelGold, parArmorBp, parHpM, resolveStar3 } from "./meta/index.ts";
 import { TICK_HZ } from "./time.ts";
 import type {
   ResolvedBoss,
@@ -54,6 +54,7 @@ function resolveBoss(b: BossDef, levelGruntHitM: number | null): ResolvedBoss {
     enemyId: b.enemyId,
     hpM,
     hitM,
+    attackPowerBp: bp(b.attackPower),
     plateLength: [b.plateLength[0], b.plateLength[1]],
     phase1: {
       endAtHpBp: bp(b.phase1.endAtHpPct / 100),
@@ -63,6 +64,7 @@ function resolveBoss(b: BossDef, levelGruntHitM: number | null): ResolvedBoss {
       // HP per add on average (the sim's two equal adds). The hit base is the level's own encounter gruntHit.
       addsHpPoolM: mulDiv(hpM, K.BOSS_ADDS_HP_NUM, K.BOSS_ADDS_HP_DEN),
       addsGruntHitM: levelGruntHitM ?? mulDiv(hitM, 10_000, K.BOSS_HIT_MULT_BP),
+      addsAttackPowerBp: bp(b.phase1.addsAttackPower),
     },
     phase2: {
       endAtHpBp: bp(b.phase2.endAtHpPct / 100),
@@ -126,6 +128,7 @@ export function resolveLevel(
       name: s.encounter.name,
       hpPoolM: milli(s.encounter.hp),
       gruntHitM: milli(s.encounter.gruntHit),
+      attackPowerBp: bp(s.encounter.attackPower),
       waves: s.encounter.waves.map((w) => w.map(resolveRef)),
     };
   });
@@ -184,6 +187,7 @@ export function resolveLevel(
     },
     plateLength: [lv.plateLength[0], lv.plateLength[1]],
     goldTotal: levelGold(lv.chapter, lv.index),
+    parArmorBp: parArmorBp(lv.chapter),
     parHpM: parHpM(lv.chapter),
     star3: resolveStar3(lv.star3),
     parRefTicks: ticks(lv.parRefS),

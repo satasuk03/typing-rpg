@@ -17,6 +17,7 @@ import {
   levelGold,
   milli,
   mulBp,
+  parArmorBp,
   parHpM,
   type ResolvedEnemy,
   type ResolvedLevel,
@@ -76,6 +77,7 @@ export function economyFixtureLevel(n: number, hpScaleBp = 10_000): ResolvedLeve
       name: `enc${i + 1}`,
       hpPoolM: mulBp(milli(e.mons.reduce((a, m) => a + (m[0] as number), 0)), hpScaleBp),
       gruntHitM: milli(e.mons[0]?.[1] ?? 0),
+      attackPowerBp: 10_000,
       waves: [e.mons.map(() => ({ enemyId: "grunt", gimmick: null }))],
     });
   });
@@ -115,6 +117,7 @@ function baseDef(
     plateLength,
     goldTotal: levelGold(1, Math.min(index, 10)),
     parHpM: parHpM(1),
+    parArmorBp: parArmorBp(1),
     star3: { kind: "noSkills" },
     parRefTicks: 0,
     tutorial: false,
@@ -154,6 +157,7 @@ export function contentLevel(id: string): ResolvedLevel {
       name: s.encounter.name,
       hpPoolM: milli(s.encounter.hp),
       gruntHitM: milli(s.encounter.gruntHit),
+      attackPowerBp: 10_000,
       waves: s.encounter.waves.map((w) => w.map((r) => ({ enemyId: r.enemy, gimmick: null }))),
     };
   });

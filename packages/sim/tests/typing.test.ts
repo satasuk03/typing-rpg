@@ -761,6 +761,7 @@ describe("doc 01 §2 / interfaces §3.3 ATB gauge", () => {
               name: "A",
               hpPoolM: 6000,
               gruntHitM: 1,
+              attackPowerBp: 10_000,
               waves: [[{ enemyId: "slime", gimmick: null }]],
             },
             {
@@ -768,6 +769,7 @@ describe("doc 01 §2 / interfaces §3.3 ATB gauge", () => {
               name: "B",
               hpPoolM: 90_000,
               gruntHitM: 1,
+              attackPowerBp: 10_000,
               waves: [[{ enemyId: "slime", gimmick: null }]],
             },
           ],
@@ -1182,8 +1184,22 @@ function mkDef2() {
     { current: ["apple", "bird", "cat", "door", "eagle", "fish"] },
     {
       segments: [
-        { kind: "encounter", name: "A", hpPoolM: 90_000, gruntHitM: 1, waves: [wave] },
-        { kind: "encounter", name: "B", hpPoolM: 90_000, gruntHitM: 1, waves: [wave] },
+        {
+          kind: "encounter",
+          name: "A",
+          hpPoolM: 90_000,
+          gruntHitM: 1,
+          attackPowerBp: 10_000,
+          waves: [wave],
+        },
+        {
+          kind: "encounter",
+          name: "B",
+          hpPoolM: 90_000,
+          gruntHitM: 1,
+          attackPowerBp: 10_000,
+          waves: [wave],
+        },
       ],
     },
   );
