@@ -481,4 +481,4 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
   - P3.6: cutscene prop lookups match the key `prop.prologue.wordgate`, because layout props have no `id`.
   - P3.2: the sun Glow quads don't fade with the theft ramp, so the VFX layer or mood should dim them stepwise.
   - P4.2 polish: the ruins ground still renders lush green; the backlit-stone tint is a workaround.
-  - Tech debt: `layout.ts` only accepts `chN-lNN` ids, so `prologue.json` carries the placeholder id `ch1-l00` and `loadLevel("prologue")` renames it. Fix the regex and add a prologue-layout load test (mood tweak equals `STORM_GOLD`).
+  - ~~Tech debt: `layout.ts` only accepts `chN-lNN` ids, so `prologue.json` carries the placeholder id `ch1-l00` and `loadLevel("prologue")` renames it. Fix the regex and add a prologue-layout load test (mood tweak equals `STORM_GOLD`).~~ Done 2026-10-10.
