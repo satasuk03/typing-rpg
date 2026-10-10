@@ -2,12 +2,23 @@
 
 | | |
 |---|---|
-| **Doc version** | **2.0.3** (2026-10-10, Chapter 2 "The Hushwood") |
-| **SIM_VERSION** | `1` (v2.0 does not bump it: every new rule is gated by new content, Ch1 and the Trial replay identically, §13.1) |
+| **Doc version** | **2.2** (2026-10-10, Prologue "The Unwriting") |
+| **SIM_VERSION** | `1` (neither v2.0 nor v2.2 bumps it: every new rule is gated by new content, so Ch1, Ch2 and the Trial replay identically, §13.1, §14.1) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **2.2** (2026-10-10, proposed by the P0.1 contracts owner; **approved by the orchestrator 2026-10-10**: D41–D48 accepted as written. The rule "prologue words are not in any level pool" is a validator **warning**, not an error. The audio binding for `PrologueClimax` landed in the merge commit): the Prologue contracts (`docs/PROLOGUE_PLAN.md` §3.3, refined against the code). Every change is **additive and gated** on `ResolvedLevel.prologue`, which is absent on every story level. Ch1/Ch2 events, results, balance cells, bot output and state hashes don't change (§14.1). `SIM_VERSION` stays 1. `CONTENT_VERSION` changes only when P1.2 ships `bundle.prologue` (P0.3 adds the optional schema key and no data, so it doesn't).
+  - **Content (§6):** `PrologueDef`, `PrologueKitActive` and `ContentBundle.prologue?: PrologueDef`. The prologue's plate and guard words are inline lowercase strings, not `WordEntry` rows, so they can never reach a level pool, SRS or the journal. Its boss is a normal `BossDef` (`nul`) whose `phase1.endAtHpPct` **is** the climax gate (the plan's separate `endAtBossHpPct` is dropped: one source of truth). The schema checks structure (distinct ids and words, exactly one boss segment and it is last); `tools/content` checks quality (§14.2).
+  - **Sim (§3, new §3.7 "Prologue"):** `ResolvedPrologue`, `ResolvedLevel.prologue?`, `resolvePrologue(bundle)` and `prologueRunConfig(bundle)` (the one way to build the run, so the client, bot and tests never diverge). Rules (§3.7), all integer and tick based, no new RNG draws: the **kit** (N slots, charge ×`chargeMultBp`, smart then asap after `forceAfterTicks` of ready-wait, at most one cast per `castGapTicks`, round robin from the slot after the last cast, nothing before the run's first `WordCompleted`, `hasPassive` reads the kit); the **HP floor** (no `HeroDowned`, no Second Wind, no timeout fail); the **surge** (hero damage ×2 at `afterTicks` of combat, doubling every `doubleEveryTicks`, capped, applied after the passive-mods step); the **climax** (step 5: boss at its phase-1 gate with `bossMinTicks` of combat → `PrologueClimax` then `LevelCleared{gold: 0}`, terminal; adds don't hold the gate); **no loot** (no `GoldGained`, no `ChestDropped`, no `loot` derivation).
+  - **Slot widening:** `SkillCharged.slot`, `SkillCast.slot`, `SkillView.slot` and the sim-internal `PendingHit.slot` widen from `0 | 1` to `number`; `RunState.skillChargeM` / `skillReady` widen to `number[]` / `boolean[]`. **Story levels keep exactly the length-2 values they have today** (`[0, 0]` / `[false, false]` at create), so every hash is byte-identical; why is spelled out in §14.1. `Loadout` is unchanged (the kit is level data).
+  - **Events (§4):** new `PrologueClimax { enemyId; bossId; surgeMultBp; addIds }` (the plan's `bossId: EntityId` is renamed `enemyId` to match `BossIntroStarted`, and `bossId` is the def id string as everywhere else).
+  - **View (§5):** `SkillView.slot: number`; `LevelView.prologue?: PrologueView` `{ surgeMult; bossClamped; armed }`. On the prologue `hero.secondWindAvailable` is `false` and `boss.holding` is `null`.
+  - **Save (§9.1):** no schema change. The reserved `journal.firstSeen` key **`#prologue`** (the `#intro:chN` pattern) marks it seen; it rides the existing min-merge and sync. The prologue run itself writes nothing to the save.
+  - **Client seams (§14.3–§14.6, `ts client`, illustrative syntax but binding names):** the `PlaySession` prologue mode, the cutscene timeline types and id unions, the `StageDirector` seam, sprite ids, the audio/eventBindings stubs and the save-flag helpers.
+  - **Doc re-sync (no code change):** the §3/§6/§8 blocks had not caught up with v2.0.3/v2.1 (`reveal`, `calmMind`, `DamageSkillId`, `damageBySkillM`, `FUTURE_UNLOCK`, the `ActiveSkillDef`/`PassiveDef`/`EncounterDef`/`Segment`/`TrialDef` type exports). They now match `types.ts` and `schemas.ts`.
+  - **Not changed:** the Trial, `hdk1`, the run ticket and the Worker re-sim (prologue runs are never submitted), `Loadout`/`LoadoutSource`, `SaveBlob`, unlock data, `BALANCE`.
+  - **Merge note:** `apps/game/tests/audio/audio.test.ts` compares `KNOWN_SIM_EVENTS` with this doc's `ALL_EVENT_TYPES`, so it fails until P0.3 (or the merge commit) adds `"PrologueClimax"` to `apps/game/src/audio/bindings.ts` (§14.7). Merge this doc together with P0.3, or add that one line when merging, as C0.1 did for v2.0.
 - **2.1 (proposed by the Balance owner, approved by the orchestrator 2026-10-10):** PO "slow drip" skill unlocks. Full rationale: `docs/balance-ch1.md` §10 and `docs/balance-ch2.md` §10.
   - **Content (§6), the only contract change:** `ActiveSkillDef.unlockLevel` / `PassiveDef.unlockLevel` (still `z.string().optional()`) may also hold the sentinel `FUTURE_UNLOCK = "future"`, exported from `@hd2d/content` with `isFutureUnlock(def)`. It means "held for a later chapter": no shipped level unlocks it. Absent still means the starter kit. Every existing consumer that compares `unlockLevel` with a level id or with `undefined` (new save, run config, map "Unlocks" row, `levelUnlocks`) already treats a future skill as "not starter, never unlocked", so no consumer had to change for correctness. `levelUnlocks` also filters the sentinel explicitly.
   - **Why not a new field:** a skill with no `unlockLevel` and a new `future: true` flag would be read as starter kit by `newSave` (`apps/game/src/meta/ops.ts`) and `apps/game/src/level/config.ts` until both were changed. The sentinel fails safe.
@@ -146,6 +157,7 @@ There are no cycles: `sim` never imports `shared`, and `content` imports nothing
 | `packages/sim/src/index.ts` | public API (§3) | Sim |
 | `packages/sim/src/balance.ts`, `tables.generated.ts`, `scripts/gen-tables.ts` | §7 | Sim |
 | `packages/sim/src/resolve.ts` | `resolveLevel`, `resolveTrial` | Sim |
+| `packages/sim/src/prologue.ts` (v2.2, new in P1.1) | `resolvePrologue`, `prologueRunConfig`, the §3.7 kit/surge/climax helpers | Sim |
 | `packages/sim/src/meta/*.ts` | §8 meta/reward functions, `buildLoadout`, `parLoadout` | Sim |
 | `packages/content/src/schemas.ts` | §6 | Content |
 | `packages/shared/src/{api,save,errors,compress}.ts` | §9 | Backend |
@@ -362,17 +374,25 @@ export const SIM_VERSION = 1 as const;
 // Shared vocabulary comes from content (single source): DamageType, Rarity, GearSlot, WeaponArchetype.
 import type { DamageType, Rarity, GearSlot, WeaponArchetype, ContentBundle, StarChallenge } from "@hd2d/content";
 
-export type ActiveSkillId = "slashWave" | "piercingThrust" | "fireball" | "frostLock" | "mendingLight" | "aegis";
+export type ActiveSkillId = "slashWave" | "piercingThrust" | "fireball" | "frostLock" | "mendingLight" | "aegis"
+  | "reveal";                   // v2.0.3 (doc re-synced in v2.2)
+/** v2.0.3: active skills that can deal damage (everything except Reveal): the keys of the per-skill damage table. */
+export type DamageSkillId = Exclude<ActiveSkillId, "reveal">;
 export type PassiveId =
   | "cleanCut" | "bulwarkStreak" | "steadyHands" | "riposte"
-  | "ironWill" | "openingGambit" | "lastStand" | "comeback";
+  | "ironWill" | "openingGambit" | "lastStand" | "comeback"
+  | "calmMind";                 // v2.0.3 (doc re-synced in v2.2)
 export type CastMode = "smart" | "asap";
 export type ComboMode = "gentle" | "strict" | "zen";
 export type Difficulty = "story" | "standard" | "hard" | "zen"; // zen: enemies never attack
 export type Gimmick = "fading" | "scrambled";
 
 export interface GearStats { tier: number; rarity: Rarity; upgrade: number }
-/** Flattened, sim-ready loadout. Built by buildLoadout (§8) or parLoadout (tools). */
+/**
+ * Flattened, sim-ready loadout. Built by buildLoadout (§8) or parLoadout (tools).
+ * v2.2: unchanged. On the prologue the sim ignores actives/activeModes/passives and reads the kit (§3.7);
+ * prologueRunConfig passes [null, null] / ["smart", "smart"] / [null, null, null].
+ */
 export interface Loadout {
   weapon: GearStats & { archetype: WeaponArchetype };
   armor: GearStats;
@@ -474,9 +494,39 @@ export interface ResolvedLevel {
   star3: ResolvedStar; parRefTicks: number; // v1.5: ResolvedStar
   tutorial: boolean;
   foldSentences: boolean;                   // v1.5: chapter <= BALANCE.SENTENCE_FOLD_CASE_MAX_CHAPTER (1)
+  /** v2.2: present iff this def came from resolvePrologue. ABSENT (never undefined/null) on every story level (§14.1). */
+  prologue?: ResolvedPrologue;
 }
 /** Deterministic given (bundle contents, levelId, ctx). Fixtures are keyed on (contentVersion, levelId, ctx). */
 export declare function resolveLevel(bundle: ContentBundle, levelId: string, ctx: { dueWeakWords: string[] }): ResolvedLevel;
+
+// ---- v2.2 Prologue (§3.7, §14). Integers only; produced from ContentBundle.prologue by resolvePrologue. ----
+export interface ResolvedPrologue {
+  kitActives: ActiveSkillId[];   // kit slot order = PrologueDef.kit.actives order; length N (1..8); slot i = index i
+  kitStartChargeM: Milli[];      // length N: mulDiv(K.SKILL_CHARGE_M[id], startChargePct, 100) per slot (<= the need)
+  kitPassives: PassiveId[];      // PrologueDef.kit.passives order (the view's `passives` order); 0..10 ids
+  chargeMultBp: Bp;              // bp(chargeMult): x every kit charge gain (2.5 -> 25000)
+  castGapTicks: number;          // ticks(castGapS): min ticks between two kit casts (>= 1)
+  forceAfterTicks: number;       // ticks(forceAfterS): ready-wait combat ticks after which a slot uses its asap condition
+  heroHpFloorBp: Bp;             // heroHpFloorPct * 100: hero HP never drops below mulBp(maxHp, this), min 1 milli
+  surge: {
+    encounterAfterTicks: number; // ticks(surge.encounterAfterS): combat ticks of a normal encounter before the first doubling
+    bossAfterTicks: number;      // ticks(surge.bossAfterS): ... of the boss encounter
+    doubleEveryTicks: number;    // ticks(surge.doubleEveryS) (>= 1)
+    maxMultBp: Bp;               // surge.maxMult * BP (16 -> 160000); 1 disables the surge
+  };
+  bossMinTicks: number;          // ticks(bossMinS): boss-encounter combat ticks before the climax may fire (D16-style clamp)
+}
+/**
+ * v2.2. The prologue as a ResolvedLevel: levelId "prologue", chapter 1, index 0, isBoss true, goldTotal 0, and
+ * `prologue` set; the full field mapping is in §3.7. Throws SimError when bundle.prologue is absent or malformed
+ * (unknown enemy/boss id, the boss segment is missing or not last, the boss minigame is not fallingRubble).
+ * Deterministic given the bundle contents. Takes no ctx: the prologue has no SRS weak words.
+ */
+export declare function resolvePrologue(bundle: ContentBundle): ResolvedLevel;
+/** v2.2. Everything createLevel/replay need for a prologue run (client, tools/bot, tests all use this; §3.7). */
+export interface PrologueRunConfig { def: ResolvedLevel; loadout: Loadout; seed: number; options: LevelOptions }
+export declare function prologueRunConfig(bundle: ContentBundle): PrologueRunConfig;
 
 export declare function createLevel(def: ResolvedLevel, loadout: Loadout, seed: number, options: LevelOptions): LevelState;
 /** Precondition: input.tick === state.tick. Applied before that tick's step processing. No-op (returns []) on a terminal state. */
@@ -496,6 +546,7 @@ export interface ReplayResult<S, R> { finalState: S; events: SimEvent[]; hash: s
  * Steps to each input's tick and applies it; STOPS consuming inputs once the state is terminal (later inputs are
  * ignored, not errors). After the last input keeps stepping until terminal, `untilTick`, or BALANCE.MAX_LEVEL_S
  * (-> LevelFailed{timeout}). Throws on non-monotonic ticks.
+ * v2.2: on the prologue there is no timeout fail (§3.7): replay stops at MAX_LEVEL_S with `result: null` if not terminal.
  */
 export declare function replay(
   def: ResolvedLevel, loadout: Loadout, seed: number, options: LevelOptions,
@@ -559,9 +610,11 @@ For tick `t`, the client applies all inputs with `tick === t` in order. `step` t
 3. Run enemy timers: a windup start emits `EnemyAttackWindup` + `GuardWordShown`; an impact emits `EnemyAttack`.
    - 3b (v2.0). Then run healer timers in slot order: a due heal emits `EnemyHealed` per target (§3.5).
 4. Run gimmick timers.
-5. Run the boss script: doom deadline, minigame spawns and landings, riddle deadline and next riddle (v2.0, §3.6), phase gates.
-6. Check skills for auto-cast.
+5. Run the boss script: doom deadline, minigame spawns and landings, riddle deadline and next riddle (v2.0, §3.6), phase gates. *(v2.2 prologue: the phase-1 gate is the climax check instead, §3.7.)*
+6. Check skills for auto-cast. *(v2.2 prologue: the kit rule replaces the two-slot loop, §3.7.)*
 7. Handle deaths, re-pick the focus, then run encounter, wave, phase and segment transitions.
+
+*v2.2:* on the prologue the per-encounter `combatTicks` counter (§3.7) increments with `run.activeTicks` (before step 1, on every tick processed with `phase === "combat"`), and the `MAX_LEVEL_S` timeout after step 7 is skipped.
 
 ### 3.3 Typing rules (normative)
 
@@ -621,7 +674,8 @@ if crit:      dmgM = mulBp(dmgM, CRIT_MULT_BP)
 if weak:      dmgM = mulBp(dmgM, WEAK_MULT_BP)
 if broken:    dmgM = mulBp(dmgM, BREAK_DMG_MULT_BP)
 if staggered: dmgM = mulBp(dmgM, DOOM_STAGGER_DMG_MULT_BP)
-for each equipped passive damage mod, in loadout slot order 0..2: dmgM = mulBp(dmgM, modBp)
+for each equipped passive damage mod, in loadout slot order 0..2: dmgM = mulBp(dmgM, modBp)   // (v2.2 prologue: kitPassives order)
+if prologue:  dmgM = mulBp(dmgM, surgeBp)   // v2.2 §3.7; skipped entirely (not x BP) on story levels
 dmgM = max(dmgM, 1); then clamp so the target's HP does not cross an active phase gate
 incoming: hitM -> mulBp(hitM, BLOCK_MULT_BP | IRON_WILL_BLOCK_MULT_BP) if blocked; 0 if parried or absorbed by barrier
 ```
@@ -650,6 +704,8 @@ There is no random variance (`DMG_VARIANCE = 0`, D31).
 - A second death in the same level is always `LevelFailed`.
 
 **Fail.** `goldKept = floor(goldCollected × FAIL_GOLD_KEEP)`. `LevelResult.words` is always reported.
+
+**v2.2 prologue exceptions** (§3.7): no Second Wind (HP has a floor), no `defeated` or `timeout` fail, no gold and no chests.
 
 **Walk.** A walk with `heal: true` emits `HeroHealed{walk}` for +25% max HP at `WalkStarted`.
 
@@ -718,6 +774,80 @@ leaves[k] -> lane k ; the panel shows answer.clue
 - **Pool:** entries with `uses ∋ "riddle"`, `kind === "word"`, `(chapter ?? 1) <= level.chapter`, and text length in `lengthRange`. Dedupe by text, keep the bundle order. `clue = entry.clue ?? entry.definition`.
 
 **Sim-internal state** (`BossState.riddle?`, absent for the Golem): the stream, `index`, `asked[]`, the active riddle's leaf plate ids, texts, lanes, deadline and answer slot (or null between riddles), `nextAt`, and the right/wrong/timeout counters. It is plain data, as §1.4 requires.
+
+### 3.7 Prologue (v2.2, normative)
+Every rule below applies **iff `run.def.prologue !== undefined`** ("on the prologue"). A story level never takes one of these branches, never carries one of the new keys, and so replays byte-identically (§14.1). Rationale and plan: `docs/PROLOGUE_PLAN.md` §2.1, §3.1. All rules are integer and tick based, add no RNG stream and no draw, and read no option the client could vary.
+
+**3.7.1 `resolvePrologue(bundle)`.** Let `p = bundle.prologue` (throw `SimError` if absent). `ticks(s) = Math.round(s * 60)` as in `resolveLevel`.
+
+| `ResolvedLevel` field | Value |
+|---|---|
+| `levelId`, `chapter`, `index`, `isBoss` | `p.id` (`"prologue"`), `1`, `0`, `true` |
+| `contentVersion` | the `resolveLevel` formula: `fnv1a32(canonicalContentJson(bundle))` as 8 hex chars |
+| `segments`, `enemies`, `boss` | exactly the `resolveLevel` mapping of `p.segments` (share its helpers: `resolveRef`, `resolveEnemy`, `resolveBoss`). The boss adds' `addsGruntHitM` is the last encounter segment's `gruntHit`, as in `resolveLevel`. |
+| `words` | `current: [...p.words]`, `guard: [...p.guardWords]`; `review`, `biome`, `weak`, `doom`, `finisher`, `secondWind`, `minigame`: `[]` |
+| `riddles` | absent (the prologue boss's minigame must be `fallingRubble`; phase 3 is unreachable anyway) |
+| `tierMixBp` | `{ current: 10000, review: 0, biome: 0, weak: 0 }` |
+| `plateLength` | `[min, max]` of the lengths in `p.words` |
+| `goldTotal`, `parArmorBp`, `parHpM` | `0`, `parArmorBp(1)`, `parHpM(1)` |
+| `star3`, `parRefTicks`, `tutorial`, `foldSentences` | `{ kind: "noSkills" }` (never evaluated), `0`, `false`, `true` |
+| `prologue` | `ResolvedPrologue` per the field comments in §3: `kitActives = p.kit.actives.map(a => a.id)`, `kitStartChargeM[i] = mulDiv(K.SKILL_CHARGE_M[id], startChargePct, 100)`, `kitPassives = [...p.kit.passives]`, `chargeMultBp = bp(p.chargeMult)`, `castGapTicks = max(1, ticks(p.castGapS))`, `forceAfterTicks = ticks(p.forceAfterS)`, `heroHpFloorBp = p.heroHpFloorPct * 100`, `surge = { encounterAfterTicks, bossAfterTicks, doubleEveryTicks: max(1, ticks(doubleEveryS)), maxMultBp: maxMult * 10000 }`, `bossMinTicks = ticks(p.bossMinS)` |
+
+`resolvePrologue` throws `SimError` on: an unknown enemy or boss id; no boss segment, more than one, or one that is not last; no encounter segment; a boss whose `phase3.minigame.kind !== "fallingRubble"`.
+
+**`prologueRunConfig(bundle)`** returns `{ def: resolvePrologue(bundle), loadout, seed: p.seed, options }`:
+- `loadout.weapon = { archetype, tier, rarity, upgrade }` from `p.gear`; `armor` and `charm` = `{ tier, rarity, upgrade }` from `p.gear`; `actives: [null, null]`, `activeModes: ["smart", "smart"]`, `passives: [null, null, null]`. The gear is never added to an inventory.
+- `options = { pace: p.pace, difficulty: "standard", comboMode: "gentle", caseMode: "auto", autoUnlockAfterTypos: 0, firstClear: false, frontierChapter: 1, goldMultBp: 0, allowExternalRevive: false, tutorial: false }`, with **no** `caseAssist` key. These are the new-save defaults. The player's settings are deliberately not applied: the prologue is the same fight for every player and runs before any setting exists.
+
+**3.7.2 Run state.** `createLevel` on the prologue:
+- sets `run.prologue = { combatTicks: 0, waitTicks: <N zeros>, lastCastTick: null, lastCastSlot: null }` (`PrologueRunState`, §14.9);
+- sets `skillChargeM = [...kitStartChargeM]` and `skillReady[i] = kitStartChargeM[i] >= K.SKILL_CHARGE_M[kitActives[i]]` (length N). No `SkillCharged` is emitted for a pre-charged slot (`createLevel` emits nothing); the view shows it ready from tick 0.
+
+On a story level `createLevel` keeps **exactly** `skillChargeM: [0, 0]` and `skillReady: [false, false]` (length 2 whatever the loadout) and sets no `prologue` key.
+
+`combatTicks` counts the ticks of the **current encounter** processed with `phase === "combat"`: it increments where `run.activeTicks` increments (before step 1), and `startEncounter` resets it to 0. On the first combat tick of an encounter, steps 1–7 read 1.
+
+**3.7.3 The kit.** Kit slot `i` holds `kitActives[i]`; on a story level the slots are `loadout.actives[0..1]` as today.
+- **Charge** (`chargeSkills`, on a completed `word` or `guard` plate): every kit slot gains `mulBp(plateSkillChargeM(state, plate), chargeMultBp)`, capped at `2 × need` as today, then `SkillCharged` on the edge into ready, in slot order.
+- **Cast** (step 6), replacing the two-slot loop on the prologue:
+  1. Nothing unless `phase === "combat"` and `!enc.finisherShown` (as today).
+  2. **Armed** = `run.stats.wordsCompleted >= 1` (the run's first `WordCompleted`, which also counts guard words). Not armed: return. Waits don't accrue before then.
+  3. For each slot `i` in `0..N-1` with `skillReady[i]`: `waitTicks[i] += 1`.
+  4. **Cast gap:** if `lastCastTick !== null && t - lastCastTick < castGapTicks`: return.
+  5. **Round robin:** `start = lastCastSlot === null ? 0 : (lastCastSlot + 1) % N`. For `k = 0..N-1`, `s = (start + k) % N`: if `skillReady[s]` and `canCast(state, id, waitTicks[s] >= forceAfterTicks ? "asap" : "smart")`, then `castSkill(state, s, id)` (unchanged: `SkillCast`, the pending impact, `markReady` for overflow), `waitTicks[s] = 0`, `lastCastTick = t`, `lastCastSlot = s`, and return.
+
+  So at most one kit cast per tick and per gap. `canCast` is unchanged, so "asap" still never casts a pointless skill (Mending at full HP, Aegis at the barrier cap). With the plan data (Fireball 100%, the rest lower) the first armed tick casts Fireball, which is the player's first word.
+- **Passives:** `hasPassive(run, id)` = on the prologue `kitPassives.includes(id)`, else `loadout.passives.includes(id)` as today. Every passive reads through `hasPassive`; `passiveDamageModsBp` (empty today) iterates `kitPassives` in order on the prologue.
+
+**3.7.4 HP floor** (`damageHero`). `floorM = max(1, mulBp(heroMaxHpM, heroHpFloorBp))`. For every cause, `dealt = max(0, min(dmgM, heroHpM − floorM))`. `HeroDamaged` is emitted only when `dealt > 0` (as today), so a hit landing at the floor emits its `EnemyAttack` and no `HeroDamaged`. `damageHero` therefore never reports a death: no `HeroDowned`, no `SecondWindStarted`, no `LevelFailed{defeated}`. Guard, block, parry, barrier and leak rules are unchanged.
+
+**3.7.5 Surge** (`resolveDamage`). For the current encounter: `after = enc.isBoss ? bossAfterTicks : encounterAfterTicks`, `c = run.prologue.combatTicks`.
+```text
+surgeBp = BP                                   if c < after
+        = min(maxMultBp, BP << k)              otherwise, k = 1 + floor((c - after) / doubleEveryTicks)
+          (computed as a loop: m = BP; repeat k times { m = min(2 * m, maxMultBp) }; no ** and no Math.pow)
+```
+It multiplies every hero hit that goes through `resolveDamage` (auto, chip, skill, counter, DoT), **after** the passive-mods step and before `max(dmg, 1)` and the gate clamp (§3.3). Enemy damage and heals are not scaled. Example with the plan data (18 s, 4 s, ×16): ×1 until combat tick 1079, ×2 at 1080, ×4 at 1320, ×8 at 1560, ×16 from 1800.
+
+**3.7.6 Climax** (`stepBoss`, step 5). On the prologue the `atGate(boss)` branch is replaced:
+- If `bs.phase === 1 && atGate(boss) && run.prologue.combatTicks >= bossMinTicks`:
+  1. emit `PrologueClimax { enemyId: boss.id, bossId: def.boss.id, surgeMultBp: surgeBp, addIds: <alive non-boss enemy ids, slot order> }`;
+  2. `run.endTick = t`, `phase = "cleared"`, `phaseUntil = null`, then emit `LevelCleared { levelId: "prologue", durationTicks: t, gold: 0 }`;
+  3. return. The state is terminal: steps 6–7 and every later tick do nothing. Plates, pending impacts, DoTs and adds stay as they are (the cutscene dissolves the adds). There is no `EnemyDeath`, `EncounterCleared` or `BossPhaseChanged`.
+- Otherwise, at the gate the boss simply holds: the existing damage clamp keeps it at `gateHpM` (`gateFor(boss, maxHpM, 1)`, Nul: 35%), whether or not adds are alive. A breather never begins, so phases 2 and 3 are unreachable (their data exists only to satisfy `BossDef`).
+- The check runs every combat tick, so a boss parked at its gate climaxes on the first tick where `combatTicks` reaches `bossMinTicks`, with no further hit needed.
+
+**3.7.7 Flow, loot and fail.**
+- `EncounterCleared` and the `rewards` phase (`REWARD_T`, keys ignored) run as today after a normal encounter, but `payEncounter` is skipped entirely: no `GoldGained`, no `ChestDropped`, no `deriveRng(seed, "loot", e)`.
+- No timeout: the `MAX_LEVEL_S` check after step 7 is skipped. The only fail is `LevelFailed{abandoned}` from the `abandon` command.
+- `getResult` after the climax: `outcome: "cleared"`, `gold: 0`, `chests: []`, `failReason: null`. Nothing reads it: the session neither commits nor submits the run (§14.3).
+
+**3.7.8 View** (`getView`, on the prologue):
+- `skills`: one `SkillView` per kit slot in slot order: `slot = i`, `id = kitActives[i]`, `chargeFrac`, `ready`, and `mode = waitTicks[i] >= forceAfterTicks ? "asap" : "smart"`.
+- `passives = [...kitPassives]`; `hero.secondWindAvailable = false`; `boss.holding = null` (adds never hold).
+- `prologue = { surgeMult: surgeBp / BP (1 with no encounter), bossClamped: <boss alive, phase 1, hpM <= gateHpM, level not terminal>, armed: wordsCompleted >= 1 }`.
+
+On a story level `prologue` is absent and `skills`/`passives` are built exactly as today.
 
 ---
 
@@ -799,8 +929,8 @@ export type SimEvent =
   | Ev<"SecondWindFailed">
   | Ev<"Revived", { source: "gem" | "feather"; hpAfter: number }> // hook; never emitted in the slice
   // ---- skills ----
-  | Ev<"SkillCharged", { slot: 0 | 1; skillId: ActiveSkillId }>
-  | Ev<"SkillCast", { slot: 0 | 1; skillId: ActiveSkillId; targetIds: EntityId[]; impactTick: Tick }>
+  | Ev<"SkillCharged", { slot: number; skillId: ActiveSkillId }> // v2.2: slot widened from 0 | 1 (0..1 on story levels, 0..N-1 on the prologue kit)
+  | Ev<"SkillCast", { slot: number; skillId: ActiveSkillId; targetIds: EntityId[]; impactTick: Tick }> // v2.2: slot as SkillCharged
   | Ev<"PassiveTriggered", { passiveId: PassiveId; targetId: EntityId | null }>
   // ---- gimmicks ----
   | Ev<"WordFaded", { plateId: PlateId; enemyId: EntityId }>
@@ -823,6 +953,8 @@ export type SimEvent =
   | Ev<"RiddleResolved", { enemyId: EntityId; riddleIndex: number; outcome: "right" | "wrong" | "timeout"; pickedPlateId: PlateId | null; answerPlateId: PlateId; answerText: string; answerLane: number }>
   | Ev<"FinisherShown", { enemyId: EntityId; plateId: PlateId; text: string }>
   | Ev<"FinisherCompleted", { enemyId: EntityId; plateId: PlateId }>
+  // ---- v2.2 Prologue (§3.7.6): emitted once, at the climax gate, immediately before LevelCleared in the same tick ----
+  | Ev<"PrologueClimax", { enemyId: EntityId; bossId: string; surgeMultBp: number; addIds: EntityId[] }> // addIds: alive adds, slot order
   // ---- rewards ----
   | Ev<"GoldGained", { amount: number; source: "encounter" | "passive"; total: number }>
   | Ev<"ChestDropped", { tier: ChestTier; encounterIndex: number; enemyId: EntityId | null }>
@@ -846,6 +978,7 @@ export const ALL_EVENT_TYPES = [
   "MinigameStarted", "MinigameWordSpawned", "MinigameWordCleared", "MinigameWordMissed", "MinigameEnded",
   "RiddleStarted", "RiddleLeafPicked", "RiddleResolved",
   "FinisherShown", "FinisherCompleted",
+  "PrologueClimax",
   "GoldGained", "ChestDropped",
   "TrialStarted", "TrialEnded",
 ] as const satisfies readonly SimEvent["type"][];
@@ -874,6 +1007,8 @@ export const ALL_META_EVENT_TYPES = ["CacheRolled", "ChestOpened", "GearUpgraded
   - The audio event list (`apps/game/src/audio/bindings.ts`) already lists them as silent stubs; its drift test parses this section.
   - C0.3 must add stub bindings in `level/eventBindings.ts` in the same commit as the sim types (§11.5). `EventHandlers` is exhaustive, so the client would otherwise fail to typecheck.
 - **Heal VFX** groups `EnemyHealed` by `(sourceId, tick)` for one beam per cast. The heal number uses `amount` (display HP, green).
+- **v2.2 `slot` widening.** `SkillCharged.slot` and `SkillCast.slot` are `number`. Story levels still emit only 0 and 1, with the same values in the same order, so event streams and goldens are unchanged. Consumers must not assume `slot < 2`: on the prologue it indexes `LevelView.skills` (0..N-1).
+- **v2.2 `PrologueClimax`** (§3.7.6) is emitted only on the prologue, once, right before `LevelCleared`. `surgeMultBp` is the surge at that tick (10000 = none), for the aura at the catch. `addIds` lists the adds still alive (the cutscene dissolves them into Nul's cloak). The audio list and `level/eventBindings.ts` need their stub entries in the same merge (§11.5, §14.7).
 
 ---
 
@@ -936,7 +1071,14 @@ export interface HeroView {
   secondWindAvailable: boolean;
   pose: HeroPose; poseSinceTick: Tick;
 }
-export interface SkillView { slot: 0 | 1; id: ActiveSkillId; chargeFrac: number; ready: boolean; mode: CastMode }
+/** v2.2: slot widened from 0 | 1 (story 0..1; prologue 0..N-1 = the kit slot). Prologue `mode` = the condition in force (§3.7.8). */
+export interface SkillView { slot: number; id: ActiveSkillId; chargeFrac: number; ready: boolean; mode: CastMode }
+/** v2.2 prologue strip (§3.7.8). Floats allowed (never hashed). */
+export interface PrologueView {
+  surgeMult: number;     // surgeBp / BP: 1, 2, 4, 8, 16 (aura growth, P3.2 surgeAura)
+  bossClamped: boolean;  // the boss sits at its gate waiting for bossMinTicks (the ward VFX)
+  armed: boolean;        // the first WordCompleted happened; kit skills may now cast (Grimoire bar wakes up)
+}
 export interface LevelView {
   tick: Tick; phase: LevelPhase; phaseProgress: number;    // 0..1 for timed phases (walk dolly, intros, breather)
   levelId: string; chapter: number; isBossLevel: boolean;
@@ -961,6 +1103,8 @@ export interface LevelView {
   secondWind: { plateId: PlateId; ticksLeft: number; totalTicks: number } | null;
   stats: { netWpm: number; accuracy: number; burstWpm: number; elapsedTicks: number; activeTicks: number };
   goldCollected: number;
+  /** v2.2: present iff the level is the prologue (absent, not null, on story levels, so existing mocks compile). */
+  prologue?: PrologueView;
 }
 /** v2.0 riddle panel (§3.6). The HUD draws `clue` in its own panel, never over the leaf plates (readability invariant). */
 export interface RiddleView {
@@ -1067,6 +1211,7 @@ export const EncounterDef = z.object({
   attackPower: z.number().positive().default(1), // v1.9: P of this encounter's enemies (x chapter par armor score)
   waves: z.array(z.array(EnemyRef).min(1).max(4)).min(1), // >1 wave -> WaveStarted
 }).refine((e) => new Set(e.waves.flat().flatMap((r) => (r.gimmick ? [r.gimmick] : []))).size <= 2, "max 2 gimmicks/encounter");
+export type EncounterDef = z.infer<typeof EncounterDef>;     // (doc re-synced in v2.2)
 
 export const FallingRubbleDef = z.object({
   kind: z.literal("fallingRubble"),
@@ -1119,6 +1264,7 @@ export const Segment = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("encounter"), encounter: EncounterDef }),
   z.object({ kind: z.literal("boss"), bossId: z.string() }),
 ]);
+export type Segment = z.infer<typeof Segment>;               // (doc re-synced in v2.2)
 export const LevelDef = z.object({
   id: z.string().regex(/^ch\d+-l\d+$/), chapter: z.number().int().min(1).max(30), index: z.number().int().min(1).max(10),
   name: z.string(), biome: Biome, layoutId: z.string(),       // LDtk/Tiled level id (T2.2)
@@ -1147,26 +1293,80 @@ export const GearDef = z.object({
 }).refine((g) => (g.slot === "weapon") === (g.archetype !== undefined));
 export type GearDef = z.infer<typeof GearDef>;
 
+/** v2.1: `unlockLevel` is a level id, absent (starter kit), or FUTURE_UNLOCK (held for a later chapter). (doc re-synced in v2.2) */
+export const FUTURE_UNLOCK = "future" as const;
+export const isFutureUnlock = (d: { unlockLevel?: string }): boolean => d.unlockLevel === FUTURE_UNLOCK;
 export const ActiveSkillDef = z.object({
-  id: z.enum(["slashWave", "piercingThrust", "fireball", "frostLock", "mendingLight", "aegis"]),
+  id: z.enum(["slashWave", "piercingThrust", "fireball", "frostLock", "mendingLight", "aegis", "reveal"]), // v2.0.3 + reveal
   name: z.string(), description: z.string(),  // may use {dmg},{charge},{secs} placeholders filled from BALANCE
-  iconId: z.string(), vfxId: z.string(), sfxId: z.string(), unlockLevel: z.string().optional(),
+  iconId: z.string(), vfxId: z.string(), sfxId: z.string(), unlockLevel: z.string().optional(), // a level id, or FUTURE_UNLOCK (v2.1)
 });
+export type ActiveSkillDef = z.infer<typeof ActiveSkillDef>;
 export const PassiveDef = z.object({
-  id: z.enum(["cleanCut", "bulwarkStreak", "steadyHands", "riposte", "ironWill", "openingGambit", "lastStand", "comeback"]),
+  id: z.enum(["cleanCut", "bulwarkStreak", "steadyHands", "riposte", "ironWill", "openingGambit", "lastStand", "comeback", "calmMind"]), // v2.0.3 + calmMind
   name: z.string(), description: z.string(),
   tag: z.enum(["precision", "speed", "defense", "tech", "economy"]),
-  iconId: z.string(), unlockLevel: z.string().optional(),
+  iconId: z.string(), unlockLevel: z.string().optional(), // a level id, or FUTURE_UNLOCK (v2.1)
 });
+export type PassiveDef = z.infer<typeof PassiveDef>;
 export const TrialDef = z.object({
   id: z.string(), name: z.string(), durationS: z.literal(60),
   // Standardized pool (same for everyone); the run seed picks one. >= 1600 chars covers 60 s at 300+ WPM.
   passages: z.array(TypableText.min(1600)).min(30),
 });
+export type TrialDef = z.infer<typeof TrialDef>;
+
+// ---- v2.2 Prologue (§3.7, §14.2). Human units (seconds, %, multipliers); resolvePrologue converts. ----
+/** One kit slot. startChargePct = % of the skill's charge need at tick 0 (100 = ready: it casts on the first word). */
+export const PrologueKitActive = z.object({
+  id: ActiveSkillDef.shape.id,
+  startChargePct: z.number().int().min(0).max(100),
+});
+export type PrologueKitActive = z.infer<typeof PrologueKitActive>;
+/** Prologue plate and guard words: lowercase a-z, 3..5 letters (A1, typed before calibration). Inline strings, not WordEntry. */
+export const PrologueWord = z.string().regex(/^[a-z]{3,5}$/);
+const distinct = (xs: readonly string[]): boolean => new Set(xs).size === xs.length;
+export const PrologueDef = z.object({
+  id: z.literal("prologue"),
+  layoutId: z.string(),                          // "prologue" (apps/game/src/assets/levels/prologue.json)
+  biome: Biome,                                  // "ruins": render/audio biome only (the words are inline, no pool)
+  pace: z.number().int().min(15).max(120),       // LevelOptions.pace (25): enemy timers and guard windows
+  seed: z.number().int().min(0).max(0xffffffff), // createLevel seed: the same fight for the same inputs, every run
+  words: z.array(PrologueWord).min(40).refine(distinct, "prologue words must be distinct"),
+  guardWords: z.array(PrologueWord).min(12).refine(distinct, "prologue guard words must be distinct"),
+  /** Encounters (walks allowed between), then exactly one boss segment, last. It need not start with a walk. */
+  segments: z.array(Segment).min(2),
+  kit: z.object({
+    actives: z.array(PrologueKitActive).min(1).max(8)
+      .refine((a) => distinct(a.map((x) => x.id)), "kit actives must be distinct"),
+    passives: z.array(PassiveDef.shape.id).max(10).refine(distinct, "kit passives must be distinct"),
+  }),
+  /** "Full power" gear for all three slots (sword, L, tier 3, +5). Client-built, never added to an inventory. */
+  gear: z.object({
+    archetype: WeaponArchetype, tier: z.number().int().min(1).max(10), rarity: Rarity, upgrade: z.number().int().min(0).max(15),
+  }),
+  chargeMult: z.number().positive(),             // x every kit charge gain (2.5)
+  castGapS: z.number().positive(),               // min seconds between two kit casts (1.5)
+  forceAfterS: z.number().positive(),            // ready-wait before a slot drops from smart to asap (4)
+  heroHpFloorPct: z.number().int().min(1).max(99), // hero HP floor, % of max (25: below Last Stand 30 and Mending 60)
+  surge: z.object({
+    encounterAfterS: z.number().positive(),      // combat seconds of a normal encounter before the first doubling (18)
+    bossAfterS: z.number().positive(),           // ... of the boss encounter (20)
+    doubleEveryS: z.number().positive(),         // (4)
+    maxMult: z.number().int().min(1).max(64),    // cap (16); 1 = no surge
+  }),
+  bossMinS: z.number().min(0),                   // boss-encounter combat seconds before the climax may fire (12)
+}).refine((p) => {
+  const kinds = p.segments.map((s) => s.kind);
+  return kinds.filter((k) => k === "boss").length === 1 && kinds[kinds.length - 1] === "boss" && kinds.includes("encounter");
+}, "prologue segments: at least one encounter, then exactly one boss segment, last");
+export type PrologueDef = z.infer<typeof PrologueDef>;
 
 export const ContentBundle = z.strictObject({
   words: z.array(WordEntry), enemies: z.array(EnemyDef), bosses: z.array(BossDef), levels: z.array(LevelDef),
   gear: z.array(GearDef), actives: z.array(ActiveSkillDef), passives: z.array(PassiveDef), trials: z.array(TrialDef),
+  /** v2.2: the prologue (§14.2). The key is ABSENT (never `undefined`: canonicalContentJson throws) until P1.2 ships it. */
+  prologue: PrologueDef.optional(),
 });
 export type ContentBundle = z.infer<typeof ContentBundle>;
 /** fnv1a32(canonicalContentJson(bundle)) as 8 hex chars; emitted by tools/content at build time. */
@@ -1188,6 +1388,8 @@ export declare const CONTENT_VERSION: string;
 - healers: at most 1 per wave, and never the only non-boss enemy of a wave (it would have nothing to heal).
 - elite refs set `attackPower`, which the schema enforces.
 - a boss whose minigame is `riddle` has a phase-2 doom pool (chapter-scoped) of ≥ 8 sentences with ≥ 6 distinct first letters.
+
+**v2.2 validator rules** for `bundle.prologue` are in §14.2.
 
 ---
 
@@ -1415,6 +1617,7 @@ export interface LevelResult {
     netWpmX100: number; accuracyBp: Bp; hitsTaken: number; blocks: number; perfectParries: number;
     autoAttacks: number; skillsCast: number; secondWindUsed: boolean;
     damageByOriginM: Record<HitOrigin, number>;   // skill share = skill / Σ (T1.4 AC)
+    damageBySkillM?: Record<DamageSkillId, number>; // v1.3/v2.0.3: per damaging skill, burn included (doc re-synced in v2.2)
   };
   words: WordResult[];                             // every completed or typo'd word/guard plate, in order
 }
@@ -1516,6 +1719,12 @@ export declare function mergeSaves(base: SaveBlob | null, local: SaveBlob, serve
 - `summarize.levelMax` already encodes `chapter*100 + level`.
 - `frontierChapter` (merge: max) now really advances, via `frontierChapterOf` (§8) after each result and on load. Its existing consumers then see 2: chest gear tier and cache price (both T1 at ch2, so no visible change), and replay pay, which is stale only for `chapter < frontier − 1`, so Ch1 replays are not stale at frontier 2.
 - `settings.caseAssist` is the one additive key. It is a zod default, so v1/v2 fixtures still migrate and parse. An older v2 client strips the unknown key and parses fine, and settings never merge (local wins), so no `SAVE_SCHEMA_VERSION` bump is needed. Code that builds a `SaveBlob` literal (`ops.ts` new game) must add `caseAssist: false`.
+
+**Prologue (v2.2): no schema change.**
+- "Seen" is the reserved `journal.firstSeen` key **`"#prologue"`** (value: `srs.levelsPlayed` at the time, as for `#intro:chN`). Keys starting with `#` are flags (`isFlagKey`) and never show in the journal. The key rides the existing `firstSeen` min-merge and cloud sync, so a profile that has seen the prologue on one device has seen it everywhere.
+- It is written once, at the end of Part C or on skip, and only in first-run mode; never at the start, and never on a replay from the title.
+- The prologue **run** writes nothing: no gold, gear, SRS, journal words, stars, `progress`, `pace.recentNetWpm`, `accuracyDaily` or `lifetime`.
+- No migration: an absent key reads as "not seen", and the flag only gates the first-run flow, which existing profiles never re-enter (§14.3).
 
 **Sync and merge (409).**
 - **New Game generation (v1.8):** if `local.resetEpoch !== server.resetEpoch`, the side with the higher epoch wins wholesale (settings stay local) and none of the rules below apply. `SaveStore.reset()` bumps the epoch, so old-generation data can never win a merge, online or offline.
@@ -1835,6 +2044,14 @@ Story levels are not verified in the slice. `replay()` and `LEVEL_LOG_LIMITS` ex
 | D38 | **(v2.0)** "Ignore capitals" = `LevelOptions.caseAssist` (sim input) fed from `settings.caseAssist` (save). It beats `caseMode`. | Folding happens in the sim, so it must be an input. A separate boolean avoids widening the `caseMode` enum, which older clients would reject on parse. |
 | D39 | **(v2.0)** `WordEntry.chapter` ("introduced in chapter N") scopes sentence pools by exact chapter and every other pool cumulatively (≤). | The pools were global: Ch2 Hush Spells would have reached the Ruin Golem and broken Ch1 identity. |
 | D40 | **(v2.0)** Per-chapter knobs are content constants (`CHAPTER_KNOBS`), baked into `LevelDef`/`BossDef` numbers at authoring time; the sim never reads them. | It is the existing T6.1 mechanism made per chapter, and Ch1's values are pinned by a test. |
+| D41 | **(v2.2)** The prologue runs on the real sim, gated on `ResolvedLevel.prologue`, from a separate `ContentBundle.prologue` (not a `LevelDef`). | The typing feel and every T2.6 event are the real thing. A `LevelDef` would touch the map, unlocks, stars, the 20-level bot gate, balance cells and the level-id regex (plan §3.1). |
+| D42 | **(v2.2)** The kit is level data; `Loadout` keeps its 2-tuples. Only `slot` and the two run-state arrays widen, and story levels keep length 2. | No save, `LoadoutSource` or loadout-screen change, and byte-identical story hashes (§14.1). |
+| D43 | **(v2.2)** The climax gate is the boss's own `phase1.endAtHpPct`; the plan's `endAtBossHpPct` is dropped. Adds never hold the gate. | One source of truth instead of a validator equality rule. The cutscene dissolves surviving adds, so waiting for them would only stretch the fight. |
+| D44 | **(v2.2)** The surge doubles **at** `afterS` (×2), then every `doubleEveryS`. | Matches the plan's prose ("after 18 s, damage doubles every 4 s"). The plan's formula `2^floor((c − after)/every)` stayed ×1 for one extra step; P1.3 tunes `afterS` either way. |
+| D45 | **(v2.2)** No timeout fail, no gold or chest events, and the `rewards` phase is kept after the first encounter. | "No way to lose" includes an idle player. The rewards beat is existing, tested flow, and it is where the sky darkens before Nul's entrance. |
+| D46 | **(v2.2)** Prologue words are inline lowercase strings, not `WordEntry` rows. | They cannot leak into a level pool, SRS or the journal by construction, and no `uses` value or chapter scoping is needed. |
+| D47 | **(v2.2)** The cutscene timeline types are a client-internal seam (`ts client`), not a sim/content contract. | Only `apps/game` reads them. Several agents build against them, so their names are fixed here, but they don't go through the extractor. |
+| D48 | **(v2.2)** `prologueRunConfig` fixes the run options to the new-save defaults and ignores player settings. | The same fight for everyone, also before any settings exist; the bot and the tests reproduce it exactly. |
 
 **Rejected or adjusted reviewer items:** none rejected. Two were adjusted:
 - `buildLoadout` takes a structural `LoadoutSource` rather than `SaveBlob`. The sim cannot import `@hd2d/shared` without creating a cycle; `shared` proves at compile time that a save is assignable to it.
@@ -1953,3 +2170,215 @@ export declare function knobsFor(chapter: number): ChapterKnobs;
 | T1.2 | §3.5 (healer and elite), per-ref P, `EnemyHealed`, the `EnemyView.elite/healer` and `EnemySpawned` flags |
 | T1.3 | §3.6 riddle, the `riddle` stream, `RiddleView`, the case view fields (`exactCase`, `shiftNext`, `shifted`), `caseAssist` folding |
 | T4.1 / T4.2 / T4.3 | the v2.0 validator rules (§6), `chapter` on every Ch2 entry, `clue` where the definition leaks the answer |
+
+---
+
+## 14. Prologue contracts (v2.2)
+
+The normative types are in §3–§6, marked `v2.2`; the sim rules are §3.7. This section adds the byte-identity argument, the content rules, the client seams, the task map and the P0.3 checklist. Plan: `docs/PROLOGUE_PLAN.md`. PO decisions (2026-10-10): the villain is **Nul, the Silent King**; **hold Esc for 1 s** skips; the kit is **the 6 Ch1 actives without Reveal**.
+
+### 14.1 Story levels stay byte-identical (normative), and why the `slot` widening is safe
+**Definition.** After any v2.2 code or content lands, for every Ch1 and Ch2 level `L` and every `ctx`: `resolveLevel(bundle, L, ctx)` deep-equals its pre-v2.2 value except `contentVersion`; replays give the same event list, `LevelResult` and state hash (with `contentVersion` pinned or blanked, as today); balance cells and `pnpm bot` output are unchanged.
+
+**Why widening `slot` to `number` and the run-state arrays to `number[]` / `boolean[]` changes no byte:**
+1. **Types are erased.** `hash(state) = fnv1a32(canonicalJson(state))`, and `canonicalJson` writes an array as `[v0,v1]` and a number as its digits, whatever the static type. `[number, number] → number[]` and `0 | 1 → number` are compile-time only, so the bytes can change only if a runtime **value** changes.
+2. **The values are pinned.** On a story level `createLevel` writes exactly `skillChargeM: [0, 0]` and `skillReady: [false, false]`: length 2 even with an empty slot, never sized from the loadout, never padded to the kit maximum. The charge, cast and view loops still walk slots 0 and 1 of `loadout.actives` in that order, and emit the same events with the same fields in the same order. `PendingHit.slot` still holds 0 or 1. **This is the part an implementer can get wrong**: any "generalise to N" refactor must take N = 2 from the story path, not from `actives.filter(nonNull).length` or a constant 8.
+3. **Nothing is added to a story state.** `ResolvedLevel.prologue`, `RunState.prologue` and `LevelView.prologue` are **absent** keys. `canonicalJson` throws on `undefined`, so code must omit the key, never set it to `undefined` or `null`. No existing event gains a field.
+4. **No RNG.** The kit, the surge and the climax draw nothing and add no stream (§1.3).
+5. **Every new branch tests `def.prologue !== undefined`.** The surge step is skipped on story levels, not multiplied by `BP` (that would also be the identity for integers, but skipping costs nothing and removes any doubt).
+6. **The strict-index fallout is value-neutral.** With `noUncheckedIndexedAccess`, `run.skillChargeM[slot]` becomes `number | undefined`. The five fix-ups in §14.9 use `?? 0` and `=== true`, which never apply to an in-range index.
+7. **`CONTENT_VERSION`.** P0.3 adds only the optional schema key and no data, so it does not change. P1.2's `bundle.prologue` and the `nul` enemy and boss rows change it, and with it `def.contentVersion`. As in v2.0 and v2.1, the goldens are immune: `typingGolden.ts` pins `GOLEM_PINNED_CONTENT_VERSION`, `ch1-resolved.json` blanks it, and the Willow and harness fixtures are synthetic. Adding `nul` to `bundle.enemies` / `bundle.bosses` changes no story level's `enemies` or `boss`, because those are looked up by id and never iterated.
+
+**Evidence (P0.1 dry run on this branch, then discarded).** Exactly the §14.9 type widening plus the five fix-ups: `pnpm -r --no-bail typecheck` clean in every package (no client or tool fallout), and `vitest run packages/sim` 41 files / 596 tests pass, including the determinism, typing and Willow goldens and `ch1-resolved`.
+
+**Gates (P0.3 and P1.1 AC):** `golden-typing.json`, `golden-willow.json`, `golden-replay.json`, `golden-trial.json` and `ch1-resolved.json` unchanged; `pnpm bot` and `pnpm balance` output diff to empty against `main`.
+
+### 14.2 Content (P1.2) and validator rules
+- **Files.** `packages/content/src/data/prologue.ts` exports `PROLOGUE = PrologueDef.parse({...})`; `data/bundle.ts` adds `prologue: PROLOGUE`; `data/enemies.ts` adds the `nul` `EnemyDef` (`archetype: "boss"`, `spriteId: "nul"`); `data/bosses.ts` adds the `nul` `BossDef` (`name: "Nul"`, `title: "The Silent King"`, `enemyId: "nul"`, `phase1.endAtHpPct: 35`, at most 2 adds; phase 2/3 values are placeholders, since they are unreachable). All prologue numbers live in `prologue.ts`, never in `balance.ts`.
+- **Kit order is story order.** `kit.actives` = Fireball (100), Aegis, Slash Wave, Piercing Thrust, Mending Light, Frost Lock, with falling start charges. The cutscene steals the skills in kit order, and the Grimoire bar draws them in it. `kit.passives` = the 9 `PassiveId`s.
+- **Starting numbers** (plan §2.1; P1.3 tunes them): pace 25, gear sword/L/tier 3/+5, `chargeMult` 2.5, `castGapS` 1.5, `forceAfterS` 4, `heroHpFloorPct` 25, surge 18 / 20 / 4 / ×16, `bossMinS` 12.
+- **Validator (`tools/content`, P1.2)**, in addition to the schema refinements:
+  - every enemy and boss id resolves; the boss segment's `EnemyDef.archetype` is `boss`; its minigame is `fallingRubble`;
+  - a boss referenced only by the prologue is allowed (no "unused boss" error), and it is exempt from the riddle and phase-2 doom-pool rules;
+  - prologue segments and the boss's adds have **no `gimmick` and no `elite`** (Reveal is not in the kit; brand-new players);
+  - `kit.actives` contains no `reveal` (PO);
+  - `words` have ≥ 14 distinct first letters, `guardWords` ≥ 8, and the two lists don't overlap;
+  - `heroHpFloorPct` is below Last Stand's and Mending Light's thresholds (30 and 60 today), so both can show (warning);
+  - the plan's rule "plate words are not in any level pool" (freshness, not isolation: D46 already isolates them).
+
+### 14.3 Client: session and flow (P3.5; normative behaviour, illustrative code)
+- **`PlaySession` mode** `"story" | "prologue"`, plus a replay flag. In prologue mode it:
+  - builds the run from `prologueRunConfig(contentBundle)` and nothing else;
+  - **holds the sim start** until the cutscene's `startPlay` cue (`runner.start` runs there, not in `attach()`);
+  - **never calls `onFinished`**: no results screen, no save commit, no run ticket, never submitted;
+  - on `PrologueClimax` hands the same `RenderWorld` and stage to the cutscene player (no reload, actors stay put);
+  - shows the pause-menu variant **Resume / Skip prologue**.
+- **Input.** A tap of Esc in Part B keeps its meaning (drop the target, or pause). **Holding Esc for 1.0 s anywhere** skips the whole prologue: a 400 ms fade, then `markPrologueSeen` (first-run mode only), then the story card (first run) or the title (replay). All input is ignored for 1.5 s after `PrologueClimax`; cutscene lines advance only on Space/Enter, never on letters.
+- **First run** (`App.beginFirstRun`): `!onboarding || !isFirstRun` → false (unchanged); `!prologueSeen(save)` → `playPrologue({ then: "story" })`; else the existing story/L1 logic. Existing profiles are never forced.
+- **Replay:** a title "Prologue" button for every profile plays Parts A–C in replay mode (no flag write) and returns to the title.
+- **Dev/test:** `?onboard=0` skips it; `?scene=prologue[&wpm-bot=N][&part=cutscene&t=ms&freeze=1]`. The wpm-bot works unchanged.
+
+### 14.4 Cutscene seam (P3.1 owns; client-internal, D47)
+The names below are binding across P3.1 (engine), P3.2 (VFX ids), P3.3 (HUD cue ids), P3.4 (SFX ids) and P3.6 (the timeline). P3.1 may add optional fields inside a cue variant; renaming a cue kind, an id or a `StageDirector` method needs an ICP.
+```ts client
+// apps/game/src/cutscene/types.ts
+import type { CameraPose } from "../render/camera";
+import type { MusicState, Sfx } from "../audio/types";      // P3.4 adds the prologue ids to SFX_IDS
+import type { HeroAnim } from "../render/sprites/artTypes";
+export type Ms = number;
+export type Ease = "cut" | "linear" | "in" | "out" | "inOut";
+/** Poses the StageDirector resolves from the layout/stage (BATTLE_POSE, BOSS_INTRO_POSE, anchors). */
+export type CameraAnchor = "walk" | "battle" | "bossIntro" | "hero" | "boss" | "gate";
+export type ActorRef = "hero" | "boss" | `prop:${string}`;    // prop:<layout prop id>, e.g. "prop:wordgate"
+/** World VFX (render/vfx/prologue, P3.2). One P0.2 spec row per id. */
+export type PrologueVfxId =
+  | "inkRise" | "skyTear" | "hushBolt" | "ward" | "surgeAura" | "catchFireball" | "inkWrite"
+  | "theftStream" | "auraCollapse" | "gateDarken" | "letterVortex" | "silenceFog" | "ember";
+/** HUD cues (hud/prologue, P3.3). Drawn on the HUD canvas, above WebGL. */
+export type PrologueHudCue =
+  | { id: "kitShatter"; index: number }          // kit slot index (§14.2 order); crack 2 frames, then pixel shards
+  | { id: "passivesDim" }
+  | { id: "caption"; text: string }              // centre caption
+  | { id: "ink"; text: string; charMs: Ms }      // "I unwrite you." calligraphy, one letter per charMs
+  | { id: "colourSwirl"; on: boolean }           // the stolen colours in Nul's cloak (HUD layer, survives the grade)
+  | { id: "shardsReturn" };                      // the starter-kit icons (read from the bundle) fall into the hand
+export type HeroCutsceneAnim = HeroAnim | "kneel" | "rise" | "reach" | "swordOut";
+export type NulAnim = "idle" | "cast" | "write" | "catch" | "hurt" | "rise";
+export type Speaker = "nul" | "knight";
+export type Cue = { at: Ms; dur?: Ms } & (
+  | { kind: "camera"; pose: Partial<CameraPose> | { anchor: CameraAnchor; offset?: Partial<CameraPose> }; ease: Ease; shake?: number }
+  | { kind: "actor"; who: ActorRef; anim?: HeroCutsceneAnim | NulAnim; move?: { dx: number; dz: number }; visible?: boolean; tint?: string }
+  | { kind: "vfx"; id: PrologueVfxId; from?: ActorRef; to?: ActorRef; params?: Readonly<Record<string, number | string>> }
+  | { kind: "sfx"; id: Sfx }
+  | { kind: "music"; state?: MusicState; motif?: "spark"; silence?: number }   // silence 0..1 (low-pass + duck)
+  | { kind: "mood"; to: "base" | "unwritten" | number }                         // number = blend 0..1 toward UNWRITTEN
+  | { kind: "hud"; cue: PrologueHudCue }
+  | { kind: "line"; speaker: Speaker; text: string }  // gates the clock: hold max(2200, 1200 + 60 * chars) ms or Space/Enter
+  | { kind: "startPlay" }                              // Part A only: starts the sim (PlaySession)
+  | { kind: "end" }
+);
+/** "standalone": hero and Nul at their layout anchors, no adds (stills, replay jumps). "continue": take over the live stage. */
+export interface Timeline { id: "prologue.open" | "prologue.unwriting"; durationMs: Ms; setup: "standalone" | "continue"; cues: readonly Cue[] }
+// apps/game/src/level/stage.ts (additive seam only)
+export interface StageDirector {
+  heroActor(): unknown; bossActor(): unknown; prop(id: string): unknown;
+  setCameraOverride(pose: CameraPose | null): void;
+  setMood(mood: unknown | null): void;               // a BiomeMood blend; null = the layout's own
+  setLetterbox(on: boolean): void;
+  setHeroAnim(anim: HeroCutsceneAnim): void;
+}
+```
+- `timeline.ts`: `evaluate(tl, tMs, lineClock)` is a pure function of time; `validate(tl, registries)` checks the ids, sorted cues, lines ≤ 8 words of A2 English, and no overlapping `camera` cues without an ease; `endState(tl)` is where a skip lands.
+- The player runs on a presentation clock, paused on blur/hidden and in the pause menu. Particles integrate at a fixed 1/60 s step from each cue's start with seeded RNGs, so `seek(t)` is reproducible.
+- Reduced motion turns camera moves into cuts and removes shake; `reducedFlash` caps the theft flashes; `effectsIntensity` scales particle counts. Lines and timing don't change.
+
+### 14.5 Render ids (P0.3 registers placeholders; P2.1/P2.2/P2.3 draw)
+```ts client
+// apps/game/src/render/sprites/artTypes.ts (additions)
+export type PrologueArt = "nul";                                    // sprite key monster.nul (EnemyDef.spriteId "nul")
+export type NulAnimKey = "idle" | "atk" | "cast" | "write" | "catch" | "hurt" | "rise"; // idle + atk are what the stage plays in combat
+export type ProloguePropKey = "wordgate" | "runestone" | "sword";   // prop.prologue.<key>[.<n>] (+ .flip twins, the ch2Props convention)
+export type HeroCutsceneAnimKey = "kneel" | "rise" | "reach" | "swordOut"; // added to the `hero` entry by P2.3; HeroAnim itself is unchanged
+// apps/game/src/render/sprites/prologueArt.ts   (P0.3: placeholder; P2.1 owns)
+export declare function registerPrologueArt(table: Map<string, () => unknown>): void;   // monster.nul, monster.nul.ward
+// apps/game/src/render/sprites/prologueProps.ts (P0.3: empty; P2.2 owns)
+export declare function registerPrologueProps(table: Map<string, () => unknown>): void; // prop.prologue.*
+```
+Until P2.1 lands, `registerPrologueArt` maps `monster.nul` to the `monster.shade` anims (so a `nul` enemy row from P1.2 never meets a missing sprite) and `monster.nul.ward` to an empty `{ idle: [] }`.
+
+### 14.6 Save-flag helpers (P3.5, `apps/game/src/meta/ops.ts`)
+```ts client
+export const PROLOGUE_SEEN_KEY = "#prologue";                       // isFlagKey(): hidden from the journal
+export const prologueSeen = (save: Save): boolean => save.journal.firstSeen[PROLOGUE_SEEN_KEY] !== undefined;
+/** Written like markIntroSeen (value: srs.levelsPlayed); a no-op when already seen. First-run mode only, never on replay. */
+export declare function markPrologueSeen(save: Save, nowMs: number): Save;
+```
+
+### 14.7 Event plumbing (same merge as the sim types, §11.5)
+- `apps/game/src/level/eventBindings.ts`: a `PrologueClimax` row (stub until P3.2/P3.5 bind it).
+- `apps/game/src/audio/bindings.ts`: `"PrologueClimax"` in `KNOWN_SIM_EVENTS` (its drift test reads §4 of this doc) and in `AUDIO_SILENT_EVENTS` (the cutscene owns the audio; P3.4).
+
+### 14.8 What each task writes (contract consumers)
+| Task | Contract pieces |
+|---|---|
+| P0.3 stubs | §14.9, exactly. No behaviour; goldens unchanged (§14.1). |
+| P1.1 sim | `packages/sim/src/prologue.ts` (`resolvePrologue`, `prologueRunConfig`, exported from `api.ts`); §3.7.2–§3.7.8 in `level.ts`, `skills.ts`, `passives.ts`, `combat.ts`, `boss.ts`; rule-named tests; can't-lose fuzz; a prologue golden; Node↔Chromium parity includes it |
+| P1.2 content | §14.2 (data, Nul rows, `bundle.ts`, validator), `CONTENT_VERSION` |
+| P1.3 bot | `pnpm bot --prologue` built on `prologueRunConfig`; numbers in `prologue.ts` only |
+| P2.1 / P2.2 / P2.3 | §14.5 ids (Nul, props, hero cutscene anims) |
+| P3.1 | §14.4 types, `timeline.ts`, `player.ts`, the `StageDirector` seam |
+| P3.2 / P3.3 / P3.4 | the `PrologueVfxId`, `PrologueHudCue` and SFX/music ids of §14.4; the `PrologueClimax`, `hushBolt` (an `EnemyAttack` from `nul`) and `view.prologue` bindings |
+| P3.5 | §14.3 and §14.6 |
+
+### 14.9 P0.3 stub checklist (types only; copy verbatim)
+Run `scripts/check.sh` at the end. Expected: green, with goldens and bot output unchanged. Don't touch `Loadout`, `LoadoutSource`, `ActiveSkillId`, `BALANCE`, `meta/**`, `data/**` or any other behaviour.
+
+1. **`packages/sim/src/types.ts`**
+   - Add `export interface ResolvedPrologue { ... }` exactly as in §3 (all fields and comments), just above `ResolvedLevel`.
+   - In `ResolvedLevel`, after `riddles?: ResolvedRiddleWord[];`, add:
+     `/** v2.2: present iff this def came from resolvePrologue. ABSENT on every story level (§14.1). */ prologue?: ResolvedPrologue;`
+   - Add `export interface PrologueRunConfig { def: ResolvedLevel; loadout: Loadout; seed: number; options: LevelOptions }` after `ResolvedLevel`.
+   - Do **not** add `resolvePrologue` / `prologueRunConfig`: P1.1 creates them in `prologue.ts`.
+2. **`packages/sim/src/state.ts`**
+   - `PendingHit`, skill variant: `slot: 0 | 1;` → `slot: number;`.
+   - `RunState`: `skillChargeM: [number, number];` → `skillChargeM: number[]; // per kit slot (story: always length 2, §14.1)`, and `skillReady: [boolean, boolean];` → `skillReady: boolean[];`.
+   - Add, above `RunState`:
+     ```ts internal
+     /** v2.2 prologue run state (§3.7.2). Present iff def.prologue; ABSENT on story levels (hashes, §14.1). */
+     export interface PrologueRunState {
+       combatTicks: number;          // ticks of the current encounter processed in phase "combat"; 0 at EncounterStarted
+       waitTicks: number[];          // per kit slot: armed combat ticks spent ready without casting (smart -> asap)
+       lastCastTick: Tick | null;    // the last kit cast (cast gap)
+       lastCastSlot: number | null;  // round robin: the next scan starts at lastCastSlot + 1
+     }
+     ```
+   - In `RunState`, after `revealUntil?: Tick;`, add `/** v2.2: present iff def.prologue (§3.7.2). */ prologue?: PrologueRunState;`.
+3. **`packages/sim/src/events.ts`**
+   - `SkillCharged`: `slot: 0 | 1` → `slot: number`. `SkillCast`: `slot: 0 | 1` → `slot: number`.
+   - After the `FinisherCompleted` variant add:
+     `| Ev<"PrologueClimax", { enemyId: EntityId; bossId: string; surgeMultBp: number; addIds: EntityId[] }> // v2.2 (§3.7.6)`
+   - In `ALL_EVENT_TYPES`, after `"FinisherCompleted",` add `"PrologueClimax",`.
+4. **`packages/sim/src/view.ts`**
+   - `SkillView`: `slot: 0 | 1;` → `slot: number;`.
+   - Add `export interface PrologueView { surgeMult: number; bossClamped: boolean; armed: boolean }` (with the §5 comments).
+   - In `LevelView`, after `goldCollected: number;`, add `prologue?: PrologueView;` (with the §5 comment).
+5. **`packages/sim/src/skills.ts`** (strict-index fallout only; values unchanged):
+   - `chargeSkills`: `Math.min(run.skillChargeM[slot] + gain, …)` → `Math.min((run.skillChargeM[slot] ?? 0) + gain, …)`.
+   - `markReady`: `run.skillChargeM[slot] >= needM(id)` → `(run.skillChargeM[slot] ?? 0) >= needM(id)`.
+   - `castSkill`: `run.skillChargeM[slot] -= needM(id);` → `run.skillChargeM[slot] = (run.skillChargeM[slot] ?? 0) - needM(id);`.
+   - Leave `SLOTS = [0, 1]` and the `slot: 0 | 1` parameters as they are (they still compile).
+6. **`packages/sim/src/level.ts`** (strict-index fallout only):
+   - `skillViews`: `run.skillChargeM[slot] / K.SKILL_CHARGE_M[id]` → `(run.skillChargeM[slot] ?? 0) / K.SKILL_CHARGE_M[id]`; `ready: run.skillReady[slot],` → `ready: run.skillReady[slot] === true,`.
+   - Keep `createLevel`'s `skillChargeM: [0, 0]` and `skillReady: [false, false]` literals unchanged.
+7. **`packages/content/src/schemas.ts`**
+   - After `export type TrialDef …`, add `PrologueKitActive` (+ type), `PrologueWord`, the `distinct` helper (not exported), and `PrologueDef` (+ type), exactly as in §6.
+   - In `ContentBundle`, after `trials: z.array(TrialDef),`, add `prologue: PrologueDef.optional(), // v2.2 (§14.2): absent until P1.2`.
+   - `packages/content/src/index.ts` needs no change (`export * from "./schemas.ts"`). Don't touch `data/bundle.ts` (P1.2).
+8. **`apps/game/src/level/eventBindings.ts`**: after the `FinisherCompleted` row add
+   ```ts client
+   PrologueClimax: b("PrologueClimax", {
+     fxNone: "v2.2 stub: the session hands the stage to the cutscene player (P3.5); P3.2 binds the Fireball catch",
+     silent: "v2.2 stub: the cutscene owns the music and SFX (P3.4)",
+   }),
+   ```
+9. **`apps/game/src/audio/bindings.ts`**: add `"PrologueClimax", // interfaces v2.2` to `KNOWN_SIM_EVENTS` after `"FinisherCompleted",`, and `"PrologueClimax", // v2.2: the cutscene owns the audio` to `AUDIO_SILENT_EVENTS`.
+10. **`apps/game/src/render/sprites/artTypes.ts`**: add the four type aliases of §14.5.
+11. **`apps/game/src/render/sprites/prologueArt.ts`** (new): `registerPrologueArt(table)` that sets `monster.nul` to the `monster.shade` entry's factory (read it from `table` after `registerCh2Monsters` ran) and `monster.nul.ward` to `() => ({ idle: [] })`. Header comment: "v2.2 placeholder; P2.1 replaces it".
+12. **`apps/game/src/render/sprites/prologueProps.ts`** (new): `export function registerPrologueProps(_table: Map<string, () => Anims>): void {}` with the header comment "v2.2 placeholder; P2.2 adds prop.prologue.*".
+13. **`apps/game/src/render/sprites/ProceduralSpriteSource.ts`**: import both and call `registerPrologueProps(this.table); registerPrologueArt(this.table);` **after** `registerCh2Monsters(this.table);`, and add a line to the id list in the header comment.
+14. **`apps/game/src/hud/**`**: no change expected (the dry run found no HUD fallout). If `tsc` finds any, fix it with a cast, not a logic change.
+
+**Done when:** `pnpm -r typecheck`, `pnpm test` and `bash scripts/check.sh` are green; `git diff main -- packages/sim/tests/fixtures` is empty; the `pnpm bot --quick` output is identical to `main`.
+
+### 14.10 Review notes (Opus Reviewer self-review, for the orchestrator)
+1. **Plan §3.3 was labelled "2.1".** v2.1 is the slow-drip entry, so this is v2.2. `PROLOGUE_PLAN.md` §3.3 now points here.
+2. **`endAtBossHpPct` dropped** (D43). The gate is Nul's `phase1.endAtHpPct`, so P1.2's "the gate equals `phase1.endAtHpPct`" check is no longer needed.
+3. **`PrologueClimax` payload.** The plan had `{ bossId: EntityId; surgeMultBp }`. Elsewhere `bossId` is the def id string and `enemyId` the entity, so it is now `{ enemyId, bossId, surgeMultBp, addIds }`.
+4. **Surge off-by-one** (D44). The plan's prose and formula differed by one doubling step; the prose wins.
+5. **Wait time is counted in armed combat ticks**, not from the tick a slot became ready. So intros, the rewards beat and the time before the first word never push a skill to "asap", and the rule needs no "ready since" tick that would have to survive phase changes.
+6. **Adds don't hold the climax gate** (D43), unlike phase 1 of a story boss (`holding: "adds"`). Otherwise a player who ignores the adds would wait at the gate until they die, and the cutscene expects to dissolve them anyway.
+7. **No timeout on the prologue** (D45): the plan's "no fail except abandoned" and the P1.1 idle fuzz both need it.
+8. **Pre-charged slots emit no `SkillCharged`.** `createLevel` has no event channel; the HUD reads `SkillView.ready`, which is already the documented source of the ready state (`SkillCharged` is silent and has no FX).
+9. **The audio drift test** goes red if this doc merges without the §14.9 step 9 line. Merge them together.
+10. **Words-not-in-level-pools** is kept as a validator rule only because the plan asks for it. Isolation doesn't depend on it (D46), and it may make an A1 list of 60 words hard to find. The orchestrator may downgrade it to a warning.
+11. **Write lists.** P0.3 needs `packages/sim/src/{skills,level}.ts` for the five strict-index fix-ups, and P1.2 needs `packages/content/src/data/bundle.ts` for the bundle key. Both are added to `PROLOGUE_PLAN.md` §5.

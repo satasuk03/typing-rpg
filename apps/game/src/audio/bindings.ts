@@ -24,6 +24,7 @@ export type AudioHandler = (e: AudioEventLike, a: AudioApi) => void;
 /** Copy of interfaces.md section 4 `ALL_EVENT_TYPES` (sim events). Keep in sync on interface bumps. */
 export const KNOWN_SIM_EVENTS = [
   "LevelStarted",
+  "PrologueClimax",
   "WalkStarted",
   "WalkEnded",
   "EncounterStarted",
@@ -106,6 +107,7 @@ const num = (v: unknown): number => (typeof v === "number" ? v : 0);
 /** Sim events that intentionally make no sound (visual/HUD only). Together with the table they cover every event. */
 export const AUDIO_SILENT_EVENTS: readonly string[] = [
   "LevelStarted",
+  "PrologueClimax", // v2.2: the cutscene owns the climax sound (P3.4)
   "WalkEnded",
   "WaveStarted",
   "LevelFailed",
