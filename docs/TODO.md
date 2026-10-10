@@ -25,14 +25,8 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
   - Reachable fix: armor +3 costs 1,148 gold in Gear; L1-L9 first-clear gold with 1 star each is about 1,210, so the Golem leak drops from 20% to 3% (test in `apps/game/tests/app/ops.test.ts`).
 - **For Ch2:** set grunt attack power around 1.07× par and elites/bosses 1.25–1.35×. Re-solve `HIT_MULT` per chapter. Check that par−3 upgrades land near 1.3× the damage budget.
 
-## PO feedback 2026-10-10: starter kit (not started; do after T1.1 merges)
-- **Smaller starter kit.**
-  - New players start with only **1 active and 1 passive** (Fireball + Clean Cut is a suggestion). Today they start with Fireball + Aegis and Clean Cut + Steady Hands + Iron Will.
-  - Move the other starter skills (Aegis, Steady Hands, Iron Will) into `unlockLevel` slots.
-  - **Every skill must unlock before the L10 boss** (the latest is the L9 clear), so the boss balance barely changes.
-- **No balance retune.** The PO thinks the game is easy enough. Report the `pnpm balance` and bot results, but don't retune knobs.
-- **Fix the Iron Will text.** "Blocking a hit leaves you almost unharmed." oversells it: the real effect is that blocked hits deal 15% instead of 20%. Make the text state the real effect.
-- **Model:** a small Sonnet task. Files: `packages/content/src/data/skills.ts`, the new-profile kit in `apps/game/src/meta/ops.ts`, and any tests or HUD/onboarding that assume the 2-active starter kit.
+## PO feedback 2026-10-10: starter kit
+- **Done 2026-10-10.** New players start with Fireball + Clean Cut. Aegis unlocks at L1, Steady Hands at L4 and Iron Will at L6. Iron Will's text now states its real effect. A content rule enforces the kit.
 
 ## Ch2 art backlog
 - **The single source is now `docs/qa/ch2-review-1.md`** (R2, 2026-10-10): 3 P1, 12 P2, 23 P3. It supersedes the per-task lists that used to be here.
