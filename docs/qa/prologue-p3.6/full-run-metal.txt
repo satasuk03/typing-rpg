@@ -1,0 +1,2 @@
+Metal (ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)) 1280x720, audio on, wpm-bot 40 acc 0.97 seed 3, fresh profile
+A 10.7 s, B 53.2 s, C 74.2 s (real time, min line holds), total to story 138.3 s; console errors 0, in-app errors 0; route play, level ch1-l01 up

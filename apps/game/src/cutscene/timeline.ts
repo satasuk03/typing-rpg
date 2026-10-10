@@ -245,11 +245,18 @@ function hudAt(cues: readonly Cue[], t: Ms): HudState {
   let dim = false;
   let swirl = false;
   let shards: number | null = null;
+  let fade = 0;
   for (const c of cues) {
     if (c.kind !== "hud") continue;
     if (c.at > t) break;
     const h = c.cue;
     switch (h.id) {
+      case "fade": {
+        // a linear ramp from the previous fade's value (cues are sorted, so `fade` is where the last one ended)
+        const d = c.dur ?? 0;
+        fade = d > 0 ? lerp(fade, h.to, clamp01((t - c.at) / d)) : h.to;
+        break;
+      }
       case "caption":
         if (t < c.at + (c.dur ?? DEFAULT_CAPTION_MS)) caption = h.text;
         break;
@@ -280,6 +287,7 @@ function hudAt(cues: readonly Cue[], t: Ms): HudState {
     passivesDim: dim,
     colourSwirl: swirl,
     shardsReturnAgeMs: shards,
+    fade,
   };
 }
 
@@ -470,6 +478,9 @@ export function validate(tl: Timeline, registries: Registries = DEFAULT_REGISTRI
         if (c.silence !== undefined && !(c.silence >= 0 && c.silence <= 1)) {
           err(i, `music silence ${c.silence} not in 0..1`);
         }
+        if (typeof c.drone === "number" && !(c.drone >= 0 && c.drone <= 127)) {
+          err(i, `music drone ${c.drone} is not a MIDI note`);
+        }
         break;
       case "mood":
         if (typeof c.to === "number" && !(c.to >= 0 && c.to <= 1)) {
@@ -483,6 +494,7 @@ export function validate(tl: Timeline, registries: Registries = DEFAULT_REGISTRI
         }
         if (h.id === "ink" && !(h.charMs > 0)) err(i, `ink charMs must be > 0`);
         if ((h.id === "caption" || h.id === "ink") && h.text.trim() === "") err(i, `empty text`);
+        if (h.id === "fade" && !(h.to >= 0 && h.to <= 1)) err(i, `fade ${h.to} not in 0..1`);
         break;
       }
       case "line": {

@@ -1,7 +1,8 @@
 # Cutscene engine (P3.1)
 
 Data-driven, presentation-only, seekable, skippable. Contract: `docs/interfaces.md` v2.2 §14.4. The real prologue
-timelines are P3.6's; `testTimeline.ts` is only a small engine test.
+timelines are `timelines/prologue.ts` (P3.6: Part A `OPEN_TIMELINE`, Part C `UNWRITING_TIMELINE`, plan §2 and
+`docs/vfx/prologue-art-direction.md` §2.3 / §4 / §5); `testTimeline.ts` is only a small engine test.
 
 | File | What |
 |---|---|
@@ -38,3 +39,19 @@ cutscene frames (unknown anims fall back to idle until P2.3's sheet lands). P3.1
 `?scene=prologue&part=cutscene&t=<ms>&freeze=1[&lc=<ms>][&id=ch1-l04][&reduced=1]` (`src/dev/prologueScene.ts`) renders the exact frame
 (standalone setup: hero at the layout `start` anchor). Without `freeze` it plays live. Tests: `src/cutscene/cutscene.test.ts` (Node) and
 `tests/cutscene/cutscene.spec.ts` (`CUTSCENE_PORT=5409 pnpm exec playwright test -c tests/cutscene/playwright.config.ts`, Metal).
+
+## P3.6: the real timelines and how the session plays them
+- **Authoring rule.** A `line` cue holds the timeline clock (and every scripted cue, VFX and camera ease with it), so a line sits at
+  the END of the shot it belongs to and the next move starts after it. Part C is 54.5 s of timeline plus the line holds (about 74 s
+  at the minimum reading time); Part A is 8 s plus Nul's line.
+- **Cue fields added in P3.6** (all optional, additive): `music` `drone: number | null` (MIDI note / release), `swell: true`,
+  `motif: "spark" | "sparkEnd"`; `sfx` `count` / `boss` (the `SfxParams` the prologue voices read: theft slot, letter / glyph index,
+  speaker); `hud` `{ id: "fade", to }` (a linear black fade over the cue's `dur`, `HudState.fade`); `NulAnim` `"reach"`.
+- **Routing** (`level/session.ts`): `sfx` / `line` (a `lineBlip`) / `music` cues go to the engine (`applyMusicCue`, `musicDrone`,
+  `musicSwell`, `musicMotif`); `CutsceneState.vfx` + `moodBlend` go to `PrologueFx` (`attachPrologueFx`); `hud` state goes to the
+  P3.3 `PrologueHud` (`setCutscene`, anchors from the stage projection, `worldKeepOuts` -> `PrologueFx.keepOutRects`); the `boss`
+  actor posing Nul (anim, the rise into the tear, hidden) goes to `LevelStage.setBossCutscene`; the `prop:prop.prologue.sword` actor
+  shows / hides the sword prop; the `fade` is a black post flash; the `catchFireball` cue is a 160 ms hit-stop of the world and
+  the cutscene clock.
+- **Stills.** `window.__play.proSeek(tMs, lineClockMs?, jumped?)` parks Part A or C on a timeline time (pure seek, no sound);
+  `proSeek(-1)` lets it play on. Used by `tests/app/prologueStills.metal.ts`.

@@ -16,7 +16,9 @@ import type { CameraPose, RenderWorld, SpriteActor, SpriteFrame } from "../rende
 import { type BiomeMood, blendMood, GROVE_DAWN } from "../render/biomes";
 import type { DynamicLight } from "../render/lighting";
 import { ELITE_SCALE, eliteKey, WILLOW_FACE_FRAC } from "../render/sprites/ch2Monsters";
+import { NUL_FRAME_MS } from "../render/sprites/prologueArt";
 import { HERO_LUM_CAP } from "../render/vfx/colors";
+import { inkRiseOffsetY } from "../render/vfx/prologue/params";
 
 /** W4: enemy sprites never exceed this max channel on the bright forest (fades out toward the cave): flash lights + hit flash no longer clip a pale slime white. */
 const FOE_FOREST_CAP = 0.85;
@@ -164,6 +166,48 @@ export const ADDS_FADE_SEC = 0.3;
 /** P3.1 cutscene seam (interfaces.md v2.2 §14.4). Implemented by `LevelStage.director()`. */
 export type { StageDirector } from "../cutscene/types";
 
+/** P3.6: how a Part C timeline poses Nul (its `boss` actor state, evaluated by the cutscene engine). */
+export interface BossCutsceneState {
+  /** A `monster.nul` anim (idle / cast / write / catch / reach / hurt / intro / rise) or null = the stage's own. */
+  anim: string | null;
+  ageMs: number;
+  dx: number;
+  dz: number;
+  visible: boolean;
+}
+
+/** P3.6: seconds of the B2 boss intro over which the camera tilts up (art direction §4.2: y 2.45 -> 2.65). */
+const PRO_INTRO_TILT_SEC = 3.4;
+const PRO_INTRO_TILT_Y = 0.2;
+/** P3.6: Nul steps out of the sky tear: he fades in over this window after the tear has opened. */
+const PRO_NUL_FADE_FROM = 0.7;
+const PRO_NUL_FADE_SEC = 1.1;
+/** P3.6: the servants left on stage when the cutscene starts dissolve into Nul's cloak over this long. */
+const PRO_ADDS_DISSOLVE_SEC = 0.9;
+/** Nul's lift (m) at the end of his rise (`nulLift` in render/vfx/prologue/params.ts, 9 m over 3.6 s, easeInQuad). */
+const NUL_RISE_M = 9;
+const NUL_RISE_MS = 3600;
+
+/** The frame index of a `monster.nul` anim at `ageMs` (hold times in `NUL_FRAME_MS`, 0 = hold). */
+export function nulFrameIndex(anim: string, ageMs: number, n: number): number {
+  if (n <= 1) return 0;
+  if (anim === "write") return [0, 1, 2, 1][Math.floor(Math.max(0, ageMs) / 110) % 4] ?? 0;
+  // the theft pull: the arm hooks for 90 ms as each stolen stream reaches the mask (820 ms into its 1100 ms beat)
+  if (anim === "reach") return ageMs >= 820 && ageMs < 910 ? 1 : 0;
+  const ms = (NUL_FRAME_MS as Record<string, readonly number[] | undefined>)[anim];
+  if (!ms) return 0;
+  const loop = ms.every((d) => d > 0);
+  let t = Math.max(0, ageMs);
+  const total = ms.reduce((a, b) => a + b, 0);
+  if (loop && total > 0) t %= total;
+  for (let i = 0; i < n; i++) {
+    const d = ms[i] ?? 0;
+    if (d === 0 || t < d) return i;
+    t -= d;
+  }
+  return n - 1;
+}
+
 export interface StageOptions {
   enemies: ReadonlyMap<string, EnemyDef>;
 }
@@ -220,6 +264,13 @@ export class LevelStage {
     visible: boolean;
   } | null = null;
   private dirSeam: StageDirector | null = null;
+  // ---- P3.6 prologue (gated on `setPrologue(true)`; story levels never set any of these)
+  private pro = false;
+  private dirBoss: BossCutsceneState | null = null;
+  private fogOverride: number | null = null;
+  private addsDissolveT: number | null = null;
+  private introT = 0;
+  private readonly nulAnimCache = new Map<string, readonly SpriteFrame[]>();
 
   constructor(
     readonly world: RenderWorld,
@@ -602,6 +653,59 @@ export class LevelStage {
     return this.dirSeam;
   }
 
+  // ------------------------------------------------------------------------------------------- P3.6 prologue
+
+  /** Prologue mode: servants rise out of ink pools, Nul fades in under the tear, the B2 camera tilts. Story levels never call it. */
+  setPrologue(on: boolean): void {
+    this.pro = on;
+  }
+
+  /** Part C: pose Nul from the timeline's `boss` actor state (null = the stage's own idle / attack frames). */
+  setBossCutscene(s: BossCutsceneState | null): void {
+    this.dirBoss = s;
+  }
+
+  /** `silenceFog`: the mood fog density while a cutscene mood is active (null = the mood's own). */
+  setFogDensity(d: number | null): void {
+    this.fogOverride = d;
+  }
+
+  /** Part C start: every servant still standing dissolves into Nul's cloak. */
+  dissolveAdds(): void {
+    if (this.addsDissolveT === null) this.addsDissolveT = this.time;
+  }
+
+  /** Where an enemy's feet are NOW (world units, including a cutscene lift / offset); false when it is not on stage. */
+  enemyFeet(id: number, out: { x: number; y: number; z: number }): boolean {
+    const e = this.foes.get(id);
+    if (!e) return false;
+    const p = e.actor.mesh.position;
+    out.x = p.x;
+    out.y = p.y;
+    out.z = p.z;
+    return true;
+  }
+
+  /** A world point projected through the real camera to CSS px (the cutscene HUD anchors: the open hand, the tear). */
+  project(x: number, y: number, z: number): { x: number; y: number } {
+    return this.toPx(x, y, z);
+  }
+
+  private nulFrames(e: EnemyActor, anim: string): readonly SpriteFrame[] {
+    const key = `monster.${e.sprite}`;
+    const ck = `${key}|${anim}`;
+    let fr = this.nulAnimCache.get(ck);
+    if (!fr) {
+      try {
+        fr = this.world.source.frames(key, anim);
+      } catch {
+        fr = [];
+      }
+      this.nulAnimCache.set(ck, fr);
+    }
+    return fr;
+  }
+
   setLetterbox(on: boolean): void {
     if (this.letterboxOn === on) return;
     this.letterboxOn = on;
@@ -619,6 +723,7 @@ export class LevelStage {
     this.dt = dt;
     this.time += dt;
     this.lastView = view;
+    this.introT = view.phase === "bossIntro" ? this.introT + dt : 0;
     const tickF = view.tick + alpha;
 
     this.heroFlash = Math.max(0, this.heroFlash - dt * 6);
@@ -646,7 +751,12 @@ export class LevelStage {
     this.updateCamera(view);
     this.handle.update(dt, this.world.camera.pose.x);
     // P3.1: a cutscene's blended mood wins over the level's per-x mood (re-applied by `handle.update` every frame)
-    if (this.dirMood) this.world.setMood(this.dirMood);
+    if (this.dirMood) {
+      const m = this.dirMood;
+      // P3.6: `silenceFog` ramps the mood's fog density (PrologueFx.out.fogDensity)
+      const fd = this.fogOverride;
+      this.world.setMood(fd === null ? m : { ...m, fog: [fd, m.fog[1], m.fog[2]] });
+    }
     this.dawnT = Math.min(DAWN_SEC, Math.max(0, this.freedClock - DAWN_DELAY));
     if (this.dawnT > 0 && this.world.biome === "grove") {
       // P2-3: grove dawn. `handle.update` re-applies the level's mood every frame, so the warm-up blends from it afterwards
@@ -783,7 +893,20 @@ export class LevelStage {
     let flashCol: readonly [number, number, number] = [1.25, 1.2, 1.1];
     let flash = e.flash;
     const age = this.time - e.born;
-    if (age < 0.7) dx += 4 * (1 - easeOut(age / 0.7));
+    // P3.6: the prologue's servants rise out of their ink pools (`inkRiseOffsetY`) and Nul steps out of the sky tear
+    // (a fade-in), instead of sliding in from the right
+    if (age < 0.7 && !this.pro) dx += 4 * (1 - easeOut(age / 0.7));
+    let proY = 0;
+    if (this.pro) {
+      if (!ev.isBoss && age < 0.9) proY = inkRiseOffsetY(age * 1000);
+      if (ev.isBoss && !this.dirBoss)
+        e.actor.setDissolve(1 - easeOut((age - PRO_NUL_FADE_FROM) / PRO_NUL_FADE_SEC));
+      if (!ev.isBoss && this.addsDissolveT !== null) {
+        const k = clamp01((this.time - this.addsDissolveT) / PRO_ADDS_DISSOLVE_SEC);
+        e.actor.setDissolve(k);
+        if (k >= 1) e.actor.visible = false;
+      }
+    }
 
     if (!ev.alive) {
       // the dissolve starts when EnemyDeath is presented (`enemyDied`): a finisher holds the death for its
@@ -851,7 +974,25 @@ export class LevelStage {
       const sf = e.states[st];
       if (sf && sf.length > 0) frames = sf;
     }
-    const idx = frames.length > 1 ? Math.floor(this.time * 2.2 + e.slot) % frames.length : 0;
+    let idx = frames.length > 1 ? Math.floor(this.time * 2.2 + e.slot) % frames.length : 0;
+    // P3.6 Part C: the timeline poses Nul (anim by the cue's age, offset, lift while he rises, visibility)
+    const db = this.dirBoss;
+    let cutX = 0;
+    let cutZ = 0;
+    if (db && ev.isBoss) {
+      if (db.anim) {
+        const nf = this.nulFrames(e, db.anim);
+        if (nf.length > 0) {
+          frames = nf;
+          idx = nulFrameIndex(db.anim, db.ageMs, nf.length);
+        }
+        if (db.anim === "rise") proY += NUL_RISE_M * clamp01(db.ageMs / NUL_RISE_MS) ** 2;
+      }
+      cutX = db.dx;
+      cutZ = db.dz;
+      e.actor.visible = db.visible;
+      e.actor.setDissolve(0);
+    }
     const f = frames[idx] ?? frames[0];
     if (f) {
       e.actor.setFrame(f);
@@ -863,7 +1004,7 @@ export class LevelStage {
       flashCol = [0.02, 0.01, 0.06];
     }
     e.actor.setFlash(flash, flashCol);
-    e.actor.place(e.baseX + dx, e.flyY + bob, e.baseZ + dz);
+    e.actor.place(e.baseX + dx + cutX, e.flyY + bob + proY, e.baseZ + dz + cutZ);
     if (e.states) this.updateWillowLight(e, dt);
   }
 
@@ -902,7 +1043,12 @@ export class LevelStage {
       const base = h.cameraPose("walk");
       return { target: { ...base, x: this.heroX + WALK_LEAD }, letterbox: false };
     }
-    if (view.phase === "bossIntro") return { target: h.cameraPose("boss"), letterbox: true };
+    if (view.phase === "bossIntro") {
+      const boss = h.cameraPose("boss");
+      // P3.6 (B2): a slow tilt up as Nul steps out of the tear: y 2.45 -> 2.65 over the 3.4 s intro
+      if (this.pro) boss.y += PRO_INTRO_TILT_Y * clamp01(this.introT / PRO_INTRO_TILT_SEC);
+      return { target: boss, letterbox: true };
+    }
     return { target: h.cameraPose(`battle:${this.curEnc}`), letterbox: false };
   }
 
