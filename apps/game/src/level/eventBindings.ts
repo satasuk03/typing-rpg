@@ -22,6 +22,7 @@
 import type { EventOf, SimEvent, SimEventType } from "@hd2d/sim";
 import { AUDIO_BINDINGS, type AudioApi, dispatchAudioEvent } from "../audio/bindings";
 import type { CombatFxSink } from "../render/vfx/combat/CombatFx";
+import type { PrologueFxSink } from "../render/vfx/prologue/PrologueFx";
 
 // ---------------------------------------------------------------------------------------------- sinks
 
@@ -66,9 +67,11 @@ export interface Sinks {
   ui: UiActions;
   /** The combat VFX library (T2.3). Absent in tests and when effects are off. */
   fx?: CombatFxSink;
+  /** The prologue world VFX (P3.2, `render/vfx/prologue`). Absent on every story level, in tests and when effects are off. */
+  prologue?: PrologueFxSink;
 }
 
-export type BindingCtx = Pick<Sinks, "render" | "ui" | "fx">;
+export type BindingCtx = Pick<Sinks, "render" | "ui" | "fx" | "prologue">;
 
 export interface EventBinding<K extends SimEventType> {
   render?: (e: EventOf<K>, c: BindingCtx) => void;
@@ -76,6 +79,11 @@ export interface EventBinding<K extends SimEventType> {
   fx?: (e: EventOf<K>, c: BindingCtx) => void;
   /** Required when `fx` is absent: why the event has no combat effect. */
   fxNone?: string;
+  /**
+   * Prologue world VFX (P3.2), run right after `fx`. A separate column on purpose: the combat table's rule (one `CombatFxSink`
+   * call per `fx`) is untouched, and every handler is a no-op without a `Sinks.prologue` (story levels never set one).
+   */
+  prologue?: (e: EventOf<K>, c: BindingCtx) => void;
   hud: "push" | "none";
   audio: "bound" | "silent";
   /** Why the event is intentionally not presented anywhere (required when nothing else is set). */
@@ -125,6 +133,7 @@ function b<K extends SimEventType>(
     fx?: EventBinding<K>["fx"];
     fxNone?: string;
     silent?: string;
+    prologue?: EventBinding<K>["prologue"];
   } = {},
 ): EventBinding<K> {
   return { hud: hudOf(type), audio: audioOf(type), ...extra };
@@ -157,6 +166,7 @@ export const BINDINGS: BindingTable = {
     render: (e, c) => c.render.spawnEnemy(e.enemyId, e.defId, e.slot, e.isBoss, e.elite === true),
     fxNone:
       "the stage slides the enemy in; the boss entrance is BossIntroStarted; the elite aura (T3.2) is driven per frame by EnemyView.elite",
+    prologue: (e, c) => c.prologue?.enemySpawned(e), // inkRise: an add rises out of an ink pool
   }),
   EncounterCleared: b("EncounterCleared", {
     render: (_e, c) => c.render.encounterCleared(),
@@ -237,6 +247,7 @@ export const BINDINGS: BindingTable = {
     fx: (e, c) => c.fx?.autoAttack(e),
   }),
   Hit: b("Hit", {
+    prologue: (e, c) => c.prologue?.hit(e), // the ward ripples on a hit while Nul is clamped
     render: (e, c) => {
       if (e.targetId === 0) return;
       const strong = e.crit || e.kind === "skill" || e.kind === "finisher";
@@ -285,6 +296,7 @@ export const BINDINGS: BindingTable = {
   EnemyAttack: b("EnemyAttack", {
     render: (e, c) => c.render.enemyAttack(e.enemyId),
     fx: (e, c) => c.fx?.enemyAttack(e),
+    prologue: (e, c) => c.prologue?.enemyAttack(e), // hushBolt when the attacker is Nul
   }),
   HeroDamaged: b("HeroDamaged", {
     render: (e, c) => {
@@ -366,6 +378,7 @@ export const BINDINGS: BindingTable = {
       c.render.punch(1, 0.004, 0.02);
     },
     fx: (e, c) => c.fx?.bossIntro(e),
+    prologue: (e, c) => c.prologue?.bossIntro(e), // skyTear: Nul steps out of the sky
   }),
   BossPhaseChanged: b("BossPhaseChanged", {
     render: (_e, c) => {
@@ -437,8 +450,9 @@ export const BINDINGS: BindingTable = {
   }),
   PrologueClimax: b("PrologueClimax", {
     fxNone:
-      "v2.2 stub: the session hands the stage to the cutscene player (P3.5); P3.2 binds the Fireball catch",
-    silent: "v2.2 stub: the cutscene owns the music and SFX (P3.4)",
+      "the combat library has nothing to play: the prologue column ends Part B's world effects, and the cutscene's catchFireball cue is the catch",
+    silent: "the cutscene owns the music and SFX (P3.4)",
+    prologue: (e, c) => c.prologue?.climax(e),
   }),
 
   // ---- rewards ----
@@ -542,6 +556,7 @@ export class EventRouter {
     const binding = BINDINGS[e.type] as EventBinding<SimEventType>;
     (binding.render as ((ev: SimEvent, c: BindingCtx) => void) | undefined)?.(e, s);
     (binding.fx as ((ev: SimEvent, c: BindingCtx) => void) | undefined)?.(e, s);
+    (binding.prologue as ((ev: SimEvent, c: BindingCtx) => void) | undefined)?.(e, s);
     if (binding.hud === "push") s.hud.pushEvent(e);
     if (binding.audio === "bound" && s.audio) dispatchAudioEvent(e, s.audio);
     const list = this.hooks.get(e.type);

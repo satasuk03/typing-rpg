@@ -88,6 +88,34 @@ const RGB2: Rgb = [0, 0, 0];
 /** Seconds the aura takes to dim to the lower tier on a one-tier streak drop. */
 export const STEP_DOWN_SEC = 0.15;
 
+// ---- P3.2 prologue modes (docs/vfx/prologue-art-direction.md 3: `surgeAura`, `auraCollapse`). Everything below is gated on
+// `setPrologue()`: story levels never call it, so their aura is exactly what it was.
+/** The prologue floor: STREAK_STYLE tier 2 from `startPlay`. */
+export const PROLOGUE_FLOOR_TIER = 2;
+/** Per doubling of the surge: extra flare level, ring size factor (cap), extra motes per second (cap). */
+const SURGE_LEVEL = 0.15;
+const SURGE_RING = 1.1;
+const SURGE_RING_CAP = 1.4;
+const SURGE_MOTES = 4;
+const SURGE_MOTES_CAP = 30;
+/** The gold under-pillar from surgeMult >= 8 (3 doublings). */
+const SURGE_GOLD_FROM = 3;
+const GOLD_PILLAR: Rgb = [1.9, 1.35, 0.45];
+/** Collapse timings (ms from the cue): rings contract 0-500, the pillar narrows 300-700, snaps 700-760, gone after. */
+export const COLLAPSE_MS = { rings: 500, pillarFrom: 300, pillarTo: 700, snapEnd: 760 } as const;
+
+export interface AuraPrologue {
+  /** Aura tier floor (>= 1). */
+  floor: number;
+  /** `view.prologue.surgeMult`: 1, 2, 4, 8, 16. */
+  surgeMult: number;
+}
+
+/** Number of surge doublings for a surgeMult (1 -> 0, 2 -> 1, 4 -> 2, 8 -> 3, 16 -> 4). */
+export function surgeSteps(mult: number): number {
+  return mult >= 2 ? Math.min(4, Math.round(Math.log2(mult))) : 0;
+}
+
 export class HeroAura {
   private readonly rune: FxQuad;
   private readonly pool: AuraQuad;
@@ -120,6 +148,12 @@ export class HeroAura {
   private spin = 0;
   /** False hides the aura (menus). */
   enabled = true;
+  /** P3.2: null on every story level. */
+  private pro: AuraPrologue | null = null;
+  private proSteps = 0;
+  /** ms into `auraCollapse`, or -1. */
+  private collapseAge = -1;
+  private gold: AuraQuad | null = null;
 
   constructor(
     private readonly world: RenderWorld,
@@ -173,6 +207,44 @@ export class HeroAura {
   /** Tier-up downbeat: x1.6 decaying over 450 ms. */
   surge(): void {
     this.surgeT = 1;
+  }
+
+  /**
+   * P3.2: switch the prologue aura on (floor tier + surge build-up from `view.prologue.surgeMult`) or off (null: story levels).
+   * A higher surgeMult than before pops the downbeat (`surge()`), like a tier-up.
+   */
+  setPrologue(p: AuraPrologue | null): void {
+    if (p === null) {
+      this.pro = null;
+      this.proSteps = 0;
+      return;
+    }
+    if (this.gold === null) this.gold = new AuraQuad(this.world, AuraKind.Column, 7, 2.3, 0.5);
+    const steps = surgeSteps(p.surgeMult);
+    if (this.pro !== null && steps > this.proSteps) this.surge();
+    this.proSteps = steps;
+    this.pro = p;
+  }
+  get prologue(): AuraPrologue | null {
+    return this.pro;
+  }
+
+  /**
+   * P3.2 `auraCollapse`: the aura as a pure function of `ageMs` since the cue (rings contract, the pillar narrows and snaps,
+   * then nothing). Called every frame while the cue is active; null ends it. It starts from the full (tier 4) look, so a seek
+   * reproduces the frame. Keep the cue active to the end of Part C (give it a long `dur`): the aura stays dark while it runs.
+   */
+  setCollapse(ageMs: number | null): void {
+    if (ageMs !== null && this.gold === null)
+      this.gold = new AuraQuad(this.world, AuraKind.Column, 7, 2.3, 0.5);
+    this.collapseAge = ageMs === null ? -1 : Math.max(0, ageMs);
+    if (ageMs !== null && ageMs >= COLLAPSE_MS.snapEnd) {
+      this.streakTier = 0;
+      this.forceT4 = false;
+    }
+  }
+  get collapsing(): boolean {
+    return this.collapseAge >= 0;
   }
 
   /** A ground shockwave ring around the hero (tier-up downbeat, ATB filled): expands over `dur` s. */
@@ -242,6 +314,7 @@ export class HeroAura {
     this.burst.alpha(0);
     this.shock.alpha(0);
     this.shockT = -1;
+    this.gold?.alpha(0);
     for (const s of this.stars) s.intensity(0);
     this.lights.setAura(0, 0, 0, 0, 0, 0, 0, 0);
   }
@@ -254,15 +327,41 @@ export class HeroAura {
       return;
     }
     this.hidden = false;
-    const tier = this.forceT4 ? 4 : this.streakTier;
-    const target = STREAK_STYLE.auraLevel[tier] as number;
-    if (this.level < target) this.level = Math.min(target, this.level + 2.5 * dt);
+    // ---- P3.2 prologue (all inert while `pro` is null and no collapse runs: story levels)
+    const pro = this.pro;
+    const collapsing = this.collapseAge >= 0;
+    let tier = this.forceT4 ? 4 : this.streakTier;
+    if (collapsing) tier = 4;
+    else if (pro !== null) tier = Math.max(tier, pro.floor);
+    const steps = pro !== null && !collapsing ? this.proSteps : 0;
+    let ringK = 1;
+    let pillarW = 1;
+    let vK = 1;
+    let snap = false;
+    if (steps > 0) ringK = Math.min(SURGE_RING_CAP, SURGE_RING ** steps);
+    const target = (STREAK_STYLE.auraLevel[tier] as number) + steps * SURGE_LEVEL;
+    if (collapsing) {
+      const age = this.collapseAge;
+      const c = Math.min(1, age / COLLAPSE_MS.rings);
+      ringK = 1 - 0.9 * c * c * c;
+      const pu = Math.min(
+        1,
+        Math.max(
+          0,
+          (age - COLLAPSE_MS.pillarFrom) / (COLLAPSE_MS.pillarTo - COLLAPSE_MS.pillarFrom),
+        ),
+      );
+      pillarW = 1 - 0.95 * pu * pu * (3 - 2 * pu);
+      snap = age >= COLLAPSE_MS.pillarTo && age < COLLAPSE_MS.snapEnd;
+      if (age >= COLLAPSE_MS.snapEnd) vK = 0;
+      this.level = target; // the full look: the cue is a pure function of its age
+    } else if (this.level < target) this.level = Math.min(target, this.level + 2.5 * dt);
     else if (this.level > target) this.level = Math.max(target, this.level - this.downRate * dt);
     if (this.surgeT > 0) this.surgeT = Math.max(0, this.surgeT - dt / 0.45);
     if (this.comboPulse > 0) this.comboPulse = Math.max(0, this.comboPulse - dt / 0.3);
     const surge = 1 + 0.6 * easeOutQuad(this.surgeT);
     const a = this.level * k;
-    const v = a * surge;
+    const v = a * surge * vK;
     const rm = set.reducedMotion;
     const dispTier = Math.max(1, tier);
     accentRgb(this.level > 0.001 ? dispTier : 0, time, rm, RGB);
@@ -326,7 +425,7 @@ export class HeroAura {
         ring
           .color(r * 1.15, g * 1.15, b * 1.15)
           .at(hx, 0.055, hz + 0.1)
-          .size(3.8 + 1.0 * v)
+          .size((3.8 + 1.0 * v) * ringK)
           .progress(0.18 + 0.82 * u)
           .alpha(1.0 * m * fg);
       }
@@ -335,7 +434,7 @@ export class HeroAura {
       this.pillar
         .color(r, g, b)
         .at(hx, 2.5, hz - 0.08)
-        .size(1.1 + 0.6 * v, 5.2)
+        .size((1.1 + 0.6 * v) * pillarW, 5.2)
         .alpha(0.36 * m * (1 - 0.45 * this.bright));
       for (let i = 0; i < 2; i++) {
         const s = this.shafts[i] as AuraQuad;
@@ -343,9 +442,26 @@ export class HeroAura {
         if (tier >= 2)
           s.color(r * 1.1, g * 1.1, b * 1.1)
             .at(hx + off, 2.1, hz - 0.1)
-            .size(0.42, 3.6 + 0.5 * i)
+            .size(0.42 * pillarW, 3.6 + 0.5 * i)
             .alpha(0.7 * m * fg);
         else s.alpha(0);
+      }
+      // P3.2: the gold under-pillar from surgeMult >= 8, and the 60 ms white snap line of the collapse
+      const gq = this.gold;
+      if (gq !== null) {
+        if (snap) {
+          gq.additive(1)
+            .color(2, 2, 2)
+            .at(hx, 2.5, hz - 0.06)
+            .size(0.07, 5.4)
+            .alpha(1);
+        } else if (steps >= SURGE_GOLD_FROM) {
+          gq.additive(0.5)
+            .color(GOLD_PILLAR[0], GOLD_PILLAR[1], GOLD_PILLAR[2])
+            .at(hx, 2.4, hz - 0.1)
+            .size(0.9 + 0.5 * (steps - SURGE_GOLD_FROM), 4.6)
+            .alpha(0.34 * Math.min(1.1, v));
+        } else gq.alpha(0);
       }
       // halo behind the chest
       this.halo
@@ -358,7 +474,7 @@ export class HeroAura {
         this.burst
           .color(r * 1.2, g * 1.2, b * 1.2)
           .at(hx, 1.25, hz - 0.12)
-          .size(3.4 + 0.8 * v)
+          .size((3.4 + 0.8 * v) * ringK)
           .alpha(0.8 * m * fg);
         this.burst.mesh.rotation.z = rm ? 0 : time * 0.28;
       } else this.burst.alpha(0);
@@ -386,6 +502,7 @@ export class HeroAura {
       for (const s of this.shafts) s.alpha(0);
       this.halo.alpha(0);
       this.burst.alpha(0);
+      this.gold?.alpha(0);
       this.lights.setAura(0, 0, 0, 0, 0, 0, 0, 0);
     }
 
@@ -411,9 +528,9 @@ export class HeroAura {
     }
 
     // ---- motes (pool A glow + pool B pixel)
-    if (tier >= 1 && this.level > 0.05) {
+    if (tier >= 1 && this.level > 0.05 && vK > 0) {
       this.moteAcc +=
-        (MOTE_RATE[tier] as number) *
+        ((MOTE_RATE[tier] as number) + Math.min(SURGE_MOTES_CAP, steps * SURGE_MOTES)) *
         MOTE_BOOST *
         k *
         q *
@@ -517,5 +634,6 @@ export class HeroAura {
     this.burst.dispose();
     this.shock.dispose();
     for (const s of this.stars) s.dispose();
+    this.gold?.dispose();
   }
 }
