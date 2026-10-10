@@ -219,6 +219,33 @@ describe("chapter 2 level layouts (T2.4)", () => {
         ).toBeGreaterThan(0.1);
   });
 
+  it("P2-1 variety: every level carries its own signature set piece, flip twins exist, and moods differ per level", () => {
+    const src = new ProceduralSpriteSource();
+    const SIGNATURE: Record<string, string> = {
+      "ch2-l05": "prop.ch2.lily.",
+      "ch2-l06": "prop.ch2.shrineGate",
+      "ch2-l08": "prop.ch2.bridge",
+      "ch2-l09": "prop.ch2.weeper.",
+    };
+    for (const [id, key] of Object.entries(SIGNATURE)) {
+      const l = loadLevel(id);
+      expect(
+        l.props.some((p) => p.key.startsWith(key)),
+        `${id} uses ${key}`,
+      ).toBe(true);
+    }
+    for (const k of ["shrineGate", "bridge", "lily.0", "lily.1", "weeper.0", "weeper.1"]) {
+      expect(src.has(`prop.ch2.${k}`), k).toBe(true);
+      expect(src.has(`prop.ch2.${k}.flip`), `${k}.flip`).toBe(true);
+    }
+    // L2 drops L1's root arch, and every level has its own light colour
+    expect(loadLevel("ch2-l02").props.some((p) => p.key === "prop.ch2.rootarch")).toBe(false);
+    const sunCols = new Set(
+      IDS.slice(0, 9).map((i) => JSON.stringify(loadLevel(i).segments[0]?.mood.sunCol ?? null)),
+    );
+    expect(sunCols.size).toBeGreaterThanOrEqual(8);
+  });
+
   it("multi-segment levels crossfade moods (L8 dusk deepens, L10 outer grove to the heart)", () => {
     for (const id of ["ch2-l08", "ch2-l10"]) {
       const l = loadLevel(id);

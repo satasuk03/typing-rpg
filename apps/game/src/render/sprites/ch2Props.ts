@@ -631,6 +631,106 @@ export function makeSunkenColumn(seed = 3, ht = 64) {
   return L.finish({ ax: (w + 6) / 2, ay: ht + 6, bulge: 1.1 });
 }
 
+// ------------------------------------------------------------------ level-variety props (P2-1): appended, same conventions
+/** A stone shaft with authored cylinder normals, a ragged top, moss on the cap. Used by the shrine gate. */
+function stoneShaft(L, x0, w, yTop, yBot, seed) {
+  const P = pal(['#101612', '#1a221c', '#26302a', '#344038', '#46544a', '#5e6e62']);
+  for (let y = yTop; y < yBot; y++) for (let x = 0; x < w; x++) {
+    const cut = Math.floor(hash(x >> 1, seed) * 6);
+    if (y < yTop + cut) continue;
+    const q = (x - w / 2 + 0.5) / (w / 2), fl = (x % 5 === 0) ? -1 : 0;
+    let l = 3.3 - q * 1.6 + fl + (hash(x >> 2, y >> 3) - 0.5) * 0.8 + bayer(x0 + x, y) * 0.6;
+    if (y > yBot - 10) l -= (y - (yBot - 10)) * 0.12; // waterline darkening
+    L.sn(x0 + x, y, pick(P, l), q, 0, Math.sqrt(Math.max(0.05, 1 - q * q)));
+    if (y < yTop + cut + 5 && hash(x0 + x, y) < 0.55) L.sn(x0 + x, y, pick(PAL.NMOSS, 2 + hash(x, y) * 2), 0, 1, 0.4);
+    if (hash(x0 + x, y + 41) < 0.015) L.sn(x0 + x, y, hex('#8a9a5a'), 0, 0, 1);
+  }
+}
+/** Half-drowned shrine gate (a torii-like pair of stone shafts + lintel, one side broken). 124 x 96 px. */
+export function makeShrineGate(seed = 4) {
+  const r = RNG(seed), w = 124, h = 96, L = Layer(w, h), P = pal(['#101612', '#1a221c', '#26302a', '#344038', '#46544a', '#5e6e62']);
+  stoneShaft(L, 12, 15, 22, h, seed);
+  stoneShaft(L, 97, 15, 40, h, seed + 5); // the right one is snapped lower
+  // the lintel: a slab with a lifted upswept end, spanning most of the gap and ending broken short of the right shaft
+  for (let x = 4; x < 98; x++) {
+    const up = x < 22 ? (22 - x) * 0.18 : 0, t = (x - 4) / 94;
+    for (let y = 12; y < 22; y++) {
+      const q = (y - 17) / 5;
+      const yy = y - up + (x > 80 ? (x - 80) * 0.25 : 0);
+      L.sn(x, yy, pick(P, 3.2 - q * 1.2 + (hash(x >> 1, y) - 0.5) * 0.8 + bayer(x, y) * 0.5 - (t > 0.8 ? 0.6 : 0)), 0, -q * 0.8, Math.sqrt(Math.max(0.05, 1 - q * q)));
+    }
+  }
+  for (let x = 6; x < 70; x++) for (let y = 10; y < 14; y++) if (L.a(x, y + 1) && hash(x, y + 3) < 0.5) L.sn(x, y, pick(PAL.NMOSS, 2 + hash(x, y) * 2.5), 0, 1, 0.4);
+  // a dim cyan rune on the lintel, and moss strands hanging from it
+  for (let k = 0; k < 9; k++) L.ed(40 + k, 17 + (k % 3 === 1 ? -1 : 0), PAL.RUNE[1], 0.9);
+  for (let i = 0; i < 7; i++) strand(L, 18 + i * 11 + r() * 4, 22, 14 + r() * 26, PAL.SPM, r() * 6);
+  return L.finish({ ax: w / 2, ay: h, bulge: 1.0 });
+}
+
+/** Arched plank footbridge with rope rails and warm lantern lamps on the posts. 176 x 60 px. */
+export function makeFootbridge(seed = 6) {
+  const w = 176, h = 60, L = Layer(w, h), P = PAL.WOOD;
+  const deck = (x) => 40 - Math.sin(Math.PI * clamp((x - 8) / (w - 16), 0, 1)) * 16; // arched deck line
+  // piles under the deck (they reflect in the water)
+  for (const px of [14, 46, 88, 130, 162]) for (let y = Math.round(deck(px)); y < h; y++) for (let x = px - 2; x <= px + 2; x++) { const q = (x - px) / 2.5; L.sn(x, y, pick(P, 2.4 - q * 1.2 + (hash(x, y >> 2) - 0.5) * 0.7), q, 0, 0.8); }
+  // deck planks with gaps
+  for (let x = 8; x < w - 8; x++) for (let y = 0; y < 5; y++) {
+    const yy = Math.round(deck(x)) + y, plank = Math.floor(x / 5), f = x % 5;
+    L.sn(x, yy, f === 4 ? P[0] : pick(P, 3.4 - y * 0.55 + (hash(plank, 3) - 0.5) * 1.3 + bayer(x, y) * 0.4), 0, y === 0 ? 1 : 0, 0.9);
+  }
+  // posts every 22 px, a lamp on every other post, rope rails
+  for (let i = 0, px = 10; px < w - 6; i++, px += 22) {
+    const top = Math.round(deck(px)) - 15;
+    for (let y = top; y < Math.round(deck(px)); y++) for (let x = px - 1; x <= px + 1; x++) L.sn(x, y, pick(P, 3.2 - (x - px) * 0.9 + (hash(x, y) - 0.5) * 0.6), x - px, 0, 0.8);
+    if (i % 2 === 0) for (let y = -4; y <= 0; y++) for (let x = -2; x <= 2; x++) { if (Math.abs(x) === 2 || y === -4 || y === 0) L.sn(px + x, top + y - 1, PAL.IRON[2], x, 0, 0.5); else L.e(px + x, top + y - 1, PAL.PAPER[y === -2 ? 3 : 2]); }
+  }
+  for (let x = 10; x < w - 8; x++) { const yy = Math.round(deck(x) - 11 + Math.sin(x * 0.28) * 0.6); L.sn(x, yy, hex('#8a7a52'), 0, 0, 1); if (x % 2 === 0) L.sn(x, yy + 6, hex('#6e6040'), 0, 0, 1); }
+  return L.finish({ ax: w / 2, ay: h, bulge: 0.8 });
+}
+
+/** A lily field: flat pads with a notch, a few pink-white blooms on short stalks. 64 x 26 px. */
+export function makeLilies(seed = 5, blooms = 3) {
+  const r = RNG(seed), w = 64, h = 26, L = Layer(w, h), G = pal(['#0c1c10', '#16301a', '#244a22', '#386a2c', '#54883a']);
+  const pads = 9 + (r() * 4 | 0);
+  for (let i = 0; i < pads; i++) {
+    const cx = 5 + r() * (w - 10), cy = h - 4 - r() * 9, rx = 4 + r() * 4, ry = rx * 0.38, notch = r() * 6.28;
+    for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
+      const dx = (x - cx) / rx, dy = (y - cy) / ry, d = Math.hypot(dx, dy);
+      if (d > 1) continue;
+      if (Math.abs(Math.atan2(dy, dx) - notch) < 0.22 && d > 0.25) continue;
+      L.sn(x, y, pick(G, 2.6 - dy * 1.2 - d * 0.8 + (hash(x, y) - 0.5) * 0.8 + bayer(x, y) * 0.5), 0, 1, 0.5);
+    }
+  }
+  for (let b = 0; b < blooms; b++) {
+    const bx = Math.round(8 + r() * (w - 16)), by = Math.round(h - 8 - r() * 6), sh = 4 + (r() * 4 | 0);
+    for (let y = 0; y < sh; y++) L.sn(bx, by - y + 1, G[2], 0, 0, 1);
+    const topY = by - sh;
+    for (let k = -3; k <= 3; k++) { const hgt = 3 - Math.abs(k) * 0.55; for (let j = 0; j < hgt; j++) L.ed(bx + k, topY - j, k === 0 && j === 0 ? hex('#fff4d8') : (Math.abs(k) > 1 ? hex('#e890b8') : hex('#f8c8dc')), 0.5); }
+    L.e(bx, topY + 1, hex('#ffd860'));
+  }
+  return L.finish({ ax: w / 2, ay: h, bulge: 0.4 });
+}
+
+/** A weeping willow: a stout leaning trunk, a low leafy dome and long drooping lock curtains to the ground. 168 x 176 px. */
+export function makeWeepingWillow(seed = 12) {
+  const r = RNG(seed), w = 168, h = 176, L = Layer(w, h), P = PAL.WBARK;
+  const cx = w / 2 + (r() - 0.5) * 8, base = h - 2, lean = (r() - 0.5) * 14;
+  const pts = []; for (let k = 0; k <= 8; k++) { const t = k / 8; pts.push([cx + lean * t * t + Math.sin(t * 3 + seed) * 2, base - t * 78]); }
+  limb(L, pts, 18, 9, P, { groove: true, base: 2.2 });
+  for (let i = 0; i < 4; i++) { const dir = i % 2 ? 1 : -1; limb(L, [[cx + dir * 6, base - 2], [cx + dir * 18, base - 6 + i], [cx + dir * (28 + i * 4), base]], 8, 2, P, { groove: true, base: 2.0 }); }
+  // low dome (back of the curtain)
+  const cy = base - 90, tx = pts[8][0];
+  for (const [dx, dy, rx, ry] of [[-34, 8, 30, 16], [34, 10, 30, 16], [0, -6, 40, 20], [-12, 14, 28, 14], [16, 14, 28, 14]]) clump(L, tx + dx, cy + dy, rx, ry, PAL.WLEAF, seed + dx, -0.5);
+  // the curtains: many locks from the dome rim down to the ground, ragged ends
+  const n = 20;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1), x = tx + (t - 0.5) * 128 + (r() - 0.5) * 4, ytop = cy + 6 + Math.abs(t - 0.5) * 36;
+    const len = (base - ytop - 2) * (0.68 + r() * 0.3);
+    lock(L, x, ytop, len, 5 + r() * 4, PAL.WLEAF, r() * 6, { sway: 2.2, leaves: r() < 0.7, base: 2.4 });
+  }
+  return L.finish({ ax: w / 2, ay: h, bulge: 0.8 });
+}
+
 // ------------------------------------------------------------------ flip twin (normal.x negated)
 /** A mirrored copy of a frame: image + glow flipped, authored normal flipped AND x-negated (Ch1's mesh flip does not). */
 export function flipFrame(f: SpriteFrame): SpriteFrame {
@@ -647,7 +747,7 @@ type Anims = Record<string, SpriteFrame[]>;
 /**
  * Registers every Ch2 prop under `prop.ch2.<name>.<n>` (+ a `.flip` twin each). `table` is the source's key table.
  * Ground-standing: oak 0-4, lpost 0-1, waystone, shroomT / shroomV, rootarch, fern 0-1, willowCore.
- * Fen (T2.2): cypress 0-2, reeds 0-2, post, column 0-1.
+ * Fen (T2.2): cypress 0-2, reeds 0-2, post, column 0-1. Variety (P2-1): shrineGate, bridge, lily 0-1, weeper 0-1.
  * Hanging (anchor at top): lantern 0-2, moss 0-1, fronds.<silver|hush|gold|bloom>.0-3.
  */
 export function registerCh2Props(table: Map<string, () => Anims>): void {
@@ -676,6 +776,11 @@ export function registerCh2Props(table: Map<string, () => Anims>): void {
   add("post", () => makePost(2));
   add("column.0", () => makeSunkenColumn(3, 64));
   add("column.1", () => makeSunkenColumn(6, 44));
+  // level variety (P2-1): shrine gate, arched footbridge, lily fields, weeping willows
+  add("shrineGate", () => makeShrineGate(4));
+  add("bridge", () => makeFootbridge(6));
+  [5, 9].forEach((s, i) => add(`lily.${i}`, () => makeLilies(s, 2 + i)));
+  [12, 20].forEach((s, i) => add(`weeper.${i}`, () => makeWeepingWillow(s)));
   for (const t of ["silver", "hush", "gold", "bloom"]) for (let i = 0; i < 4; i++) add(`fronds.${t}.${i}`, () => makeWillowFronds(i * 7 + 1, t, 60 + i * 6, 120 + i * 14));
 }
 
