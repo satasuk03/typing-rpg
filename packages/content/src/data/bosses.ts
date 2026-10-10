@@ -101,4 +101,41 @@ export const WHISPERING_WILLOW: BossDef = BossDef.parse({
   introS: 4,
 });
 
-export const BOSSES: BossDef[] = [RUIN_GOLEM, WHISPERING_WILLOW];
+/**
+ * Nul, "The Silent King" (docs/PROLOGUE_PLAN.md 1.2; prologue-only, interfaces 14.2). He never dies: the prologue rules climax
+ * at phase1.endAtHpPct (35, the gate; the sim intercepts it before BossPhaseChanged). Phase 2 and 3 are UNREACHABLE placeholders
+ * that only satisfy BossDef (the validator exempts this boss from the 66/33 gates, the doom and the minigame pool rules).
+ * Numbers are starting values (P1.3 tunes): hp 480 / hit 8 against the full-power prologue hero.
+ */
+export const NUL: BossDef = BossDef.parse({
+  id: "nul",
+  name: "Nul",
+  title: "The Silent King",
+  enemyId: "nul",
+  hp: 480,
+  hit: 8,
+  attackPower: 1,
+  plateLength: [4, 5],
+  phase1: {
+    addsAttackPower: 1,
+    endAtHpPct: 35,
+    adds: [{ enemy: "hush-shade" }, { enemy: "lantern-wisp" }],
+  },
+  phase2: { endAtHpPct: 33, doomEveryS: 16, minDoomSpells: 2 }, // unreachable placeholder
+  phase3: {
+    // unreachable placeholder
+    minigame: {
+      kind: "fallingRubble",
+      lanes: 3,
+      spawnEveryS: 2.6,
+      fallS: 7,
+      clearAtkMult: 1.2,
+      missHit: 6,
+    },
+    finisherText: RUIN_GOLEM_FINISHER_TEXT,
+  },
+  breatherS: 2,
+  introS: 4,
+});
+
+export const BOSSES: BossDef[] = [RUIN_GOLEM, WHISPERING_WILLOW, NUL];

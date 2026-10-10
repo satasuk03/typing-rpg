@@ -3,6 +3,7 @@ import { BOSSES } from "./bosses.ts";
 import { ENEMIES } from "./enemies.ts";
 import { GEAR } from "./gear.ts";
 import { LEVELS } from "./levels.ts";
+import { PROLOGUE } from "./prologue.ts";
 import { ACTIVES, PASSIVES } from "./skills.ts";
 import { TYPING_TRIAL } from "./trials.ts";
 import { WORDS } from "./words.ts";
@@ -17,4 +18,5 @@ export const contentBundle: ContentBundle = {
   actives: ACTIVES,
   passives: PASSIVES,
   trials: [TYPING_TRIAL],
+  prologue: PROLOGUE,
 };

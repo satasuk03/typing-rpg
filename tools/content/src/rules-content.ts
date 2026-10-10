@@ -3,6 +3,7 @@ import { CONFIG } from "./config.ts";
 import type { Layout } from "./layouts.ts";
 import { biomePool, isPlate, usePool } from "./rules.ts";
 import { ruleCh2Layouts } from "./rules-layouts.ts";
+import { rulePrologue } from "./rules-prologue.ts";
 import { type Issue, issue } from "./types.ts";
 
 /** Files read from the app (null = not available, the matching check is skipped with a warning). */
@@ -73,6 +74,14 @@ export function ruleIdsAndRefs(b: ContentBundle): Issue[] {
       out.push(issue("refs", "error", `${l.id}: layoutId "${l.layoutId}" must equal the level id`));
     }
   }
+  const levelBosses = new Set(
+    b.levels.flatMap((l) => l.segments.flatMap((s) => (s.kind === "boss" ? [s.bossId] : []))),
+  );
+  const prologueOnly = new Set(
+    (b.prologue?.segments ?? []).flatMap((s) =>
+      s.kind === "boss" && !levelBosses.has(s.bossId) ? [s.bossId] : [],
+    ),
+  );
   for (const x of b.bosses) {
     const e = enemies.get(x.enemyId);
     if (!e) out.push(issue("refs", "error", `boss ${x.id}: unknown enemy "${x.enemyId}"`));
@@ -80,6 +89,9 @@ export function ruleIdsAndRefs(b: ContentBundle): Issue[] {
       out.push(issue("refs", "error", `boss ${x.id}: enemy "${x.enemyId}" must be archetype boss`));
     }
     for (const r of x.phase1.adds) refCheck(`boss ${x.id} adds`, r.enemy);
+    // v2.2 (interfaces 14.2): a boss referenced only by the prologue is allowed; its phase 2/3 data is unreachable, so the
+    // 66/33 gates, finisher, doom and minigame-pool rules do not apply to it (rules-prologue.ts checks it instead).
+    if (prologueOnly.has(x.id)) continue;
     if (x.phase1.endAtHpPct !== 66 || x.phase2.endAtHpPct !== 33) {
       out.push(issue("boss", "error", `boss ${x.id}: phase gates must be 66/33 (doc 01 4.2)`));
     }
@@ -595,5 +607,6 @@ export function runContentRules(b: ContentBundle, ctx: ContentContext): Issue[] 
     ...ruleEnemies(b, ctx.monsterSprites),
     ...ruleGear(b),
     ...ruleSkills(b, ctx.sfxIds),
+    ...rulePrologue(b),
   ];
 }
