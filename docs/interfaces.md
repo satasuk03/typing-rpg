@@ -2,12 +2,18 @@
 
 | | |
 |---|---|
-| **Doc version** | **2.0.2** (2026-10-10, Chapter 2 "The Hushwood") |
+| **Doc version** | **2.0.3** (2026-10-10, Chapter 2 "The Hushwood") |
 | **SIM_VERSION** | `1` (v2.0 does not bump it: every new rule is gated by new content, Ch1 and the Trial replay identically, §13.1) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **2.0.3** (2026-10-10): the T1.4 Chapter 2 skills proposal is approved. Full text: `docs/proposals/icp-v2.0.3-ch2-skills.md`.
+  - **Reveal** (active, unlocks at ch2-l03): charge 8. For 8 s it strips gimmicks from current and new plates. It doesn't touch riddle leaves and deals no damage. Sets `RunState.revealUntil?`.
+  - **Calm Mind** (passive, unlocks at ch2-l05): `guardSpanTicks` +30 (0.5 s).
+  - New type `DamageSkillId = Exclude<ActiveSkillId,"reveal">`, which keeps `damageBySkillM` at Ch1's six keys.
+  - No new events or view fields. SIM_VERSION unchanged.
+  - **Scholar** stays reserved (deferred until the PO defines a "new word").
 - **2.0.2** (2026-10-10): T1.3 change proposals approved by the orchestrator.
   - (a) `CharCorrect.shifted` is set only on chapter 2+ levels (`def.chapter > SENTENCE_FOLD_CASE_MAX_CHAPTER`). This keeps Ch1 event hashes identical. The view fields `exactCase` and `shiftNext` aren't gated.
   - (b) `LevelView.minigame.riddle` is `null` while Second Wind has removed the leaves. `RiddleView.last` is visible from the second riddle on.
