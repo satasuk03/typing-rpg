@@ -1,7 +1,8 @@
 /** Loadout: hero stats, equipped gear, 2 active skills (+ cast mode) and 3 passives, with keyboard pickers. */
-import { RARITY_INFO } from "@hd2d/content";
+import { type ContentBundle, FUTURE_UNLOCK, RARITY_INFO } from "@hd2d/content";
 import { gearDef, heroStatsOf, instanceOf } from "../../meta/ops";
 import type { App, Screen, ScreenArg } from "../app";
+import { CHAPTERS } from "../chapters";
 import { actions, el, esc, header, stat } from "../dom";
 import { iconHtml } from "../icons";
 import { fillSkillText } from "../skillText";
@@ -14,6 +15,15 @@ interface PickOption {
   text: string;
   icon: string;
   locked?: string;
+}
+
+/** Locked-skill hint: "Clear Level 4 of Chapter I to unlock", or "Regain later in your journey" (FUTURE_UNLOCK). */
+export function unlockHint(bundle: ContentBundle, unlockLevel: string | undefined): string {
+  if (unlockLevel === FUTURE_UNLOCK) return "Regain later in your journey";
+  const lv = unlockLevel ? bundle.levels.find((l) => l.id === unlockLevel) : undefined;
+  if (!lv) return "Regain later in your journey";
+  const ch = CHAPTERS.find((c) => c.n === lv.chapter)?.label ?? `Chapter ${lv.chapter}`;
+  return `Clear Level ${lv.index} of ${ch} to unlock`;
 }
 
 export function loadoutScreen(app: App, arg: ScreenArg): Screen {
@@ -85,15 +95,25 @@ export function loadoutScreen(app: App, arg: ScreenArg): Screen {
     const opts: PickOption[] = [
       { id: null, name: "Empty", text: "Leave this slot open", icon: "" },
     ];
-    for (const d of defs) {
-      const unlocked = owned.includes(d.id);
+    // Slow drip (PO 2026-10-10): owned skills first, then the ones a level unlocks (in play order), then the ones held for
+    // later chapters ("Regain later in your journey": the hero lost his power in the prologue). Saves keep every unlock.
+    const rank = (d: (typeof defs)[number]): number => {
+      if (owned.includes(d.id)) return -1;
       const lv = d.unlockLevel ? b.levels.find((l) => l.id === d.unlockLevel) : undefined;
+      return lv ? lv.chapter * 100 + lv.index : 10_000;
+    };
+    const sorted = [...defs]
+      .map((d, i) => ({ d, i }))
+      .sort((x, y) => rank(x.d) - rank(y.d) || x.i - y.i)
+      .map((x) => x.d);
+    for (const d of sorted) {
+      const unlocked = owned.includes(d.id);
       opts.push({
         id: d.id,
         name: d.name,
         text: fill(d.description, d.id),
         icon: "iconId" in d ? d.iconId : "",
-        locked: unlocked ? undefined : `Clear level ${lv?.index ?? "?"} to unlock`,
+        locked: unlocked ? undefined : unlockHint(b, d.unlockLevel),
       });
     }
     const box = el("hd-panel app-pick");

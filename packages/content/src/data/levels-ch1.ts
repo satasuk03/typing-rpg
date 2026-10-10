@@ -46,6 +46,13 @@ export const ENC_HP_MULT = knobsFor(1).encHpMult; // 1.2 (pinned in knobs.ts CHA
  */
 export const HIT_MULT = knobsFor(1).hitMult; // 1.34
 /**
+ * PO 2026-10-10 "slow drip" (docs/balance-ch1.md §10): x grunt hit of L1-L2, the levels a new player fights with the
+ * starter kit only (Fireball + Clean Cut; Aegis arrives with the L2 first clear, Iron Will with L4's). The T6.1 hits
+ * assumed Aegis + Iron Will everywhere; without them the 20 WPM Beginner cleared the tutorial on 95% of first tries
+ * (L2 96%). 0.8 puts both back at ~100% (1000 seeds) with damage taken 68 per run (it was 58 with the old kit).
+ */
+export const PRE_KIT_HIT_MULT = 0.8;
+/**
  * T6.1 knob (PO 2026-10-09 "add some risk"): x every hit of the boss level L10 (its waves' gruntHit, which the phase-1 adds
  * also use, and the Ruin Golem's hit in bosses.ts). With the weaker starter kit (Aegis 12 / 1 barrier, Iron Will 0.15) the
  * 20 WPM Beginner's first-try boss clear lands at ~85% (target 80-90%); the Aegis/Iron Will knobs alone cannot get there
@@ -132,8 +139,8 @@ export const LEVELS_CH1: LevelDef[] = [
     parRefS: parRef(76, 2),
     star3: { kind: "streak", combo: 8 },
     segments: chain([
-      enc("Glade Path", hp(199.4), hit(7.6), [ms(), ms()]),
-      enc("Mossy Clearing", hp(199.4), hit(7.6), [ms(), mu(), ms()]),
+      enc("Glade Path", hp(199.4), hit(7.6 * PRE_KIT_HIT_MULT), [ms(), ms()]),
+      enc("Mossy Clearing", hp(199.4), hit(7.6 * PRE_KIT_HIT_MULT), [ms(), mu(), ms()]),
     ]),
   }),
   // L2: 2 encounters (3 + 3). Bats arrive.
@@ -145,8 +152,8 @@ export const LEVELS_CH1: LevelDef[] = [
     parRefS: parRef(77.4, 2),
     star3: { kind: "parTime", slack: 1.2 },
     segments: chain([
-      enc("Mushroom Hollow", hp(203.4), hit(6.88), [ms(), mu(), ms()]),
-      enc("Firefly Bend", hp(203.4), hit(6.88), [mu(), bt(), ms()]),
+      enc("Mushroom Hollow", hp(203.4), hit(6.88 * PRE_KIT_HIT_MULT), [ms(), mu(), ms()]),
+      enc("Firefly Bend", hp(203.4), hit(6.88 * PRE_KIT_HIT_MULT), [mu(), bt(), ms()]),
     ]),
   }),
   // L3: first 3-encounter level.

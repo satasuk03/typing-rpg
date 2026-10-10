@@ -16,7 +16,7 @@ export const HOW_TO_PLAY_HTML = `<div class="htp"><h2>How to play</h2><dl>
   <dt><span class="hd-kbd">Esc</span></dt><dd>Drops your target. With no target it opens the pause menu.</dd>
   <dt>Attack gauge</dt><dd>Correct letters fill it. When it is full, your hero strikes.</dd>
   <dt>Combo</dt><dd>Finish words with no typos. Bigger combos hit harder.</dd>
-  <dt>Skills</dt><dd>Typing charges them, and a charged skill fires on its own.</dd>
+  <dt>Skills</dt><dd>Typing charges them, and a charged skill fires on its own. Clear levels to regain more.</dd>
   <dt><span class="red">Red word</span></dt><dd><span class="red">An incoming attack.</span> Type it before it lands to block. A perfect word parries.</dd>
   <dt class="htp-sep"></dt>
   <dt>Menus</dt><dd><span class="hd-kbd">Arrows</span> move, <span class="hd-kbd">Enter</span> picks, <span class="hd-kbd">Esc</span> goes back. No mouse needed.</dd>

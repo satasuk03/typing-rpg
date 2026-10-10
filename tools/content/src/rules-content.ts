@@ -1,4 +1,4 @@
-import type { ContentBundle, LevelDef } from "@hd2d/content";
+import { type ContentBundle, FUTURE_UNLOCK, type LevelDef } from "@hd2d/content";
 import { CONFIG } from "./config.ts";
 import type { Layout } from "./layouts.ts";
 import { biomePool, isPlate, usePool } from "./rules.ts";
@@ -499,7 +499,11 @@ export function ruleSkills(b: ContentBundle, sfxIds: readonly string[] | null): 
         out.push(issue("skills", "error", `${a.id}: unknown placeholder {${m[1]}}`));
       }
     }
-    if (a.unlockLevel !== undefined && !levels.has(a.unlockLevel)) {
+    if (
+      a.unlockLevel !== undefined &&
+      a.unlockLevel !== FUTURE_UNLOCK &&
+      !levels.has(a.unlockLevel)
+    ) {
       out.push(issue("skills", "error", `${a.id}: unlockLevel "${a.unlockLevel}" does not exist`));
     }
   }
@@ -507,26 +511,72 @@ export function ruleSkills(b: ContentBundle, sfxIds: readonly string[] | null): 
     if (/\d/.test(p.description)) {
       out.push(issue("skills", "warn", `${p.id}: numbers in text drift from BALANCE; avoid`));
     }
-    if (p.unlockLevel !== undefined && !levels.has(p.unlockLevel)) {
+    if (
+      p.unlockLevel !== undefined &&
+      p.unlockLevel !== FUTURE_UNLOCK &&
+      !levels.has(p.unlockLevel)
+    ) {
       out.push(issue("skills", "error", `${p.id}: unlockLevel "${p.unlockLevel}" does not exist`));
     }
   }
   const starterA = b.actives.filter((a) => a.unlockLevel === undefined).map((a) => a.id as string);
   const starterP = b.passives.filter((p) => p.unlockLevel === undefined);
-  // PO 2026-10-10: the starter kit is 1 active (Fireball) + 1 passive; every Ch1 unlock lands before the L10 boss.
+  // PO 2026-10-10: the starter kit is 1 active (Fireball) + 1 passive (a skill without unlockLevel).
   if (starterA.length !== 1 || starterA[0] !== "fireball") {
     out.push(issue("skills", "error", "starter kit must be exactly one active: fireball"));
   }
   if (starterP.length !== 1)
     out.push(issue("skills", "error", "starter kit must be exactly one passive"));
-  for (const s of [...b.actives, ...b.passives]) {
-    const u = s.unlockLevel;
-    if (u?.startsWith("ch1-") && u >= "ch1-l10") {
+  out.push(...ruleUnlockDrip(b));
+  return out;
+}
+
+/**
+ * PO 2026-10-10 "slow drip" (docs/balance-ch1.md §10): after the starter kit, one unlock every 2-3 levels, alternating
+ * active / passive, never on a boss level (a chapter's unlocks land before its boss). Skills held for a later chapter use
+ * FUTURE_UNLOCK. Level order is (chapter, index) over the shipped levels, so the gap rule spans chapter boundaries.
+ */
+export function ruleUnlockDrip(b: ContentBundle): Issue[] {
+  const out: Issue[] = [];
+  const order = [...b.levels].sort((x, y) => x.chapter - y.chapter || x.index - y.index);
+  const pos = new Map(order.map((l, i) => [l.id, i]));
+  const unlocks: { id: string; kind: "active" | "passive"; level: string; at: number }[] = [];
+  for (const [kind, defs] of [
+    ["active", b.actives],
+    ["passive", b.passives],
+  ] as const) {
+    for (const d of defs) {
+      const at = d.unlockLevel === undefined ? undefined : pos.get(d.unlockLevel);
+      if (at !== undefined) unlocks.push({ id: d.id, kind, level: d.unlockLevel as string, at });
+    }
+  }
+  unlocks.sort((x, y) => x.at - y.at);
+  for (const u of unlocks) {
+    if (order[u.at]?.kind === "boss") {
+      out.push(
+        issue("skills", "error", `${u.id} unlocks at ${u.level}: unlocks land before the boss`),
+      );
+    }
+  }
+  for (let i = 1; i < unlocks.length; i++) {
+    const a = unlocks[i - 1] as (typeof unlocks)[number];
+    const c = unlocks[i] as (typeof unlocks)[number];
+    const gap = c.at - a.at;
+    if (gap < 2 || gap > 3) {
       out.push(
         issue(
           "skills",
           "error",
-          `${s.id} unlocks at ${u}: Ch1 skills must unlock before the L10 boss`,
+          `${a.id} (${a.level}) -> ${c.id} (${c.level}): ${gap} levels apart, the slow drip is one unlock every 2-3 levels`,
+        ),
+      );
+    }
+    if (a.kind === c.kind) {
+      out.push(
+        issue(
+          "skills",
+          "error",
+          `${a.id} (${a.level}) -> ${c.id} (${c.level}): unlocks must alternate active / passive`,
         ),
       );
     }

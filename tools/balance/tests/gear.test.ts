@@ -59,7 +59,7 @@ describe("gear loadouts", () => {
     expect([a.weapon.upgrade, a.armor.upgrade, a.charm.upgrade]).toEqual([1, 1, 1]);
   });
   test("skills and passives are untouched by gear", () => {
-    const l = starterLoadout("starter", 1, "armor+2");
+    const l = starterLoadout("ch1-full", 1, "armor+2");
     expect(l.actives).toEqual(["fireball", "aegis"]);
     expect(l.passives).toEqual(["cleanCut", "steadyHands", "ironWill"]);
   });

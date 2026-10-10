@@ -162,9 +162,9 @@ describe("applyLevelResult", () => {
 
   it("a first clear unlocks the level's skill and pays star gold; a replay uses the replay rules", () => {
     const s = fresh();
-    const def = resolveLevel(contentBundle, "ch1-l03", { dueWeakWords: [] });
+    const def = resolveLevel(contentBundle, "ch1-l06", { dueWeakWords: [] });
     const base = {
-      levelId: "ch1-l03",
+      levelId: "ch1-l06",
       outcome: "cleared",
       failReason: null,
       durationTicks: 6000,
@@ -200,7 +200,7 @@ describe("applyLevelResult", () => {
     } as unknown as NonNullable<ReturnType<typeof play>>;
     const a = ops.applyLevelResult(s, base, { def, pace: 35, today: "2026-10-09", nowMs: 5 });
     expect(a.summary.firstClear).toBe(true);
-    expect(a.summary.unlocked.actives).toContain("slashWave");
+    expect(a.summary.unlocked.actives).toEqual(["piercingThrust"]); // slow drip: ch1-l06 unlocks Piercing Thrust
     expect(a.save.inventory.unopenedCaches).toBe(1);
     expect(a.save.inventory.gear.length).toBe(4);
     expect(a.summary.stars[0]).toBe(true);
@@ -211,9 +211,23 @@ describe("applyLevelResult", () => {
     expect(b.summary.firstClear).toBe(false);
     expect(b.summary.unlocked.actives).toEqual([]);
     expect(b.save.replays).toEqual({ day: "2026-10-09", count: 1 });
-    expect(ops.goldMultFor(a.save, "ch1-l03", "2026-10-09").goldMultBp).toBe(4000);
+    expect(ops.goldMultFor(a.save, "ch1-l06", "2026-10-09").goldMultBp).toBe(4000);
     // the result is a valid save
     expect(() => migrateSave(b.save)).not.toThrow();
+    // slow drip (PO 2026-10-10): a pre-drip save keeps skills that are now held for later (never revoked)
+    const old = fresh();
+    old.unlocks.actives = ["fireball", "aegis", "slashWave", "frostLock"];
+    old.unlocks.passives = ["cleanCut", "openingGambit", "comeback"];
+    const c = ops.applyLevelResult(old, base, { def, pace: 35, today: "2026-10-09", nowMs: 7 });
+    expect(c.save.unlocks.actives).toEqual([
+      "fireball",
+      "aegis",
+      "slashWave",
+      "frostLock",
+      "piercingThrust",
+    ]);
+    expect(c.save.unlocks.passives).toEqual(["cleanCut", "openingGambit", "comeback"]);
+    expect(migrateSave(c.save).unlocks.actives).toContain("frostLock");
   });
 });
 

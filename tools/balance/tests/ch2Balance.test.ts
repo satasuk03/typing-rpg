@@ -66,38 +66,52 @@ describe("per-chapter targets", () => {
   });
 });
 
-describe("the Ch2 player kit", () => {
-  test("default kit: starter in Ch1, ch2 from Ch2", () => {
-    expect(defaultKit(1)).toBe("starter");
-    expect(defaultKit(2)).toBe("ch2");
+describe("the progress kit (slow-drip unlock schedule, PO 2026-10-10)", () => {
+  test("default kit: progress in every chapter", () => {
+    expect(defaultKit(1)).toBe("progress");
+    expect(defaultKit(2)).toBe("progress");
   });
-  test("unlocks are in play from the level AFTER their unlocking first clear", () => {
+  test("unlocks are in play from the level AFTER their unlocking first clear; future skills never", () => {
     expect(unlockedBefore("fireball", "ch1-l01")).toBe(true); // starter kit
-    expect(unlockedBefore("calmMind", "ch2-l05")).toBe(false); // ch2-l05 unlocks it on its first clear
-    expect(unlockedBefore("calmMind", "ch2-l06")).toBe(true);
-    expect(unlockedBefore("reveal", "ch2-l03")).toBe(false);
-    expect(unlockedBefore("reveal", "ch2-l04")).toBe(true);
+    expect(unlockedBefore("aegis", "ch1-l02")).toBe(false); // ch1-l02 unlocks it on its first clear
+    expect(unlockedBefore("aegis", "ch1-l03")).toBe(true);
+    expect(unlockedBefore("calmMind", "ch2-l04")).toBe(false);
+    expect(unlockedBefore("calmMind", "ch2-l05")).toBe(true);
+    expect(unlockedBefore("reveal", "ch2-l02")).toBe(false);
+    expect(unlockedBefore("reveal", "ch2-l03")).toBe(true);
     expect(unlockedBefore("reveal", undefined)).toBe(true);
+    expect(unlockedBefore("frostLock", undefined)).toBe(false); // FUTURE_UNLOCK
+    expect(unlockedBefore("comeback", "ch2-l10")).toBe(false);
   });
-  test("ch2 keeps Aegis and swaps Calm Mind for Steady Hands from L6; ch2-reveal also swaps Reveal for Aegis from L4", () => {
-    expect(starterLoadout("ch2", 2, undefined, "ch2-l05").passives).toEqual([
+  test("Ch1: the kit grows Aegis (L3), Iron Will (L5), Steady Hands (L10); the boss kit is the T6.1 kit", () => {
+    const at = (id: string) => starterLoadout("progress", 1, undefined, id);
+    expect(at("ch1-l01").actives).toEqual(["fireball", null]);
+    expect(at("ch1-l02").passives).toEqual(["cleanCut", null, null]);
+    expect(at("ch1-l03").actives).toEqual(["fireball", "aegis"]);
+    expect(at("ch1-l05").passives).toEqual(["cleanCut", null, "ironWill"]);
+    // Piercing Thrust is owned from L7 but Aegis keeps the slot
+    expect(at("ch1-l07").actives).toEqual(["fireball", "aegis"]);
+    expect(at("ch1-l10")).toEqual(starterLoadout("ch1-full", 1));
+  });
+  test("Ch2: Calm Mind for Steady Hands from L5; Aegis stays; ch2-reveal swaps Reveal for Aegis from L3", () => {
+    expect(starterLoadout("progress", 2, undefined, "ch2-l04").passives).toEqual([
       "cleanCut",
       "steadyHands",
       "ironWill",
     ]);
-    const l10 = starterLoadout("ch2", 2, undefined, "ch2-l10");
+    const l10 = starterLoadout("progress", 2, undefined, "ch2-l10");
     expect(l10.actives).toEqual(["fireball", "aegis"]);
     expect(l10.passives).toEqual(["cleanCut", "calmMind", "ironWill"]);
-    expect(starterLoadout("ch2-reveal", 2, undefined, "ch2-l03").actives).toEqual([
+    expect(starterLoadout("ch2-reveal", 2, undefined, "ch2-l02").actives).toEqual([
       "fireball",
       "aegis",
     ]);
-    expect(starterLoadout("ch2-reveal", 2, undefined, "ch2-l04").actives).toEqual([
+    expect(starterLoadout("ch2-reveal", 2, undefined, "ch2-l03").actives).toEqual([
       "fireball",
       "reveal",
     ]);
-    // Ch1's starter kit is untouched
-    expect(starterLoadout("starter", 1)).toEqual(starterLoadout());
+    expect(starterLoadout("starter", 2).actives).toEqual(["fireball", null]);
+    expect(starterLoadout("ch1-full", 1)).toEqual(starterLoadout());
   });
 });
 
@@ -116,7 +130,7 @@ describe("per-slot gear offsets", () => {
   test("weapon-2,armor+1,charm-2 is the Ch1 hint-path arrival in Ch2 (armor C+3, the rest C+0)", () => {
     const g = parseGear("weapon-2,armor+1,charm-2");
     expect(gearLabel(g)).toBe("weapon-2,armor+1,charm-2");
-    const l = starterLoadout("ch2", 2, "weapon-2,armor+1,charm-2");
+    const l = starterLoadout("progress", 2, "weapon-2,armor+1,charm-2");
     expect([l.weapon.upgrade, l.armor.upgrade, l.charm.upgrade]).toEqual([0, 3, 0]);
   });
   test("a single slot offset is still rejected (use armor+N / par-N)", () => {

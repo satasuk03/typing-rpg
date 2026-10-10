@@ -1,6 +1,6 @@
 // T1.6 in-level rewards: gold shares per EncounterCleared, chest drops on the `loot` stream (derived at roll time),
 // LevelResult.chests / gold, the 5 s rewards phase after the boss, and unlockLevel semantics.
-import { contentBundle } from "@hd2d/content";
+import { contentBundle, FUTURE_UNLOCK, isFutureUnlock } from "@hd2d/content";
 import { describe, expect, test } from "vitest";
 import { K } from "../src/balance.ts";
 import {
@@ -173,13 +173,47 @@ describe("the boss encounter: chest, gold share, 5 s rewards phase", () => {
 describe("unlockLevel: the first clear unlocks the listed skills and passives", () => {
   test("levelUnlocks lists exactly the defs naming that level", () => {
     const all = [...contentBundle.actives, ...contentBundle.passives].filter(
-      (d) => d.unlockLevel !== undefined,
+      (d) => d.unlockLevel !== undefined && !isFutureUnlock(d),
     );
     for (const d of all) {
       const u = levelUnlocks(contentBundle, d.unlockLevel as string);
       expect([...u.actives, ...u.passives]).toContain(d.id);
     }
     expect(levelUnlocks(contentBundle, "nope")).toEqual({ actives: [], passives: [] });
+  });
+
+  test("slow drip (PO 2026-10-10): one unlock on each of 8 levels; the rest are held for later chapters", () => {
+    const perLevel = contentBundle.levels
+      .map((l) => {
+        const u = levelUnlocks(contentBundle, l.id);
+        return [l.id, [...u.actives, ...u.passives]] as const;
+      })
+      .filter(([, ids]) => ids.length > 0);
+    expect(Object.fromEntries(perLevel)).toEqual({
+      "ch1-l02": ["aegis"],
+      "ch1-l04": ["ironWill"],
+      "ch1-l06": ["piercingThrust"],
+      "ch1-l09": ["steadyHands"],
+      "ch2-l02": ["reveal"],
+      "ch2-l04": ["calmMind"],
+      "ch2-l06": ["slashWave"],
+      "ch2-l08": ["riposte"],
+    });
+    const future = [...contentBundle.actives, ...contentBundle.passives]
+      .filter((d) => isFutureUnlock(d))
+      .map((d) => d.id);
+    expect(future.sort()).toEqual(
+      [
+        "bulwarkStreak",
+        "comeback",
+        "frostLock",
+        "lastStand",
+        "mendingLight",
+        "openingGambit",
+      ].sort(),
+    );
+    // "future" is not a level: nothing unlocks it, even if a caller passes the sentinel
+    expect(levelUnlocks(contentBundle, FUTURE_UNLOCK)).toEqual({ actives: [], passives: [] });
   });
 
   test("a first clear adds them (no duplicates); a replay or a failure adds nothing", () => {
