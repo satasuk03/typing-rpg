@@ -107,6 +107,7 @@ const HUD_HANDLED: ReadonlySet<string> = new Set([
   "GuardParried",
   "HeroDamaged",
   "HeroHealed",
+  "EnemyHealed",
   "SkillCast",
   "GoldGained",
   "AtbFilled",

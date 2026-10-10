@@ -22,6 +22,15 @@ export function riddlePanelRect(W: number, hasBoss: boolean): Rect {
   return { x: Math.round(W / 2 - RIDDLE_PANEL_W / 2), y, w: RIDDLE_PANEL_W, h: RIDDLE_PANEL_H };
 }
 
+export const RIDDLE_SLIDE_SEC = 0.25;
+/** Slide-in (brief 5.4): the panel drops 56 px into its reserved rect while fading in over 250 ms; instant in reduced motion. */
+export function riddleSlide(age: number, reducedMotion: boolean): { dy: number; a: number } {
+  if (reducedMotion || age >= RIDDLE_SLIDE_SEC) return { dy: 0, a: 1 };
+  const k = Math.max(0, age) / RIDDLE_SLIDE_SEC;
+  const e = 1 - (1 - k) ** 3;
+  return { dy: -(1 - e) * 56, a: e };
+}
+
 /** The panel exists only while a riddle is live (null in the gap, after the last riddle, and during Second Wind). */
 export function activeRiddle(v: LevelView): RiddleView | null {
   if (v.minigame?.kind !== "riddle") return null;

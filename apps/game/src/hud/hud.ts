@@ -45,7 +45,7 @@ import {
   popAlpha,
   popScale,
 } from "./pops";
-import { activeRiddle, drawRiddlePanel, riddlePanelRect } from "./riddlePanel";
+import { activeRiddle, drawRiddlePanel, riddlePanelRect, riddleSlide } from "./riddlePanel";
 import type { HudSettings } from "./settings";
 import { DEFAULT_HUD_SETTINGS, normalizeSettings } from "./settings";
 import { getSkillIcon } from "./skillIcons";
@@ -111,6 +111,9 @@ export interface HudDebugPlate {
   letters: Rect[];
   /** Worst letter-vs-plate contrast ratio. */
   contrast: number;
+  /** v2.0 fading word: the plate is faded and the alpha its next letter was drawn with (must be >= 0.85). */
+  faded?: boolean;
+  nextAlpha?: number | null;
 }
 export interface HudDebugSnapshot {
   viewport: { w: number; h: number; dpr: number; scale: number };
@@ -155,6 +158,10 @@ interface PlateEntry {
   box: Rect; // design px
   letters: Rect[]; // design px
   seenAt: number;
+  /** Fading-word level 0..1 (eased toward `view.faded`: out over 300 ms, back in over 200 ms). */
+  fade: number;
+  /** Alpha the next letter was last drawn with (debug / readability invariant). */
+  nextAlpha: { v: number };
 }
 interface Ghost {
   geom: PlateGeom;
@@ -205,6 +212,8 @@ export class Hud {
   private ghosts: Ghost[] = [];
   private heroTrail = 1;
   private enemyTrail = new Map<number, number>();
+  /** v2.0: enemy id -> 0..1 green HP-bar fill flash after an EnemyHealed (decays over 300 ms). */
+  private healFlash = new Map<number, number>();
   private atbPulse = 0;
   private atbIgnite = 0;
   private comboPulse = 0;
@@ -218,6 +227,8 @@ export class Hud {
   private heroRectCss: Rect | null = null;
   private bossRectCss: Rect | null = null;
   private riddleRectDesign: Rect | null = null;
+  /** HUD time the riddle panel appeared (null while none): drives the 250 ms slide-in. */
+  private riddleShownAt: number | null = null;
   private panelText: { id: string; rect: Rect }[] = [];
   /** 0 during the boss intro, then 1 over 300 ms: panels, combo and skill orbs fade back in. */
   private introFade = 1;
@@ -351,6 +362,7 @@ export class Hud {
     this.ghosts.length = 0;
     this.lastRects.clear();
     this.enemyTrail.clear();
+    this.healFlash.clear();
     this.layoutState = newLayoutState();
     this.heroTrail = 1;
     this.immuneAt.clear();
@@ -528,7 +540,7 @@ export class Hud {
         break;
       case "CharCorrect": {
         if (!this.typingFxAttached) {
-          this.plateFx.pop(e.plateId, e.index);
+          this.plateFx.pop(e.plateId, e.index, e.shifted === true);
           this.plateFx.press(e.plateId, 3 * this.settings.effectsIntensity);
         }
         this.comboPulse = 1;
@@ -665,6 +677,14 @@ export class Hud {
       case "HeroHealed":
         this.pops.spawn("heal", `+${e.amount}`, { kind: "hero" });
         break;
+      case "EnemyHealed": {
+        // v2.0 heal read (brief 5.1): a green "+N" pop at the target (same placement and clamp rules as every pop)
+        // and a green fill flash on its HP bar
+        if (e.amount > 0)
+          this.pops.spawn("heal", `+${e.amount}`, { kind: "enemy", id: e.targetId });
+        this.healFlash.set(e.targetId, 1);
+        break;
+      }
       case "SkillCast":
         this.pops.spawn("skill", e.skillId.replace(/([A-Z])/g, " $1").toUpperCase(), {
           kind: "hero",
@@ -730,6 +750,19 @@ export class Hud {
     // HP trails: white bar lags behind the real value
     const hp = view.hero.hpFrac;
     this.heroTrail = hp > this.heroTrail ? hp : Math.max(hp, this.heroTrail - dt * 0.4);
+    // fading words: ease each plate's level toward the sim flag (out over 300 ms, back in over 200 ms; instant in reduced motion)
+    for (const p of view.plates) {
+      const en = this.entries.get(p.id);
+      if (!en) continue;
+      const target = p.faded ? 1 : 0;
+      en.fade = this.settings.reducedMotion
+        ? target
+        : clamp(en.fade + Math.sign(target - en.fade) * (dt / (p.faded ? 0.3 : 0.2)), 0, 1);
+    }
+    for (const [id, v] of this.healFlash) {
+      if (v - dt * 3.3 <= 0) this.healFlash.delete(id);
+      else this.healFlash.set(id, v - dt * 3.3);
+    }
     for (const e of view.enemies) {
       const tr = this.enemyTrail.get(e.id) ?? e.hpFrac;
       this.enemyTrail.set(e.id, e.hpFrac > tr ? e.hpFrac : Math.max(e.hpFrac, tr - dt * 0.5));
@@ -804,6 +837,8 @@ export class Hud {
     // v2.0 riddle panel: a hard keep-out for every plate, pop and tag (null while there is no live riddle)
     const riddle = introHold ? null : activeRiddle(view);
     this.riddleRectDesign = riddle ? riddlePanelRect(W, !!boss) : null;
+    if (!riddle) this.riddleShownAt = null;
+    else if (this.riddleShownAt === null) this.riddleShownAt = this.time;
     if (this.riddleRectDesign) avoid.push({ ...this.riddleRectDesign });
     const isRiddle = view.minigame?.kind === "riddle";
     for (const e of view.enemies) {
@@ -823,7 +858,8 @@ export class Hud {
     const minLanes = view.minigame?.lanes ?? 3;
     for (const p of plates) {
       const leaf = isRiddle && p.kind === "minigame";
-      const g = measurePlate(c, p, leaf);
+      const owner0 = p.ownerId === null ? undefined : view.enemies.find((e) => e.id === p.ownerId);
+      const g = measurePlate(c, p, leaf, !!owner0?.elite);
       geoms.set(p.id, g);
       const owner = p.ownerId === null ? undefined : view.enemies.find((e) => e.id === p.ownerId);
       let ax = W / 2;
@@ -861,7 +897,7 @@ export class Hud {
       alive.add(p.id);
       let en = this.entries.get(p.id);
       if (!en) {
-        en = { geom: g, box, letters: [], seenAt: this.time };
+        en = { geom: g, box, letters: [], seenAt: this.time, fade: 0, nextAlpha: { v: 1 } };
         this.entries.set(p.id, en);
       }
       en.geom = g;
@@ -915,6 +951,7 @@ export class Hud {
           hpFrac: this.lerpPrev(e.hpFrac, (p) => p.enemies.find((x) => x.id === e.id)?.hpFrac),
           hpTrail: this.enemyTrail.get(e.id) ?? e.hpFrac,
           atbFrac: this.lerpPrev(e.atbFrac, (p) => p.enemies.find((x) => x.id === e.id)?.atbFrac),
+          healFlash: this.healFlash.get(e.id),
         };
         if (e.isBoss) {
           if (view.boss && view.boss.enemyId === e.id) drawBossPlate(pc, view, e, st);
@@ -933,8 +970,15 @@ export class Hud {
           this.lerpPrev(sk.chargeFrac, (p) => p.skills.find((x) => x.slot === sk.slot)?.chargeFrac),
         );
       drawComboDisplay(pc, view);
-      if (riddle && this.riddleRectDesign)
+      if (riddle && this.riddleRectDesign) {
+        // brief 5.4: the panel slides down into its reserved rect over 250 ms (instant in reduced motion)
+        const sl = riddleSlide(this.time - (this.riddleShownAt ?? this.time), set.reducedMotion);
+        c.save();
+        c.translate(0, sl.dy);
+        c.globalAlpha *= sl.a;
         drawRiddlePanel(c, this.riddleRectDesign, riddle, this.alpha, this.time, set.reducedFlash);
+        c.restore();
+      }
       c.globalAlpha = 1;
     }
 
@@ -997,6 +1041,9 @@ export class Hud {
         alpha: 1,
         letterRects: en.letters,
         quality: this.quality,
+        fadeT: en.fade,
+        fadeV2: view.chapter >= 2,
+        nextAlphaOut: en.nextAlpha,
       });
     }
 
@@ -1354,7 +1401,7 @@ export class Hud {
         });
         break;
       case "heal":
-        txt(c, p.text, x, y, 30 * punch, "#a8f290", {
+        txt(c, p.text, x, y, 30 * punch, p.anchor.kind === "enemy" ? "#5cf08a" : "#a8f290", {
           align: "center",
           f: FONT_DISP,
           w: 900,
@@ -1488,6 +1535,11 @@ export class Hud {
         fontPx: en.geom.sz * this.s,
         letters: en.letters.filter(Boolean).map((r) => this.toCss(r)),
         contrast,
+        faded: p?.faded ?? false,
+        nextAlpha:
+          p?.faded && this.view?.chapter !== undefined && this.view.chapter >= 2
+            ? en.nextAlpha.v
+            : null,
       });
     }
     const sorted = [...this.frameMs].sort((a, b) => a - b);

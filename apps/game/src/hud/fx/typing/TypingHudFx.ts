@@ -359,7 +359,7 @@ export class TypingHudFx {
         }
       }
     const guard = e.kind === "guard";
-    hud.plateFx.pop(e.plateId, e.index);
+    hud.plateFx.pop(e.plateId, e.index, e.shifted === true);
     if (k > 0)
       hud.plateFx.press(
         e.plateId,

@@ -15,6 +15,7 @@ const blank = (): LetterFxState => ({
   glitchDx: 0,
   split: 0,
   amber: false,
+  gold: false,
 });
 
 describe("letterPopCurve (spec 2.1)", () => {
