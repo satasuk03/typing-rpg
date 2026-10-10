@@ -44,6 +44,8 @@ export const eliteKey = (key: string): string => `${key}.elite`;
 
 /** Willow part layout (brief 3.7): metres relative to the boss anchor (root collar); the face is the plate anchor. */
 export const WILLOW_FACE_Y_M = 4.75;
+/** The face's height as a fraction of the core sprite height (4.75 m of 8.25 m): scale-independent, for the HUD / camera anchor. */
+export const WILLOW_FACE_FRAC = 4.75 / 8.25;
 export const WILLOW_LAYOUT = {
   core: { scale: 1.0, w: 112, h: 132 },
   faceY: WILLOW_FACE_Y_M,
@@ -462,6 +464,15 @@ export function makeWillowCore(state = 'p1') {
     const pts = []; for (let k = 0; k <= 10; k++) { const t = k / 10; pts.push([cx + s * (7 + t * 50 + Math.sin(t * 5) * 2), top + 12 - t * 36 - Math.sin(t * 3) * 3]); }
     limb(L, pts, 19, 8, P, { groove: true, base: 3.0 });
     for (const t of [0.3, 0.5, 0.7, 0.9]) { const [px, py] = pts[Math.round(t * 10)]; clump(L, px, py + 1, 11 - t * 3, 5.5, LF, Math.round(px * 7 + s), -0.2); clump(L, px + s * 5, py - 3, 8, 4.5, LF, Math.round(px * 5 + s), 0.1); }
+    // freed: pink-white blossoms open all over the leaf masses (brief 3.7 "bloom"; the P2-3 blossoms), a few emissive
+    if (state === 'freed') for (let i = 0; i < 26; i++) {
+      const t = 0.15 + hash(i, s + 11) * 0.8, [px, py] = pts[Math.round(t * 10)];
+      const bx = Math.round(px + (hash(i, 3 + s) - 0.5) * 18), by = Math.round(py + (hash(i, 4) - 0.5) * 16);
+      if (bx < 3 || bx > w - 4 || by < 3 || by > h - 4) continue;
+      const pink = hex(i % 3 === 0 ? '#ffb8d8' : '#ffd8ec');
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) L.set(bx + dx, by + dy, pink);
+      L.set(bx, by, hex('#fff6fb')); if (i % 2 === 0) L.g(bx, by, dark(hex('#ffd0e6'), 0.8));
+    }
     for (let i = 0; i < 7; i++) { const t = 0.18 + i * 0.12, [px, py] = pts[Math.round(t * 10)]; lock(L, px + (hash(i, s + 5) - 0.5) * 6, py + 4, 16 + hash(i, 9) * 22, 4.4, LF, i * 1.7 + s, { sway: 1.8, base: 3.2 }); }
   }
   // ---- the face, carved in the bark at the upper-middle: brows, sockets, a nose ridge, cheek hollows, a mouth

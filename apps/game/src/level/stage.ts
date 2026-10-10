@@ -12,13 +12,33 @@ import type { EnemyDef } from "@hd2d/content";
 import type { EnemyView, LevelView } from "@hd2d/sim";
 import type { HudAnchor, HudProjector } from "../hud";
 import type { CameraPose, RenderWorld, SpriteActor, SpriteFrame } from "../render";
-import { ELITE_SCALE, eliteKey } from "../render/sprites/ch2Monsters";
+import { blendMood, GROVE_DAWN } from "../render/biomes";
+import type { DynamicLight } from "../render/lighting";
+import { ELITE_SCALE, eliteKey, WILLOW_FACE_FRAC } from "../render/sprites/ch2Monsters";
 import { HERO_LUM_CAP } from "../render/vfx/colors";
 
 /** W4: enemy sprites never exceed this max channel on the bright forest (fades out toward the cave): flash lights + hit flash no longer clip a pale slime white. */
 const FOE_FOREST_CAP = 0.85;
 /** W4: a big pale boss (the Golem) keeps its stone: max-channel ceiling under hit lights / flashes in any biome. */
 const BOSS_LUM_CAP = 0.85;
+/** P1-3: the Willow keeps its silhouette: its rim flash and body tint are capped well under the Golem's (a held rim 0.5-0.84 + the break tint washed it to the fog's value). */
+const WILLOW_RIM_CAP = 0.3;
+const WILLOW_TINT_CAP = 0.04;
+/** P2-2: the Willow stands larger than the generic boss scale (the def says 1.0): about 2x the Golem on screen. */
+const WILLOW_SCALE = 1.15;
+/** P2-3: seconds the grove mood takes to warm to dawn once the Willow is freed. */
+const DAWN_SEC = 2.0;
+/** ... starting this long after the Willow is freed, so the warm rings and flashes of the finale land on the dark grove (K2 keep-out). */
+const DAWN_DELAY = 1.3;
+/** P2-2 / 3.7: the moon on the Willow's face, per face state: [r, g, b, intensity]. */
+const FACE_LIGHT: Readonly<Record<string, readonly [number, number, number, number]>> = {
+  intro: [0.55, 0.65, 1.0, 0.2],
+  p1: [0.7, 0.85, 1.25, 1.0],
+  spell: [0.6, 0.55, 1.1, 0.6],
+  riddle: [0.85, 1.0, 0.9, 0.9],
+  // freed: the dawn crossfade carries the warm key; a face light here clipped the K2 plate keep-out probe in the demo
+  freed: [1.0, 0.85, 0.5, 0.0],
+};
 
 /** Hero rim-light strength at caveK = 1 (T6.3 #4); the sprite shader scales it by the mood's caveK and tints it with `hi`. */
 const HERO_CAVE_RIM = 0.6;
@@ -112,6 +132,8 @@ interface EnemyActor {
   cast: readonly SpriteFrame[];
   /** T3.2 the Willow's face states (intro / p1 / spell / riddle / freed); null for every other enemy. */
   states: Readonly<Record<string, readonly SpriteFrame[]>> | null;
+  /** P2-2: the held "moon on the face" light of the Willow (null for every other enemy). */
+  faceLight: DynamicLight | null;
   wLast: string;
   scale: number;
   flyY: number;
@@ -177,6 +199,9 @@ export class LevelStage {
   private pushOut = 0.08;
   private pushBack = 0.2;
   private pendingDash: { at: number; target: number } | null = null;
+  /** P2-3: the grove-dawn crossfade once the Willow is freed. */
+  private dawnT = 0;
+  private freedClock = 0;
 
   constructor(
     readonly world: RenderWorld,
@@ -213,10 +238,19 @@ export class LevelStage {
     this.placeHero();
   }
 
+  private dropFoes(): void {
+    for (const e of this.foes.values()) {
+      e.actor.dispose();
+      if (e.faceLight) e.faceLight.dead = true;
+    }
+    this.foes.clear();
+    this.dawnT = 0;
+    this.freedClock = 0;
+  }
+
   /** Back to the start of the level (restart). */
   reset(): void {
-    for (const e of this.foes.values()) e.actor.dispose();
-    this.foes.clear();
+    this.dropFoes();
     this.nextEnc = 1;
     this.curEnc = 0;
     this.prevStopX = this.handle.getAnchor("start").x;
@@ -234,8 +268,7 @@ export class LevelStage {
   }
 
   dispose(): void {
-    for (const e of this.foes.values()) e.actor.dispose();
-    this.foes.clear();
+    this.dropFoes();
     this.hero?.dispose();
     this.hero = null;
   }
@@ -273,7 +306,10 @@ export class LevelStage {
     // T3.2: an elite takes its gold-rimmed sprite variant (when the source has one) and x1.08; the aura is Ch2Fx's
     const eliteVariant = elite && src.has(eliteKey(key));
     if (eliteVariant) key = eliteKey(key);
-    const scale = (def?.scale ?? (isBoss ? 1.6 : 1.35)) * (eliteVariant ? ELITE_SCALE : 1);
+    const scale =
+      (baseKey === "monster.willow"
+        ? (def?.scale ?? 1) * WILLOW_SCALE
+        : (def?.scale ?? (isBoss ? 1.6 : 1.35))) * (eliteVariant ? ELITE_SCALE : 1);
     const flyY = def?.flying === true ? FLY_Y : 0;
     const pos = this.slotPosition(this.curEnc > 0 ? this.curEnc : 1, slot);
     const actor = this.world.addActor(key, "idle", { scale, rim: 1.4, blobW: scale * 1.1 });
@@ -306,6 +342,7 @@ export class LevelStage {
       crouch: states ? [] : extra("crouch"),
       cast: states ? [] : extra("cast"),
       states,
+      faceLight: null,
       wLast: "p1",
       scale,
       flyY,
@@ -321,6 +358,17 @@ export class LevelStage {
       introHidden: false,
       fadeT: Infinity,
     };
+    if (states) {
+      e.faceLight = this.world.lights.hold({
+        x: pos.x + 0.6,
+        y: (actor.height || 8) * WILLOW_FACE_FRAC,
+        z: pos.z + 3.2,
+        radius: 7,
+        color: [0.7, 0.85, 1.25],
+        intensity: 0,
+        scatter: 0,
+      });
+    }
     this.foes.set(id, e);
     this.world.shadowFor(actor, pos.x, pos.z);
     actor.place(pos.x + 4, flyY, pos.z);
@@ -460,12 +508,20 @@ export class LevelStage {
   /** Outline-only flash of the hero (`"hero"`) or an enemy actor: the silhouette stays readable. */
   rimFlash(who: "hero" | number, amount: number, rgb: readonly [number, number, number]): void {
     if (who === "hero") this.hero?.setRimFlash(amount, rgb);
-    else this.foes.get(who)?.actor.setRimFlash(amount, rgb);
+    else {
+      const e = this.foes.get(who);
+      e?.actor.setRimFlash(e.states ? Math.min(amount, WILLOW_RIM_CAP) : amount, rgb);
+    }
   }
 
   /** Hold a camera pose over the stage's own (finisher push); `null` releases it. `snap` = hard cut. */
   setCameraOverride(pose: Partial<CameraPose> | null, followRate: number, snap: boolean): void {
     this.camOverride = pose ? { ...pose } : null;
+    // P2-3: the finisher push on the Willow frames its face (y ~ 4.7 m), not the root collar
+    if (this.camOverride) {
+      for (const e of this.foes.values())
+        if (e.states && e.isBoss) this.camOverride.y = e.actor.height * WILLOW_FACE_FRAC;
+    }
     this.world.camera.followRate = followRate;
     this.camSnapPending = snap;
   }
@@ -526,6 +582,12 @@ export class LevelStage {
     this.updateHero(view, tickF);
     this.updateCamera(view);
     this.handle.update(dt, this.world.camera.pose.x);
+    this.dawnT = Math.min(DAWN_SEC, Math.max(0, this.freedClock - DAWN_DELAY));
+    if (this.dawnT > 0 && this.world.biome === "grove") {
+      // P2-3: grove dawn. `handle.update` re-applies the level's mood every frame, so the warm-up blends from it afterwards
+      const k = this.dawnT / DAWN_SEC;
+      this.world.setMood(blendMood(this.world.currentMood, GROVE_DAWN, 0.85 * k * k * (3 - 2 * k)));
+    }
     this.world.update(dt, alpha);
   }
 
@@ -652,6 +714,7 @@ export class LevelStage {
         useAtk = ev.atbFrac > 0.9;
         flash = Math.max(flash, 0.12 + 0.08 * Math.sin(this.time * 18));
         flashCol = [1, 0.5, 0.2];
+        if (e.states) flash = Math.min(flash, WILLOW_TINT_CAP);
       }
       if (e.attackT < 0.4) {
         useAtk = true;
@@ -668,6 +731,8 @@ export class LevelStage {
           flashCol = [0.45, 0.75, 1];
         }
         dz += 0;
+        // P1-3: the Willow never takes the break wash (the HUD's BREAK + the WEAK tag carry it); it keeps its dark body
+        if (e.states) flash = Math.min(flash, WILLOW_TINT_CAP);
       }
     }
     void tickF;
@@ -703,6 +768,25 @@ export class LevelStage {
     }
     e.actor.setFlash(flash, flashCol);
     e.actor.place(e.baseX + dx, e.flyY + bob, e.baseZ + dz);
+    if (e.states) this.updateWillowLight(e, dt);
+  }
+
+  /** The Willow's face light follows its face state; the freed state also runs the grove-dawn crossfade (P2-2 / P2-3). */
+  private updateWillowLight(e: EnemyActor, dt: number): void {
+    const L = e.faceLight;
+    if (L) {
+      const t = FACE_LIGHT[e.wLast] ?? (FACE_LIGHT.p1 as readonly number[]);
+      const col = L.color as unknown as number[];
+      const r = Math.min(1, dt * 4);
+      col[0] = (col[0] as number) + ((t[0] as number) - (col[0] as number)) * r;
+      col[1] = (col[1] as number) + ((t[1] as number) - (col[1] as number)) * r;
+      col[2] = (col[2] as number) + ((t[2] as number) - (col[2] as number)) * r;
+      L.intensity += ((t[3] as number) - L.intensity) * r;
+      L.x = e.baseX + 0.6;
+      L.y = e.actor.height * WILLOW_FACE_FRAC;
+      L.radius = 7;
+    }
+    if (e.wLast === "freed") this.freedClock += dt;
   }
 
   /** The Willow's face for this frame: intro / p1 / spell / riddle from the view, freed once its death is presented. */
@@ -770,7 +854,9 @@ export class LevelStage {
     if (e) {
       const h = e.actor.height;
       const p = e.actor.mesh.position;
-      const y = p.y + (a.part === "head" ? h : a.part === "feet" ? 0 : h * 0.5);
+      // P2-5: the Willow's "head" is its face (brief 3.7), not the sprite top 8 m up (the BREAK burst and WEAK tag sat under the HUD)
+      const head = e.states ? h * WILLOW_FACE_FRAC : h;
+      const y = p.y + (a.part === "head" ? head : a.part === "feet" ? 0 : h * 0.5);
       // use the resting x so plates do not wobble with lunges
       return this.toPx(e.baseX, y, e.baseZ);
     }

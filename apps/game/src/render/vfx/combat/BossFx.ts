@@ -141,7 +141,17 @@ export class BossFx {
     const kit = this.kit;
     if (kit.scale.k > 0 && kit.deps.enemyInfo(e.enemyId, INFO)) {
       kit.ring(INFO.x, 0.06, INFO.z, 0.5, 7, 0.6, [2, 0.5, 2.4], [0.6, 0.1, 0.8], 1.2, true);
-      kit.flash(INFO.x, INFO.y + INFO.height * 0.6, INFO.z + 1.2, [0.7, 0.2, 0.9], 3, 8, 0.6);
+      // P1-3: the Willow's Hush light back-lights it (behind the trunk) and stays low: in front it turned the whole boss pink
+      const wl = INFO.sprite === "willow";
+      kit.flash(
+        INFO.x,
+        INFO.y + INFO.height * 0.6,
+        wl ? INFO.z - 2 : INFO.z + 1.2,
+        [0.7, 0.2, 0.9],
+        wl ? 1.2 : 3,
+        8,
+        0.6,
+      );
     }
   }
 
@@ -308,18 +318,22 @@ export class BossFx {
         const f = Math.max(0, this.doomK);
         const g = sc.k <= 0 ? 0.4 : 0.6 + 0.4 * sc.k;
         const cy = INFO.y + INFO.height * 0.5;
+        // P1-3: for the Willow the aura sits BEHIND the trunk and is thinner, so the body keeps its dark indigo value
+        const wl = INFO.sprite === "willow";
+        const az = wl ? -1.8 : 0;
+        const ak = wl ? 0.45 : 1;
         const pulse =
           sc.reducedFlash || sc.reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(kit.time * (4 + 10 * p));
         this.column
           .color(DOOM_COL[0], DOOM_COL[1], DOOM_COL[2])
-          .at(INFO.x, cy + 1.2, INFO.z - 0.3)
+          .at(INFO.x, cy + 1.2, INFO.z - 0.3 + az)
           .size(3.6 * INFO.scale, 7.5);
-        this.column.alpha((0.35 + 0.45 * p) * f * g * pulse);
+        this.column.alpha((0.35 + 0.45 * p) * f * g * pulse * ak);
         this.halo
           .color(DOOM_COL[0] * 1.2, DOOM_COL[1], DOOM_COL[2] * 1.2)
-          .at(INFO.x, cy, INFO.z + 0.4)
+          .at(INFO.x, cy, INFO.z + 0.4 + az)
           .size(INFO.height * 2.2 * (1.25 - 0.3 * p));
-        this.halo.alpha((0.3 + 0.5 * p) * f * g * pulse);
+        this.halo.alpha((0.3 + 0.5 * p) * f * g * pulse * ak);
         if (sc.k > 0) {
           this.doomAcc += dt * (14 + 26 * p) * sc.k * sc.q;
           while (this.doomAcc >= 1) {
@@ -344,7 +358,15 @@ export class BossFx {
           this.pulseT -= dt;
           if (this.pulseT <= 0 && !this.doomEnding) {
             this.pulseT = 0.5 - 0.3 * p;
-            kit.flash(INFO.x, cy, INFO.z + 1.2, [0.7, 0.2, 0.9], 1.4 + 1.2 * p, 7, 0.3);
+            kit.flash(
+              INFO.x,
+              cy,
+              wl ? INFO.z - 2 : INFO.z + 1.2,
+              [0.7, 0.2, 0.9],
+              (1.4 + 1.2 * p) * (wl ? 0.4 : 1),
+              7,
+              0.3,
+            );
           }
         }
       }
