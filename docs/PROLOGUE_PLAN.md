@@ -471,3 +471,7 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
 4. **Optional follow-up (not in this plan):** should the Ch1 HUD show the lost skills as grey shard slots, a visible "powers to
    regain" tracker? **Yes, later.** It touches the unlock UI next to the balance task's slow drip, so it should be scheduled
    after that task merges.
+
+## Orchestrator rulings during the build (2026-10-10)
+- **P1.3 feel:** the prologue is a power fantasy. Keep pace ≤ 50 and Nul's attack interval ≥ about 3 s, and keep hero HP ≥ 50% for most of the run. One heavy Nul strike early in the boss segment triggers Mending Light and the low-HP passives. Passive target: a union of ≥ 5 per persona. The first tune (pace 120, hero pinned at the 25% floor) was rejected.
+- **P3.5 idle handling:** the sim has no timeout and an idle player never leaves wave 1. After 8–10 s with no input, show a "type any word" nudge. After 20 s, show the "Hold Esc to skip" ring. After 75 s idle, auto-advance to the cutscene.
