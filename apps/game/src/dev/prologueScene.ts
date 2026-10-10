@@ -49,6 +49,11 @@ export function start(canvas: HTMLCanvasElement): void {
     void import("../render/vfx/prologue/devScene").then((m) => m.start(canvas, q));
     return;
   }
+  // P3.3: `part=hud` is the prologue HUD probe / stills scene (hud/prologue/devScene.ts)
+  if (part === "hud") {
+    void import("../hud/prologue/devScene").then((m) => m.startPrologueHud(canvas, q));
+    return;
+  }
   if (part !== "cutscene") throw new Error(`prologue scene: unknown part "${part}"`);
   const id = q.get("id") ?? "ch1-l04";
   const tierParam = Number(q.get("tier") ?? "0");

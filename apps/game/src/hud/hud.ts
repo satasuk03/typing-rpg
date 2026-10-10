@@ -54,6 +54,12 @@ import {
 } from "./riddlePanel";
 import type { HudSettings } from "./settings";
 import { DEFAULT_HUD_SETTINGS, normalizeSettings } from "./settings";
+import type {
+  PrologueAnchorSource,
+  PrologueDebug,
+  PrologueDrawEnv,
+} from "./prologue/PrologueHud";
+import { PrologueHud } from "./prologue/PrologueHud";
 import { getSkillIcon } from "./skillIcons";
 import type { PlatePalette } from "./theme";
 import {
@@ -159,6 +165,8 @@ export interface HudDebugSnapshot {
    * are attached; all counts must be 0 (T6.3 R2 P2-2 / P2-3 / P2-6).
    */
   fxKeepOut?: { panel: number; label: number; next: number; rects: number };
+  /** P3.3: the prologue HUD (Grimoire bar, dialogue, ink line, hint, skip ring, Nul's mask), CSS px. Absent in story levels. */
+  prologue?: PrologueDebug;
   fx: number;
   banners: number;
   frame: { avgMs: number; p95Ms: number; maxMs: number; count: number };
@@ -244,6 +252,8 @@ export class Hud {
   private chipRects: { owner: string; id: string; rect: Rect }[] = [];
   /** 0 during the boss intro, then 1 over 300 ms: panels, combo and skill orbs fade back in. */
   private introFade = 1;
+  /** P3.3: the prologue HUD, mounted by `attachPrologue()` (null in story levels: every prologue branch is gated on it). */
+  private prologue: PrologueHud | null = null;
   private keepOutProbe: (() => NonNullable<HudDebugSnapshot["fxKeepOut"]>) | null = null;
   setKeepOutProbe(fn: (() => NonNullable<HudDebugSnapshot["fxKeepOut"]>) | null): void {
     this.keepOutProbe = fn;
@@ -365,6 +375,75 @@ export class Hud {
     for (const l of this.listeners) l(n);
   }
 
+  /**
+   * Mount the prologue HUD (P3.3). In prologue mode (`view.prologue` present, or the Grimoire forced on for the cutscene)
+   * the Grimoire bar replaces the 2-slot skill panel, its rects join the plate / pop keep-outs, and the cutscene overlay
+   * (dialogue, ink, swirl, ember, skip ring, hints) draws last. Story levels never call it.
+   */
+  attachPrologue(existing?: PrologueHud): PrologueHud {
+    if (existing) this.prologue = existing;
+    else if (!this.prologue) this.prologue = new PrologueHud();
+    return this.prologue;
+  }
+  detachPrologue(): void {
+    this.prologue = null;
+  }
+  getPrologue(): PrologueHud | null {
+    return this.prologue;
+  }
+
+  /**
+   * Prologue Part A / C without a LevelView (the sim is not running): clears the canvas and draws only the prologue
+   * overlay (captions, dialogue, ink line, the Grimoire when forced on, skip ring, hints).
+   */
+  renderOverlay(dt: number): void {
+    const p = this.prologue;
+    if (!p) return;
+    this.time += dt;
+    p.update(dt, null, this.W, this.H, this.s);
+    const c = this.c;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    c.setTransform(this.dpr * this.s, 0, 0, this.dpr * this.s, 0, 0);
+    const env = this.prologueEnv();
+    p.frame(env, p.isActive(null), false);
+    p.drawGrimoire(env, 1);
+    p.drawOverlay(env);
+    c.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  private prologueEnv(): PrologueDrawEnv {
+    return {
+      c: this.c,
+      W: this.W,
+      H: this.H,
+      s: this.s,
+      time: this.time,
+      settings: this.settings,
+      quality: this.quality,
+      fallback: this.prologueFallback,
+    };
+  }
+  /** Projector-derived anchors (CSS px) for the cutscene; `getPrologue().setAnchors` overrides them. */
+  private readonly prologueFallback: PrologueAnchorSource = {
+    nulHead: () => this.bossAnchorCss("head"),
+    nulFeet: () => this.bossAnchorCss("feet"),
+    hand: () => {
+      const b = this.resolveAnchor({ kind: "hero" });
+      return b ? { x: b.x + 14 * this.s, y: b.y - 6 * this.s } : null;
+    },
+    tear: () => {
+      const b = this.bossAnchorCss("head");
+      return { x: b ? b.x : this.cssW * 0.5, y: 0 };
+    },
+  };
+  private bossAnchorCss(part: HudAnchorPart): { x: number; y: number } | null {
+    const v = this.view;
+    const boss = v?.boss ? v.enemies.find((e) => e.id === v.boss?.enemyId) : undefined;
+    if (!boss) return null;
+    return this.resolveAnchor({ kind: "enemy", id: boss.id, slot: boss.slot, part });
+  }
+
   reset(): void {
     this.pops.clear();
     this.banners.clear();
@@ -475,8 +554,10 @@ export class Hud {
       frac,
     };
   }
-  getSkillAnchor(slot: 0 | 1): { x: number; y: number; r: number } {
-    const c = skillCenter(slot, this.H);
+  getSkillAnchor(slot: number): { x: number; y: number; r: number } {
+    const orb = this.prologue?.orbAnchor(slot);
+    if (orb) return orb;
+    const c = skillCenter(slot as 0 | 1, this.H);
     return { x: c.x * this.s, y: c.y * this.s, r: 32 * this.s };
   }
   /**
@@ -519,6 +600,7 @@ export class Hud {
   }
 
   pushEvent(e: SimEvent): void {
+    this.prologue?.onEvent(e);
     const v = this.view;
     switch (e.type) {
       case "LevelStarted":
@@ -743,6 +825,7 @@ export class Hud {
     }
     this.alpha = clamp(alpha, 0, 1);
     this.time += dt;
+    this.prologue?.update(dt, view, this.W, this.H, this.s);
     this.pops.update(dt);
     this.introFade = view.phase === "bossIntro" ? 0 : Math.min(1, this.introFade + dt / 0.3);
     // The boss card lives exactly as long as the intro window; it must never outlast it onto live plates.
@@ -829,7 +912,11 @@ export class Hud {
     const hudVisible = view.phase !== "cleared" || this.banners.banners.length > 0;
     // T3.2: the boss name card owns the screen during the intro: no plates (typing is not live yet) and no add HP bars under it.
     const introHold = view.phase === "bossIntro";
-    const plates = introHold ? [] : view.plates;
+    // P3.3 prologue mode (all gated on `pro`): Part C has no plates, the Grimoire bar replaces the 2-slot skill panel
+    const pro = this.prologue;
+    const pm = !!pro && pro.isActive(view);
+    const csOn = !!pro && pro.hasCutscene();
+    const plates = introHold || csOn ? [] : view.plates;
 
     // ---- plates: measure, layout
     c.setTransform(dpr * s, 0, 0, dpr * s, 0, 0);
@@ -839,11 +926,15 @@ export class Hud {
       { ...HERO_PANEL },
       { x: W - 22 - STATS_PANEL_W, y: 18, w: STATS_PANEL_W, h: 104 },
       COMBO_AREA(W),
-      SKILL_AREA(H),
     ];
+    if (!pm) avoid.push(SKILL_AREA(H));
     const boss = view.boss
       ? view.enemies.find((e) => e.id === view.boss?.enemyId && e.alive)
       : undefined;
+    if (pro) {
+      pro.frame(this.prologueEnv(), pm, !!boss && view.prologue !== undefined);
+      avoid.push(...pro.reserved());
+    }
     if (boss) avoid.push({ ...bossPlateRect(W), h: bossPlateRect(W).h + 22 });
     else avoid.push(TOP_LABEL_RECT(W));
     // v2.0 riddle panel: a hard keep-out for every plate, pop and tag (null while there is no live riddle)
@@ -982,8 +1073,9 @@ export class Hud {
     pc.textRects = this.panelText;
     this.chipRects.length = 0;
     pc.chipRects = this.chipRects;
-    if (hudVisible && this.introFade > 0.01) {
-      c.globalAlpha = this.panelAlpha * this.introFade;
+    const proFade = pro ? pro.panelFade() : 1;
+    if (hudVisible && this.introFade > 0.01 && proFade > 0.01) {
+      c.globalAlpha = this.panelAlpha * this.introFade * proFade;
       const atb = this.lerpPrev(view.hero.atbFrac, (p) => p.hero.atbFrac);
       const hpv = this.lerpPrev(view.hero.hpFrac, (p) => p.hero.hpFrac);
       for (const e of view.enemies) {
@@ -1004,12 +1096,16 @@ export class Hud {
       if (!boss) drawTopLabel(pc, view);
       drawHeroPanel(pc, view, atb, hpv);
       drawStatsPanel(pc, view);
-      for (const sk of view.skills)
-        drawSkill(
-          pc,
-          sk,
-          this.lerpPrev(sk.chargeFrac, (p) => p.skills.find((x) => x.slot === sk.slot)?.chargeFrac),
-        );
+      if (!pm)
+        for (const sk of view.skills)
+          drawSkill(
+            pc,
+            sk,
+            this.lerpPrev(
+              sk.chargeFrac,
+              (p) => p.skills.find((x) => x.slot === sk.slot)?.chargeFrac,
+            ),
+          );
       drawComboDisplay(pc, view);
       if (riddle && this.riddleRectDesign) {
         // brief 5.4: the panel slides down into its reserved rect over 250 ms (instant in reduced motion)
@@ -1022,6 +1118,9 @@ export class Hud {
       }
       c.globalAlpha = 1;
     }
+    // P3.3: the Grimoire bar (own alpha: in Part C it outlives the other panels, which fade out)
+    if (pro && pm && (hudVisible || csOn) && this.introFade > 0.01)
+      pro.drawGrimoire(this.prologueEnv(), this.introFade);
 
     // second wind dim (under plates)
     if (view.secondWind) {
@@ -1108,6 +1207,11 @@ export class Hud {
       this.fx.draw("above", c, fxBase);
       c.restore();
     }
+    // P3.3: the prologue overlay draws LAST, so nothing is ever over the dialogue box
+    if (pro) {
+      c.setTransform(dpr * s, 0, 0, dpr * s, 0, 0);
+      pro.drawOverlay(this.prologueEnv());
+    }
     c.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -1137,6 +1241,8 @@ export class Hud {
       this.bossRectCss = this.toCss(bossPlateRect(this.W));
     } else this.bossRectCss = null;
     if (this.riddleRectDesign) obst.push(inflate(this.riddleRectDesign, 6));
+    // P3.3: the Grimoire, dialogue, ink, hint and skip-ring rects and Nul's mask / face (no pop sits on them)
+    if (this.prologue) obst.push(...this.prologue.popObstacles());
     obst.push(
       COMBO_AREA(this.W),
       { ...HERO_PANEL },
@@ -1625,6 +1731,7 @@ export class Hud {
         leaves: this.view?.minigame?.kind === "riddle" ? (this.view.plates ?? []).length : 0,
       },
       fxKeepOut: this.keepOutProbe?.(),
+      ...(this.prologue ? { prologue: this.prologue.debug(this.view) } : {}),
       fx: this.fx.count,
       banners: this.banners.banners.length,
       frame: {
