@@ -12,7 +12,7 @@ export {
   HIT_MULT,
   LEVELS_CH1,
 } from "./levels-ch1.ts";
-export { CH2_STUB_LEVELS, LEVELS_CH2 } from "./levels-ch2.ts";
+export { LEVELS_CH2 } from "./levels-ch2.ts";
 
 /** Ch1 then Ch2, sorted by (chapter, index). */
 export const LEVELS: LevelDef[] = [...LEVELS_CH1, ...LEVELS_CH2];

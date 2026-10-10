@@ -321,7 +321,7 @@ export function verdicts(sums: readonly PersonaSummary[]): Cell[] {
         verdict: inRange(s.skillShare, t.skillShare[0], t.skillShare[1]),
       },
     );
-    // A chapter without a boss level (the Ch2 stubs, T1.1) has no boss cells: drop the NaN ones (Ch1 never has any).
+    // A chapter without a boss level (none ship today) has no boss cells: drop the NaN ones (Ch1 never has any).
     for (let i = cells.length - 1; i >= at; i--)
       if (Number.isNaN((cells[i] as Cell).value)) cells.splice(i, 1);
     for (const c of cells.slice(at))
@@ -457,7 +457,7 @@ export function gearSection(rep: Report): string[] {
   const bossId = chapterLevels(chapter)[9] as string;
   const lv = resolveLevel(bundleForLevel(bossId), bossId, { dueWeakWords: [] });
   const boss = lv.boss;
-  // Stub levels (Ch2 until T4.3) have no boss: fall back to the strongest encounter Attack Power of the level.
+  // A level without a boss: fall back to the strongest encounter Attack Power of the level.
   const apBp =
     boss?.attackPowerBp ??
     Math.max(0, ...lv.segments.map((s) => (s as { attackPowerBp?: number }).attackPowerBp ?? 0));
@@ -513,7 +513,7 @@ export function markdown(rep: Report): string {
   const out: string[] = [];
   const label = (p: string): string => PERSONAS.find((x) => x.id === p)?.label ?? p;
   out.push(
-    `# Chapter ${rep.config.chapter ?? 1} balance${(rep.config.chapter ?? 1) === 1 ? "" : " (PLACEHOLDER: Ch1 targets, stub levels until T4.3/T5.1)"} (${rep.config.seeds} seeds per level per persona, noise ${rep.config.noise ? "on" : "off"})`,
+    `# Chapter ${rep.config.chapter ?? 1} balance${(rep.config.chapter ?? 1) === 1 ? "" : " (PLACEHOLDER: Ch1 targets until T5.1)"} (${rep.config.seeds} seeds per level per persona, noise ${rep.config.noise ? "on" : "off"})`,
     ...(Object.keys(rep.config.whatif).length > 0
       ? ["", `**What-if:** ${JSON.stringify(rep.config.whatif)} (Py columns ignore it)`]
       : []),
