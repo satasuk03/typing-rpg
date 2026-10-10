@@ -503,3 +503,14 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
   - The passives are 2-letter chips, not pixel icons.
   - The 4×4 ember core is tiny.
   - The sweep ran on a mock driver; P4.1 re-probes on the real session.
+- **P3.6 merged.** The prologue runs end to end on Metal with 0 console errors. Boss segment: 21.1 s at 40 WPM, 20.0 s at 75 WPM. The bossMinS question is closed: it counts per encounter. Interfaces v2.2.2 records the client-only cue fields.
+  - **For R1 and P4.2** (the orchestrator's contact-sheet review plus the P3.6 report):
+    - Part C is about 74 s, not 55 s, because `line` cues freeze the clock. Consider non-gating lines or camera eases that run during lines.
+    - The theft and collapse beats are quiet: the theft streams are thin and the collapse reads as white puffs.
+    - The kneeling hero looks smeared.
+    - The `a1` crane: the knight is tiny, there's too much green, and the gate is pushed into a corner.
+    - The Part C Grimoire sits over the actors' lower bodies.
+    - The max-surge aura is weak.
+    - The returning shards read faint.
+    - Faint glyphs are baked into Nul's `rise` frame.
+    - The `?scene=prologue&part=cutscene` dev route still plays the old test timeline. Use `window.__play.proSeek(t)` for stills.
