@@ -5,6 +5,10 @@ export type MonsterArt = "slimeG" | "slimeP" | "bat" | "goblin" | "goblinR" | "g
 /** Chapter II enemy ids (T2.3, ch2Monsters.ts): `monster.<id>`, plus `monster.<id>.elite` and `monster.willow.lash`. */
 export type Ch2MonsterArt = "wisp" | "shade" | "moth" | "toad" | "wolf" | "willow";
 export type HeroAnim = "idle" | "walk" | "raise" | "slash" | "cast" | "hurt" | "win";
+export type PrologueArt = "nul"; // sprite key monster.nul (EnemyDef.spriteId "nul")
+export type NulAnimKey = "idle" | "atk" | "cast" | "write" | "catch" | "hurt" | "rise"; // idle + atk are what the stage plays in combat
+export type ProloguePropKey = "wordgate" | "runestone" | "sword"; // prop.prologue.<key>[.<n>] (+ .flip twins, the ch2Props convention)
+export type HeroCutsceneAnimKey = "kneel" | "rise" | "reach" | "swordOut"; // added to the `hero` entry by P2.3; HeroAnim itself is unchanged
 
 /** Typed surface of the (untyped, ported) procedural art module. */
 export interface ProceduralArt {

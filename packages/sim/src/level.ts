@@ -593,8 +593,8 @@ const skillViews = (state: Readonly<LevelState>): SkillView[] => {
     out.push({
       slot,
       id,
-      chargeFrac: Math.min(1, run.skillChargeM[slot] / K.SKILL_CHARGE_M[id]),
-      ready: run.skillReady[slot],
+      chargeFrac: Math.min(1, (run.skillChargeM[slot] ?? 0) / K.SKILL_CHARGE_M[id]),
+      ready: run.skillReady[slot] === true,
       mode: run.loadout.activeModes[slot],
     });
   }

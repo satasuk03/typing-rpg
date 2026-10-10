@@ -86,12 +86,19 @@ export interface HeroView {
   poseSinceTick: Tick;
 }
 export interface SkillView {
-  slot: 0 | 1;
+  slot: number;
   id: ActiveSkillId;
   chargeFrac: number;
   ready: boolean;
   mode: CastMode;
 }
+/** v2.2 prologue strip (§3.7.8). Floats allowed (never hashed). */
+export interface PrologueView {
+  surgeMult: number; // surgeBp / BP: 1, 2, 4, 8, 16 (aura growth, P3.2 surgeAura)
+  bossClamped: boolean; // the boss sits at its gate waiting for bossMinTicks (the ward VFX)
+  armed: boolean; // the first WordCompleted happened; kit skills may now cast (Grimoire bar wakes up)
+}
+
 export interface LevelView {
   tick: Tick;
   phase: LevelPhase;
@@ -146,6 +153,8 @@ export interface LevelView {
     activeTicks: number;
   };
   goldCollected: number;
+  /** v2.2: present iff the level is the prologue (absent, not null, on story levels, so existing mocks compile). */
+  prologue?: PrologueView;
 }
 /** v2.0 riddle panel (§3.6). The HUD draws `clue` in its own panel, never over the leaf plates (readability invariant). */
 export interface RiddleView {

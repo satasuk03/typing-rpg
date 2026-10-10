@@ -248,10 +248,10 @@ export type SimEvent =
   | Ev<"SecondWindFailed">
   | Ev<"Revived", { source: "gem" | "feather"; hpAfter: number }> // hook; never emitted in the slice
   // ---- skills ----
-  | Ev<"SkillCharged", { slot: 0 | 1; skillId: ActiveSkillId }>
+  | Ev<"SkillCharged", { slot: number; skillId: ActiveSkillId }>
   | Ev<
       "SkillCast",
-      { slot: 0 | 1; skillId: ActiveSkillId; targetIds: EntityId[]; impactTick: Tick }
+      { slot: number; skillId: ActiveSkillId; targetIds: EntityId[]; impactTick: Tick }
     >
   | Ev<"PassiveTriggered", { passiveId: PassiveId; targetId: EntityId | null }>
   // ---- gimmicks ----
@@ -309,6 +309,10 @@ export type SimEvent =
     >
   | Ev<"FinisherShown", { enemyId: EntityId; plateId: PlateId; text: string }>
   | Ev<"FinisherCompleted", { enemyId: EntityId; plateId: PlateId }>
+  | Ev<
+      "PrologueClimax",
+      { enemyId: EntityId; bossId: string; surgeMultBp: number; addIds: EntityId[] }
+    > // v2.2 (§3.7.6)
   // ---- rewards ----
   | Ev<"GoldGained", { amount: number; source: "encounter" | "passive"; total: number }>
   | Ev<"ChestDropped", { tier: ChestTier; encounterIndex: number; enemyId: EntityId | null }>
@@ -384,6 +388,7 @@ export const ALL_EVENT_TYPES = [
   "RiddleResolved",
   "FinisherShown",
   "FinisherCompleted",
+  "PrologueClimax",
   "GoldGained",
   "ChestDropped",
   "TrialStarted",
