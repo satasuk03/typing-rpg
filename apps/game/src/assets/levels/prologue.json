@@ -8,7 +8,7 @@
   "jsonVersion": "1.5.3",
   "levels": [
     {
-      "identifier": "ch1-l00",
+      "identifier": "prologue",
       "uid": 100,
       "worldX": 0,
       "worldY": 0,
@@ -28,7 +28,7 @@
         {
           "__identifier": "id",
           "__type": "String",
-          "__value": "ch1-l00"
+          "__value": "prologue"
         },
         {
           "__identifier": "chapter",

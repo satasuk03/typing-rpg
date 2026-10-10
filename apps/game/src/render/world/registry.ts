@@ -1,8 +1,7 @@
 /**
  * Level registry: every `src/assets/levels/ch*-l*.json` file plus `prologue.json`, parsed + validated on first access.
  * Vite inlines the JSON; vitest resolves the same glob.
- * The prologue's layout is served under the id "prologue" (`PrologueDef.layoutId`). The layout schema's id field only accepts
- * `chN-lNN`, so the file carries the placeholder id `ch1-l00` and `loadLevel` renames the parsed layout.
+ * The prologue's layout is served under the id "prologue" (`PrologueDef.layoutId`); the layout schema accepts `chN-lNN` or `prologue`.
  */
 import { type LevelLayout, parseLevelLayout } from "./layout";
 
@@ -38,8 +37,7 @@ export function loadLevel(id: string): LevelLayout {
   if (hit) return hit;
   const json = raw.get(id);
   if (json === undefined) throw new Error(`unknown level "${id}" (have: ${levelIds().join(", ")})`);
-  const parsed = parseLevelLayout(json);
-  const layout = id === "prologue" ? { ...parsed, id } : parsed;
+  const layout = parseLevelLayout(json);
   cache.set(id, layout);
   return layout;
 }
