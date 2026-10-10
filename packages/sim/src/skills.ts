@@ -35,7 +35,7 @@ export function chargeSkills(state: LevelState, plate: Readonly<PlateState>, emi
     const id = run.loadout.actives[slot];
     if (id === null) continue;
     tutorialCue(state, "skill", emit);
-    run.skillChargeM[slot] = Math.min(run.skillChargeM[slot] + gain, 2 * needM(id));
+    run.skillChargeM[slot] = Math.min((run.skillChargeM[slot] ?? 0) + gain, 2 * needM(id));
     markReady(state, slot, emit);
   }
 }
@@ -44,7 +44,7 @@ function markReady(state: LevelState, slot: 0 | 1, emit: Emit): void {
   const run = state.run;
   const id = run.loadout.actives[slot];
   if (id === null) return;
-  const ready = run.skillChargeM[slot] >= needM(id);
+  const ready = (run.skillChargeM[slot] ?? 0) >= needM(id);
   if (ready && !run.skillReady[slot])
     emit({ type: "SkillCharged", tick: state.tick, slot, skillId: id });
   run.skillReady[slot] = ready;
@@ -103,7 +103,7 @@ export function checkSkillCasts(state: LevelState, emit: Emit): void {
 function castSkill(state: LevelState, slot: 0 | 1, id: ActiveSkillId, emit: Emit): void {
   const run = state.run;
   const enc = state.enc as EncounterState;
-  run.skillChargeM[slot] -= needM(id);
+  run.skillChargeM[slot] = (run.skillChargeM[slot] ?? 0) - needM(id);
   run.skillReady[slot] = false;
   run.stats.skillsCast++;
   const impactTick = state.tick + K.SKILL_IMPACT_T;

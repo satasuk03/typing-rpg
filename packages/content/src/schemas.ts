@@ -274,6 +274,70 @@ export const TrialDef = z.object({
 
 export type TrialDef = z.infer<typeof TrialDef>;
 
+// ---- v2.2 Prologue (§3.7, §14.2). Human units (seconds, %, multipliers); resolvePrologue converts. ----
+/** One kit slot. startChargePct = % of the skill's charge need at tick 0 (100 = ready: it casts on the first word). */
+export const PrologueKitActive = z.object({
+  id: ActiveSkillDef.shape.id,
+  startChargePct: z.number().int().min(0).max(100),
+});
+export type PrologueKitActive = z.infer<typeof PrologueKitActive>;
+/** Prologue plate and guard words: lowercase a-z, 3..5 letters (A1, typed before calibration). Inline strings, not WordEntry. */
+export const PrologueWord = z.string().regex(/^[a-z]{3,5}$/);
+const distinct = (xs: readonly string[]): boolean => new Set(xs).size === xs.length;
+export const PrologueDef = z
+  .object({
+    id: z.literal("prologue"),
+    layoutId: z.string(), // "prologue" (apps/game/src/assets/levels/prologue.json)
+    biome: Biome, // "ruins": render/audio biome only (the words are inline, no pool)
+    pace: z.number().int().min(15).max(120), // LevelOptions.pace (25): enemy timers and guard windows
+    seed: z.number().int().min(0).max(0xffffffff), // createLevel seed: the same fight for the same inputs, every run
+    words: z.array(PrologueWord).min(40).refine(distinct, "prologue words must be distinct"),
+    guardWords: z
+      .array(PrologueWord)
+      .min(12)
+      .refine(distinct, "prologue guard words must be distinct"),
+    /** Encounters (walks allowed between), then exactly one boss segment, last. It need not start with a walk. */
+    segments: z.array(Segment).min(2),
+    kit: z.object({
+      actives: z
+        .array(PrologueKitActive)
+        .min(1)
+        .max(8)
+        .refine((a) => distinct(a.map((x) => x.id)), "kit actives must be distinct"),
+      passives: z
+        .array(PassiveDef.shape.id)
+        .max(10)
+        .refine(distinct, "kit passives must be distinct"),
+    }),
+    /** "Full power" gear for all three slots (sword, L, tier 3, +5). Client-built, never added to an inventory. */
+    gear: z.object({
+      archetype: WeaponArchetype,
+      tier: z.number().int().min(1).max(10),
+      rarity: Rarity,
+      upgrade: z.number().int().min(0).max(15),
+    }),
+    chargeMult: z.number().positive(), // x every kit charge gain (2.5)
+    castGapS: z.number().positive(), // min seconds between two kit casts (1.5)
+    forceAfterS: z.number().positive(), // ready-wait before a slot drops from smart to asap (4)
+    heroHpFloorPct: z.number().int().min(1).max(99), // hero HP floor, % of max (25: below Last Stand 30 and Mending 60)
+    surge: z.object({
+      encounterAfterS: z.number().positive(), // combat seconds of a normal encounter before the first doubling (18)
+      bossAfterS: z.number().positive(), // ... of the boss encounter (20)
+      doubleEveryS: z.number().positive(), // (4)
+      maxMult: z.number().int().min(1).max(64), // cap (16); 1 = no surge
+    }),
+    bossMinS: z.number().min(0), // boss-encounter combat seconds before the climax may fire (12)
+  })
+  .refine((p) => {
+    const kinds = p.segments.map((s) => s.kind);
+    return (
+      kinds.filter((k) => k === "boss").length === 1 &&
+      kinds[kinds.length - 1] === "boss" &&
+      kinds.includes("encounter")
+    );
+  }, "prologue segments: at least one encounter, then exactly one boss segment, last");
+export type PrologueDef = z.infer<typeof PrologueDef>;
+
 export const ContentBundle = z.strictObject({
   words: z.array(WordEntry),
   enemies: z.array(EnemyDef),
@@ -283,6 +347,7 @@ export const ContentBundle = z.strictObject({
   actives: z.array(ActiveSkillDef),
   passives: z.array(PassiveDef),
   trials: z.array(TrialDef),
+  prologue: PrologueDef.optional(), // v2.2 (§14.2): absent until P1.2
 });
 export type ContentBundle = z.infer<typeof ContentBundle>;
 /** fnv1a32(canonicalContentJson(bundle)) as 8 hex chars; emitted by tools/content at build time. */

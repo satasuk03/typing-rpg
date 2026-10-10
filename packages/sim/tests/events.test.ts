@@ -81,6 +81,7 @@ const noop: EventHandlers = {
   RiddleResolved: () => {},
   FinisherShown: () => {},
   FinisherCompleted: () => {},
+  PrologueClimax: () => {},
   GoldGained: () => {},
   ChestDropped: () => {},
   TrialStarted: () => {},

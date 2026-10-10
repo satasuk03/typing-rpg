@@ -435,6 +435,11 @@ export const BINDINGS: BindingTable = {
     // finale on the Willow only (a no-op for every other boss).
     fx: (e, c) => c.fx?.finisherCompleted(e),
   }),
+  PrologueClimax: b("PrologueClimax", {
+    fxNone:
+      "v2.2 stub: the session hands the stage to the cutscene player (P3.5); P3.2 binds the Fireball catch",
+    silent: "v2.2 stub: the cutscene owns the music and SFX (P3.4)",
+  }),
 
   // ---- rewards ----
   GoldGained: b("GoldGained", { fx: (e, c) => c.fx?.goldGained(e) }),

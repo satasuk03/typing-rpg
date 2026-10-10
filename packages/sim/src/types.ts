@@ -163,6 +163,23 @@ export type ResolvedStar =
   | Exclude<StarChallenge, { kind: "parTime" }>
   | { kind: "parTime"; slackBp: Bp };
 
+export interface ResolvedPrologue {
+  kitActives: ActiveSkillId[]; // kit slot order = PrologueDef.kit.actives order; length N (1..8); slot i = index i
+  kitStartChargeM: Milli[]; // length N: mulDiv(K.SKILL_CHARGE_M[id], startChargePct, 100) per slot (<= the need)
+  kitPassives: PassiveId[]; // PrologueDef.kit.passives order (the view's `passives` order); 0..10 ids
+  chargeMultBp: Bp; // bp(chargeMult): x every kit charge gain (2.5 -> 25000)
+  castGapTicks: number; // ticks(castGapS): min ticks between two kit casts (>= 1)
+  forceAfterTicks: number; // ticks(forceAfterS): ready-wait combat ticks after which a slot uses its asap condition
+  heroHpFloorBp: Bp; // heroHpFloorPct * 100: hero HP never drops below mulBp(maxHp, this), min 1 milli
+  surge: {
+    encounterAfterTicks: number; // ticks(surge.encounterAfterS): combat ticks of a normal encounter before the first doubling
+    bossAfterTicks: number; // ticks(surge.bossAfterS): ... of the boss encounter
+    doubleEveryTicks: number; // ticks(surge.doubleEveryS) (>= 1)
+    maxMultBp: Bp; // surge.maxMult * BP (16 -> 160000); 1 disables the surge
+  };
+  bossMinTicks: number; // ticks(bossMinS): boss-encounter combat ticks before the climax may fire (D16-style clamp)
+}
+
 export interface ResolvedLevel {
   levelId: string;
   chapter: number;
@@ -195,6 +212,14 @@ export interface ResolvedLevel {
   foldSentences: boolean;
   /** v2.0: riddle candidates in bundle order (deduped by text). Present iff the level's boss has a riddle minigame. */
   riddles?: ResolvedRiddleWord[];
+  /** v2.2: present iff this def came from resolvePrologue. ABSENT on every story level (§14.1). */
+  prologue?: ResolvedPrologue;
+}
+export interface PrologueRunConfig {
+  def: ResolvedLevel;
+  loadout: Loadout;
+  seed: number;
+  options: LevelOptions;
 }
 
 export interface Snapshot<S> {

@@ -2,6 +2,8 @@ import type { ProceduralArt } from "./artTypes";
 import { registerCh2Monsters } from "./ch2Monsters";
 import { ch2Backdrop, registerCh2Props } from "./ch2Props";
 import { buildProceduralArt } from "./proceduralArt";
+import { registerPrologueArt } from "./prologueArt";
+import { registerPrologueProps } from "./prologueProps";
 import {
   type BackdropKind,
   DEFAULT_ANIM,
@@ -22,6 +24,7 @@ const one = (f: SpriteFrame): Anims => ({ [DEFAULT_ANIM]: [f] });
  *    stite 0-2, crystalB, crystalP, crystalB2, shroom, post, sconce, vines 0-1, trunk, cRock 0-2)
  *  - Chapter II enemies (T2.3): `monster.{wisp,shade,moth,toad,wolf,willow,willow.lash}` + `.elite` variants, see ch2Monsters.ts
  *  - Chapter II props: `prop.ch2.<name>[.<n>]` and their `.flip` twins (normal.x negated), see ch2Props.ts
+ *  - Prologue (v2.2 placeholders): `monster.nul`, `monster.nul.ward` (prologueArt.ts); `prop.prologue.*` (prologueProps.ts)
  */
 export class ProceduralSpriteSource implements SpriteSource {
   readonly name = "procedural-poc-v2";
@@ -153,6 +156,8 @@ export class ProceduralSpriteSource implements SpriteSource {
     );
     registerCh2Props(this.table);
     registerCh2Monsters(this.table);
+    registerPrologueProps(this.table);
+    registerPrologueArt(this.table);
   }
 
   has(key: string): boolean {

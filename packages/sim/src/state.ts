@@ -102,7 +102,7 @@ export type PendingHit =
   | {
       tick: Tick;
       kind: "skill";
-      slot: 0 | 1;
+      slot: number;
       skillId: ActiveSkillId;
       targetId: EntityId | null;
       crit: false;
@@ -210,6 +210,14 @@ export interface RunStats {
   skillsCast: number;
 }
 
+/** v2.2 prologue run state (§3.7.2). Present iff def.prologue; ABSENT on story levels (hashes, §14.1). */
+export interface PrologueRunState {
+  combatTicks: number; // ticks of the current encounter processed in phase "combat"; 0 at EncounterStarted
+  waitTicks: number[]; // per kit slot: armed combat ticks spent ready without casting (smart -> asap)
+  lastCastTick: Tick | null; // the last kit cast (cast gap)
+  lastCastSlot: number | null; // round robin: the next scan starts at lastCastSlot + 1
+}
+
 export interface RunState {
   def: ResolvedLevel;
   loadout: Loadout;
@@ -232,13 +240,15 @@ export interface RunState {
   heroMaxHpM: number;
   heroHpM: number;
   barrier: number; // absorb-the-next-hit charges (Aegis / Bulwark Streak, T1.4)
-  skillChargeM: [number, number]; // per active slot, in milli-words (persists across the level, D18)
-  skillReady: [boolean, boolean]; // charge >= need (waiting for its cast condition)
+  skillChargeM: number[]; // per kit slot (story: always length 2, §14.1); in milli-words, persists across the level (D18)
+  skillReady: boolean[]; // charge >= need (waiting for its cast condition)
   weaponAttacks: number; // resolved auto-attack impacts (Dagger: every 3rd applies Bleed)
   lastWordPerfect: boolean; // the last completed word/guard plate was perfect (Clean Cut)
   comebackLost: number; // combo lost to typo penalties since the last perfect word (Comeback)
   /** v2.0.3 Reveal: gimmicks are stripped from new plates until this tick. ABSENT until Reveal is first cast (Ch1 state is unchanged). */
   revealUntil?: Tick;
+  /** v2.2: present iff def.prologue (§3.7.2). */
+  prologue?: PrologueRunState;
   lastStandOn: boolean; // HP below the Last Stand threshold (edge for PassiveTriggered)
   cues: string[]; // TutorialCue ids already emitted (options.tutorial)
   secondWindUsed: boolean;
