@@ -47,42 +47,6 @@
           "entityInstances": [
             {
               "__identifier": "Scatter",
-              "px": [160, -80],
-              "width": 3264,
-              "height": 96,
-              "fieldInstances": [
-                {
-                  "__identifier": "keys",
-                  "__type": "Json",
-                  "__value": ["prop.ch2.cypress.0", "prop.ch2.cypress.1", "prop.ch2.cypress.2"]
-                },
-                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [3.5, 6] },
-                { "__identifier": "scale", "__type": "Array<Float>", "__value": [1.1, 1.4] },
-                { "__identifier": "seed", "__type": "Int", "__value": 480 },
-                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.62, 0.68, 0.58] },
-                { "__identifier": "rim", "__type": "Float", "__value": 0.5 }
-              ]
-            },
-            {
-              "__identifier": "Scatter",
-              "px": [160, 88],
-              "width": 3264,
-              "height": 48,
-              "fieldInstances": [
-                {
-                  "__identifier": "keys",
-                  "__type": "Json",
-                  "__value": ["prop.ch2.cypress.0", "prop.ch2.cypress.1", "prop.ch2.cypress.2"]
-                },
-                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [6, 9.5] },
-                { "__identifier": "scale", "__type": "Array<Float>", "__value": [1.0, 1.3] },
-                { "__identifier": "seed", "__type": "Int", "__value": 481 },
-                { "__identifier": "gap", "__type": "Float", "__value": 0.1 },
-                { "__identifier": "rim", "__type": "Float", "__value": 0.7 }
-              ]
-            },
-            {
-              "__identifier": "Scatter",
               "px": [320, 189],
               "width": 2880,
               "height": 22,
@@ -620,260 +584,6 @@
             },
             {
               "__identifier": "Prop",
-              "px": [704, 215],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.1" },
-                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
-              ]
-            },
-            {
-              "__identifier": "Light",
-              "px": [721, 220],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.62, 0.24] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 1.3 },
-                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
-                { "__identifier": "flicker", "__type": "Bool", "__value": true }
-              ]
-            },
-            {
-              "__identifier": "Glow",
-              "px": [721, 214],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
-              "px": [1376, 213],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.0" },
-                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
-              ]
-            },
-            {
-              "__identifier": "Light",
-              "px": [1393, 219],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
-                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.62, 0.24] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 1.3 },
-                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
-                { "__identifier": "flicker", "__type": "Bool", "__value": true }
-              ]
-            },
-            {
-              "__identifier": "Glow",
-              "px": [1393, 212],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
-                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
-              "px": [2080, 203],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.1" },
-                { "__identifier": "flip", "__type": "Bool", "__value": true },
-                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
-              ]
-            },
-            {
-              "__identifier": "Light",
-              "px": [2063, 209],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.62, 0.24] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 1.3 },
-                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
-                { "__identifier": "flicker", "__type": "Bool", "__value": true }
-              ]
-            },
-            {
-              "__identifier": "Glow",
-              "px": [2063, 202],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
-              "px": [2720, 206],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.0" },
-                { "__identifier": "flip", "__type": "Bool", "__value": true },
-                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
-              ]
-            },
-            {
-              "__identifier": "Light",
-              "px": [2703, 212],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
-                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.62, 0.24] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 1.3 },
-                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
-                { "__identifier": "flicker", "__type": "Bool", "__value": true }
-              ]
-            },
-            {
-              "__identifier": "Glow",
-              "px": [2703, 206],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
-                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
-              "px": [824, 218],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.1" },
-                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
-              ]
-            },
-            {
-              "__identifier": "Light",
-              "px": [841, 224],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.62, 0.24] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 1.3 },
-                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
-                { "__identifier": "flicker", "__type": "Bool", "__value": true }
-              ]
-            },
-            {
-              "__identifier": "Glow",
-              "px": [841, 218],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
-              "px": [1560, 216],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.1" },
-                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
-              ]
-            },
-            {
-              "__identifier": "Light",
-              "px": [1577, 221],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.62, 0.24] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 1.3 },
-                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
-                { "__identifier": "flicker", "__type": "Bool", "__value": true }
-              ]
-            },
-            {
-              "__identifier": "Glow",
-              "px": [1577, 215],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
-              "px": [2328, 212],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.1" },
-                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
-              ]
-            },
-            {
-              "__identifier": "Light",
-              "px": [2345, 218],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.62, 0.24] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 1.3 },
-                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
-                { "__identifier": "flicker", "__type": "Bool", "__value": true }
-              ]
-            },
-            {
-              "__identifier": "Glow",
-              "px": [2345, 211],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
-                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
-                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
-                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
               "px": [1088, 160],
               "width": 0,
               "height": 0,
@@ -905,36 +615,6 @@
                 { "__identifier": "scale", "__type": "Float", "__value": 1.25 },
                 { "__identifier": "foreground", "__type": "Bool", "__value": true },
                 { "__identifier": "dark", "__type": "Float", "__value": 0.6 },
-                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
-                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
-              "px": [906, 363],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.moss.1" },
-                { "__identifier": "y", "__type": "Float", "__value": 9.4 },
-                { "__identifier": "foreground", "__type": "Bool", "__value": true },
-                { "__identifier": "dark", "__type": "Float", "__value": 0.5 },
-                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
-                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
-              "px": [1062, 363],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.moss.0" },
-                { "__identifier": "y", "__type": "Float", "__value": 9.6 },
-                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
-                { "__identifier": "flip", "__type": "Bool", "__value": true },
-                { "__identifier": "foreground", "__type": "Bool", "__value": true },
-                { "__identifier": "dark", "__type": "Float", "__value": 0.5 },
                 { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
                 { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
               ]
@@ -1034,21 +714,6 @@
             },
             {
               "__identifier": "Prop",
-              "px": [2509, 363],
-              "width": 0,
-              "height": 0,
-              "fieldInstances": [
-                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.moss.0" },
-                { "__identifier": "y", "__type": "Float", "__value": 9.6 },
-                { "__identifier": "scale", "__type": "Float", "__value": 0.9 },
-                { "__identifier": "foreground", "__type": "Bool", "__value": true },
-                { "__identifier": "dark", "__type": "Float", "__value": 0.5 },
-                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
-                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
-              ]
-            },
-            {
-              "__identifier": "Prop",
               "px": [2579, 365],
               "width": 0,
               "height": 0,
@@ -1079,13 +744,18 @@
                   "__identifier": "mood",
                   "__type": "Json",
                   "__value": {
-                    "sat": 0.98,
-                    "exposure": 1.02,
-                    "fogCol": [0.17, 0.2, 0.16],
-                    "clear": [0.17, 0.2, 0.16],
-                    "fog": [0.03, 7, 0.5],
-                    "rays": 0.7,
-                    "bloom": 0.6
+                    "sat": 0.94,
+                    "exposure": 1.04,
+                    "fogCol": [0.17, 0.15, 0.23],
+                    "clear": [0.17, 0.15, 0.23],
+                    "fog": [0.026, 8, 0.5],
+                    "rays": 0.8,
+                    "bloom": 0.62,
+                    "amb": [0.2, 0.19, 0.3],
+                    "sunCol": [0.9, 0.58, 1.0],
+                    "hi": [0.05, 0.02, 0.06],
+                    "sh": [0.015, 0.01, 0.045],
+                    "gain": [1.0, 0.96, 1.04]
                   }
                 },
                 { "__identifier": "blend", "__type": "Int", "__value": 14 }
@@ -1112,7 +782,7 @@
                 { "__identifier": "width", "__type": "Int", "__value": 300 },
                 { "__identifier": "height", "__type": "Int", "__value": 70 },
                 { "__identifier": "pos", "__type": "Array<Float>", "__value": [40, 22, -150] },
-                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.75, 0.82, 0.85] },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.78, 0.68, 0.95] },
                 { "__identifier": "fogK", "__type": "Int", "__value": 0 },
                 { "__identifier": "rep", "__type": "Int", "__value": 1 },
                 { "__identifier": "follow", "__type": "Bool", "__value": true }
@@ -1128,7 +798,7 @@
                 { "__identifier": "width", "__type": "Int", "__value": 460 },
                 { "__identifier": "height", "__type": "Float", "__value": 43.2 },
                 { "__identifier": "pos", "__type": "Array<Float>", "__value": [40, 11, -105] },
-                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.7, 0.78, 0.74] },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.62, 0.58, 0.78] },
                 { "__identifier": "fogK", "__type": "Float", "__value": 0.55 },
                 { "__identifier": "rep", "__type": "Int", "__value": 3 }
               ]
@@ -1143,9 +813,9 @@
                 { "__identifier": "width", "__type": "Int", "__value": 420 },
                 { "__identifier": "height", "__type": "Float", "__value": 19.44 },
                 { "__identifier": "pos", "__type": "Array<Float>", "__value": [30, 6.4, -58] },
-                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.62, 0.7, 0.66] },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.5, 0.46, 0.66] },
                 { "__identifier": "fogK", "__type": "Float", "__value": 0.4 },
-                { "__identifier": "rep", "__type": "Int", "__value": 6 }
+                { "__identifier": "rep", "__type": "Int", "__value": 7 }
               ]
             },
             {
@@ -1426,6 +1096,714 @@
               "fieldInstances": [
                 { "__identifier": "name", "__type": "String", "__value": "walkshot" },
                 { "__identifier": "kind", "__type": "String", "__value": "marker" }
+              ]
+            },
+            {
+              "__identifier": "Scatter",
+              "px": [160, -80],
+              "width": 394,
+              "height": 96,
+              "fieldInstances": [
+                {
+                  "__identifier": "keys",
+                  "__type": "Json",
+                  "__value": ["prop.ch2.cypress.0", "prop.ch2.cypress.1", "prop.ch2.cypress.2"]
+                },
+                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [3.5, 6] },
+                { "__identifier": "scale", "__type": "Array<Float>", "__value": [1.1, 1.4] },
+                { "__identifier": "seed", "__type": "Int", "__value": 480 },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.62, 0.68, 0.58] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.5 }
+              ]
+            },
+            {
+              "__identifier": "Scatter",
+              "px": [160, 88],
+              "width": 394,
+              "height": 48,
+              "fieldInstances": [
+                {
+                  "__identifier": "keys",
+                  "__type": "Json",
+                  "__value": ["prop.ch2.cypress.0", "prop.ch2.cypress.1", "prop.ch2.cypress.2"]
+                },
+                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [6, 9.5] },
+                { "__identifier": "scale", "__type": "Array<Float>", "__value": [1.0, 1.3] },
+                { "__identifier": "seed", "__type": "Int", "__value": 481 },
+                { "__identifier": "gap", "__type": "Float", "__value": 0.1 },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.7 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [770, 154],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.0" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.15 },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1010, 134],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.1" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.3 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1234, 157],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.0" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.2 },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Scatter",
+              "px": [554, 186],
+              "width": 864,
+              "height": 16,
+              "fieldInstances": [
+                {
+                  "__identifier": "keys",
+                  "__type": "Json",
+                  "__value": ["prop.ch2.reeds.1", "prop.ch2.reeds.2"]
+                },
+                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [5, 9] },
+                { "__identifier": "scale", "__type": "Array<Float>", "__value": [0.8, 1.1] },
+                { "__identifier": "seed", "__type": "Int", "__value": 9100 },
+                { "__identifier": "gap", "__type": "Float", "__value": 0.35 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.0 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [786, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.0" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [890, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.2" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1106, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.3" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1202, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.1" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [890, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.0" },
+                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [907, 214],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
+                {
+                  "__identifier": "color",
+                  "__type": "Array<Float>",
+                  "__value": [0.85, 0.55, 0.45]
+                },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.9 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": true }
+              ]
+            },
+            {
+              "__identifier": "Glow",
+              "px": [907, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
+                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1122, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.1" },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [1105, 214],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
+                {
+                  "__identifier": "color",
+                  "__type": "Array<Float>",
+                  "__value": [0.85, 0.55, 0.45]
+                },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.9 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": true }
+              ]
+            },
+            {
+              "__identifier": "Glow",
+              "px": [1105, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
+                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [1010, 168],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.0 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.0 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [0.7, 0.45, 1.1] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.8 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.02 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": false }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1506, 154],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.0" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.15 },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1746, 134],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.1" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.3 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1970, 157],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.0" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.2 },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Scatter",
+              "px": [1290, 186],
+              "width": 864,
+              "height": 16,
+              "fieldInstances": [
+                {
+                  "__identifier": "keys",
+                  "__type": "Json",
+                  "__value": ["prop.ch2.reeds.1", "prop.ch2.reeds.2"]
+                },
+                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [5, 9] },
+                { "__identifier": "scale", "__type": "Array<Float>", "__value": [0.8, 1.1] },
+                { "__identifier": "seed", "__type": "Int", "__value": 9101 },
+                { "__identifier": "gap", "__type": "Float", "__value": 0.35 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.0 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1522, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.0" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1626, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.2" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1842, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.3" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1938, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.1" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1626, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.0" },
+                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [1643, 214],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
+                {
+                  "__identifier": "color",
+                  "__type": "Array<Float>",
+                  "__value": [0.85, 0.55, 0.45]
+                },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.9 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": true }
+              ]
+            },
+            {
+              "__identifier": "Glow",
+              "px": [1643, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
+                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [1858, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.1" },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [1841, 214],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
+                {
+                  "__identifier": "color",
+                  "__type": "Array<Float>",
+                  "__value": [0.85, 0.55, 0.45]
+                },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.9 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": true }
+              ]
+            },
+            {
+              "__identifier": "Glow",
+              "px": [1841, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
+                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [1746, 168],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.0 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.0 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [0.7, 0.45, 1.1] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.8 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.02 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": false }
+              ]
+            },
+            {
+              "__identifier": "Scatter",
+              "px": [2941, -80],
+              "width": 483,
+              "height": 96,
+              "fieldInstances": [
+                {
+                  "__identifier": "keys",
+                  "__type": "Json",
+                  "__value": ["prop.ch2.cypress.0", "prop.ch2.cypress.1", "prop.ch2.cypress.2"]
+                },
+                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [3.5, 6] },
+                { "__identifier": "scale", "__type": "Array<Float>", "__value": [1.1, 1.4] },
+                { "__identifier": "seed", "__type": "Int", "__value": 3480 },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.62, 0.68, 0.58] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.5 }
+              ]
+            },
+            {
+              "__identifier": "Scatter",
+              "px": [2941, 88],
+              "width": 483,
+              "height": 48,
+              "fieldInstances": [
+                {
+                  "__identifier": "keys",
+                  "__type": "Json",
+                  "__value": ["prop.ch2.cypress.0", "prop.ch2.cypress.1", "prop.ch2.cypress.2"]
+                },
+                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [6, 9.5] },
+                { "__identifier": "scale", "__type": "Array<Float>", "__value": [1.0, 1.3] },
+                { "__identifier": "seed", "__type": "Int", "__value": 3481 },
+                { "__identifier": "gap", "__type": "Float", "__value": 0.1 },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.7 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2293, 154],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.0" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.15 },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2533, 134],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.1" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.3 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2757, 157],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.weeper.0" },
+                { "__identifier": "scale", "__type": "Float", "__value": 1.2 },
+                { "__identifier": "tint", "__type": "Array<Float>", "__value": [0.85, 0.9, 0.95] },
+                { "__identifier": "rim", "__type": "Float", "__value": 0.9 }
+              ]
+            },
+            {
+              "__identifier": "Scatter",
+              "px": [2077, 186],
+              "width": 864,
+              "height": 16,
+              "fieldInstances": [
+                {
+                  "__identifier": "keys",
+                  "__type": "Json",
+                  "__value": ["prop.ch2.reeds.1", "prop.ch2.reeds.2"]
+                },
+                { "__identifier": "spacing", "__type": "Array<Float>", "__value": [5, 9] },
+                { "__identifier": "scale", "__type": "Array<Float>", "__value": [0.8, 1.1] },
+                { "__identifier": "seed", "__type": "Int", "__value": 9102 },
+                { "__identifier": "gap", "__type": "Float", "__value": 0.35 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.0 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2309, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.0" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2413, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.2" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2629, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.3" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2725, 350],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.fronds.hush.1" },
+                { "__identifier": "y", "__type": "Float", "__value": 8.8 },
+                { "__identifier": "scale", "__type": "Float", "__value": 0.95 },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "foreground", "__type": "Bool", "__value": true },
+                { "__identifier": "dark", "__type": "Float", "__value": 0.3 },
+                { "__identifier": "rim", "__type": "Float", "__value": 1.6 },
+                { "__identifier": "wrap", "__type": "Float", "__value": 0.6 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2413, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.0" },
+                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [2430, 214],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
+                {
+                  "__identifier": "color",
+                  "__type": "Array<Float>",
+                  "__value": [0.85, 0.55, 0.45]
+                },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.9 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": true }
+              ]
+            },
+            {
+              "__identifier": "Glow",
+              "px": [2430, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 4.375 },
+                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
+              ]
+            },
+            {
+              "__identifier": "Prop",
+              "px": [2645, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "key", "__type": "String", "__value": "prop.ch2.lpost.1" },
+                { "__identifier": "flip", "__type": "Bool", "__value": true },
+                { "__identifier": "emis", "__type": "Float", "__value": 2.2 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [2628, 214],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.5 },
+                {
+                  "__identifier": "color",
+                  "__type": "Array<Float>",
+                  "__value": [0.85, 0.55, 0.45]
+                },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.9 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.025 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": true }
+              ]
+            },
+            {
+              "__identifier": "Glow",
+              "px": [2628, 208],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.375 },
+                { "__identifier": "size", "__type": "Float", "__value": 1.5 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [1.0, 0.5, 0.16] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.5 }
+              ]
+            },
+            {
+              "__identifier": "Light",
+              "px": [2533, 168],
+              "width": 0,
+              "height": 0,
+              "fieldInstances": [
+                { "__identifier": "y", "__type": "Float", "__value": 3.0 },
+                { "__identifier": "radius", "__type": "Float", "__value": 6.0 },
+                { "__identifier": "color", "__type": "Array<Float>", "__value": [0.7, 0.45, 1.1] },
+                { "__identifier": "intensity", "__type": "Float", "__value": 0.8 },
+                { "__identifier": "scatter", "__type": "Float", "__value": 0.02 },
+                { "__identifier": "flicker", "__type": "Bool", "__value": false }
               ]
             }
           ]
