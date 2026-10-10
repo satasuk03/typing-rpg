@@ -1,5 +1,5 @@
 // pnpm balance [--chapter N] [--seeds N] [--workers N] [--no-noise] [--persona id,id] [--level ch1-l05,...] [--json path] [--md path]
-//              [--gear par|par-N|armor+N|weapon+N|all+N] [--kit starter|bare|ch2|ch2-aegis] [--whatif key=value,...] [--strict]
+//              [--gear par|par-N|armor+N|weapon+N|all+N] [--kit starter|bare|ch2|ch2-reveal] [--whatif key=value,...] [--strict]
 // Runs the economy_sim personas through a chapter (default 1) on the real sim and prints the target verdicts (Ch1: plan §9;
 // Ch2: CH2_PLAN §4.2), the parity with the Python model, and per-level tables. Exit code 1 when a target or parity cell
 // FAILs (PASS(±15%) passes; a documented structural miss, FAIL*, only fails with --strict).

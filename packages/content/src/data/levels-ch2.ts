@@ -8,9 +8,10 @@ import { knobsFor } from "./knobs.ts";
  *
  * Authored numbers (plan 4.1, docs/brainstorm/02 section 4 at the Ch2 par build T1/1/1 Common +2):
  *  - encounter hp = 244 at L1 .. 284 at L9, +5 per level (the same 36 s time-to-kill as Ch1: the par DPS is 1.22x higher).
- *  - gruntHit     = the Ch1 per-level authored hit (same encounter structure) x 1.6 (= the damage budget ratio
- *    DMG_FRAC 0.525 x par HP 121.7 / (0.40 x 100)), then x HIT_MULT of knobsFor(2). Placeholders: T5.1 re-solves them on the real
- *    sim WITH the guard leak on (plan 4.3).
+ *  - gruntHit     = the Ch1 per-level authored hit x 1.6 (= the damage budget ratio DMG_FRAC 0.525 x par HP 121.7 /
+ *    (0.40 x 100)) x HIT_SHAPE[n] x HIT_MULT of knobsFor(2). T5.1 solved shape and multiplier on the real sim WITH the guard
+ *    leak on (plan 4.3): the reference typist takes 1.00x the DMG_FRAC budget per level (docs/balance-ch2.md §4).
+ *  - encounter hp x ENC_HP_MULT of knobsFor(2) (T5.1: 1.1, the reference typist's ~11.6 auto-attacks per encounter).
  *  - parRefS      = sum of encounter HP / 6.78 HP/s (the Ch2 reference DPS) + 2 s per wave, HP part x ENC_HP_MULT of Ch2.
  *  - L10: two outer waves (3 slots each) then the Whispering Willow (boss arena slot 0, adds in slots 1-3).
  *  - grunts carry the encounter attackPower (P 1.07); Gloom Wolf refs are `elite` with attackPower P 1.25 (knobs.ts).

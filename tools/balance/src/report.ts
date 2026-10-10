@@ -634,7 +634,7 @@ export function markdown(rep: Report): string {
       ? []
       : [
           "",
-          `**Kit:** ${rep.config.kit ?? "default (the Ch2 player: starter kit, Reveal for Aegis from L4, Calm Mind for Steady Hands from L6)"}`,
+          `**Kit:** ${rep.config.kit ?? "ch2 (default, the Ch2 player: Fireball + Aegis; Clean Cut + Steady Hands + Iron Will, Calm Mind for Steady Hands from L6)"}`,
         ]),
     ...(Object.keys(rep.config.whatif).length > 0
       ? ["", `**What-if:** ${JSON.stringify(rep.config.whatif)} (Py columns ignore it)`]

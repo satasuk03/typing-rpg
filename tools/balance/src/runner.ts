@@ -37,10 +37,7 @@ export interface Job {
   seeds: number;
   noise: boolean;
   whatif?: WhatIf;
-  /**
-   * Absent = defaultKit(chapter). starter: the Ch1 starter kit. bare: Fireball only, Clean Cut + Steady Hands (no Aegis,
-   * no Iron Will). ch2: "the Ch2 player" (starter kit + the Ch2 unlocks once unlocked). ch2-aegis: ch2 but Aegis kept.
-   */
+  /** Absent = defaultKit(chapter). See starterLoadout for the kits. */
   kit?: Kit;
   /** free (default): scrambled/faded words are decoded for free. realistic: the T6.2 reading model (bot.ts). */
   gimmicks?: GimmickMode;
@@ -48,12 +45,12 @@ export interface Job {
   gear?: string;
 }
 
-export type Kit = "starter" | "bare" | "ch2" | "ch2-aegis";
-export const KITS: readonly Kit[] = ["starter", "bare", "ch2", "ch2-aegis"];
+export type Kit = "starter" | "bare" | "ch2" | "ch2-reveal";
+export const KITS: readonly Kit[] = ["starter", "bare", "ch2", "ch2-reveal"];
 
 /**
  * The balance default kit per chapter (T5.1). Ch1: the starter kit (byte-identical). Ch2 and later: "the Ch2 player", the
- * starter kit with each Ch2 unlock slotted in from the level after its unlocking first clear (docs/balance-ch2.md §1).
+ * starter kit with Calm Mind in Steady Hands's slot once unlocked (docs/balance-ch2.md §1).
  */
 export const defaultKit = (chapter: number): Kit => (chapter >= 2 ? "ch2" : "starter");
 
@@ -79,10 +76,12 @@ export function unlockedBefore(id: string, levelId: string | undefined): boolean
  * The balance loadout: par gear (+ the --gear offset) and a kit.
  *  - starter: the Ch1 starter kit (content skills.ts, no unlockLevel): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will.
  *  - bare: Fireball, Clean Cut + Steady Hands (the solve-hits reference build: no barrier, no reduced block damage).
- *  - ch2: "the Ch2 player" (balance-ch2.md §1). Reveal takes Aegis's slot once unlocked (ch2-l03 clear, so from L4), Calm
- *    Mind takes Steady Hands's (ch2-l05 clear, so from L6). Fireball stays: it is the only damage active (skill share).
- *  - ch2-aegis: ch2 with Aegis kept (sensitivity only: the player who never equips Reveal).
- * `levelId` gates the Ch2 unlocks (undefined = both in play).
+ *  - ch2: "the Ch2 player" (balance-ch2.md §1): the starter kit, with Calm Mind in Steady Hands's slot once unlocked
+ *    (ch2-l05 first clear, so from L6). Aegis stays in the second active slot: it is worth ~40 points of Beginner boss
+ *    clear, Reveal ~0 (measured, §1), and Fireball is the only damage active (skill share).
+ *  - ch2-reveal: ch2 plus Reveal in Aegis's slot once unlocked (ch2-l03 clear, so from L4). Sensitivity only: the player
+ *    who equips the new active (PO question, balance-ch2.md §8).
+ * `levelId` gates the Ch2 unlocks (undefined = every unlock in play).
  */
 export function starterLoadout(
   kit: Kit = "starter",
@@ -91,8 +90,8 @@ export function starterLoadout(
   levelId?: string,
 ): Loadout {
   const l = applyGear(parLoadout(chapter), parseGear(gear));
-  const ch2 = kit === "ch2" || kit === "ch2-aegis";
-  const reveal = kit === "ch2" && unlockedBefore("reveal", levelId);
+  const ch2 = kit === "ch2" || kit === "ch2-reveal";
+  const reveal = kit === "ch2-reveal" && unlockedBefore("reveal", levelId);
   const calm = ch2 && unlockedBefore("calmMind", levelId);
   l.actives = kit === "bare" ? ["fireball", null] : ["fireball", reveal ? "reveal" : "aegis"];
   l.passives =
