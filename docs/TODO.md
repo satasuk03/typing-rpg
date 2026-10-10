@@ -63,6 +63,12 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
   - **Elite:** add an outline pulse, and bind `ELITE_FX` in `stage.ts`.
   - **Hurt poses:** every enemy needs one.
   - **Willow freed state:** the blossoms and canopy curtains aren't drawn yet.
+- **T2.4 layouts** (`docs/qa/ch2-t2.4/`):
+  - **Fen variety:** fen L5, L7 and L8 look nearly identical at the battle camera. Vary the framing, props and light per level.
+  - **Hushwood lighting:** the levels are darker than the T2.1 diorama, and lanterns blow nearby oaks out to orange.
+  - **Visibility:** the L6 sunken columns barely read, and the pool placement can't be authored because the pool mask is noise-driven in the shader.
+  - **Grove:** the roots ground reads glittery cyan.
+  - **Riddle layout:** check that the leaf positions and the add slots don't overlap on screen at L10.
 - **Ch1 flipped-normal fix (proposal).** Mirrored Ch1 props are lit from the wrong side. Negate `nn.x` for mirrored meshes. The effect is subtle in daylight. This changes the Ch1 look, so it needs a before/after (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt
