@@ -60,7 +60,7 @@ export const TEAR_CORE: Rgb = [3.0, 2.8, 3.4];
 export const TEAR_EDGE: Rgb = [1.4, 0.5, 3.0];
 export const FIRE_HOT: Rgb = [4, 1.6, 0.35];
 export const FIRE_GREY: Rgb = [0.5, 0.48, 0.52];
-export const FIRE_ASH: Rgb = [0.06, 0.05, 0.08];
+export const FIRE_ASH: Rgb = [0.3, 0.29, 0.33];
 export const GOLD_SPARK: Rgb = [1.9, 1.35, 0.45];
 export const MASK_FLASH: Rgb = [2.4, 1.6, 3.0];
 export const FOG_GREY: Rgb = [0.3, 0.31, 0.34];
@@ -96,7 +96,7 @@ export const INK_RISE = {
 export const SKY_TEAR = {
   openMs: 400,
   w0: 0.25,
-  w1: 2.2,
+  w1: 3.0,
   h: 9,
   closeMs: 600,
   lineMs: 160,
@@ -125,7 +125,15 @@ export const CATCH = {
   crumbleTo: 1900,
 } as const;
 export const INK_WRITE = { charMs: 110, sparkLifeMs: 260 } as const;
-export const THEFT = { crackMs: 120, flyEnd: 820, drainEnd: 1100, flash: 120, motes: 40 } as const;
+export const THEFT = {
+  crackMs: 120,
+  flyEnd: 820,
+  drainEnd: 1100,
+  flash: 120,
+  motes: 36,
+  strands: 2,
+  tail: 0.66,
+} as const;
 export const AURA_COLLAPSE = { smokeFrom: 760, smokeTo: 1600 } as const;
 export const GATE_DARKEN = { perGlyphMs: 120, fadeMs: 160, sparkMs: 420 } as const;
 export const LETTER_VORTEX = {
@@ -137,11 +145,12 @@ export const LETTER_VORTEX = {
 } as const;
 export const SILENCE_FOG = {
   rampFromMs: 0,
-  peakMs: 5000,
-  backMs: 7000,
+  // P4.2 (P1-11): the fog peaks DURING the wide shot (31 - 34.5 s) and is back to 0.016 by the 36.0 s close-up cut
+  peakMs: 3200,
+  backMs: 5000,
   fog0: 0.012,
   fogPeak: 0.03,
-  fogEnd: 0.018,
+  fogEnd: 0.016,
   cards: 6,
   cardFromMs: 500,
   cardToMs: 5500,
@@ -149,7 +158,7 @@ export const SILENCE_FOG = {
   ashPerS: 8,
   ashLifeS: 6,
 } as const;
-export const EMBER = { lightRampMs: 600, flickerHz: 0.6, radius: 2.4, intensity: 1.6 } as const;
+export const EMBER = { lightRampMs: 600, flickerHz: 0.6, radius: 3.0, intensity: 2.4 } as const;
 
 // ---------------------------------------------------------------------------------------------- pure helpers (unit-tested)
 

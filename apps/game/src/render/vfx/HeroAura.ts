@@ -94,13 +94,17 @@ export const STEP_DOWN_SEC = 0.15;
 export const PROLOGUE_FLOOR_TIER = 2;
 /** Per doubling of the surge: extra flare level, ring size factor (cap), extra motes per second (cap). */
 const SURGE_LEVEL = 0.15;
-const SURGE_RING = 1.1;
+const SURGE_RING = 1.18;
 const SURGE_RING_CAP = 1.4;
-const SURGE_MOTES = 4;
-const SURGE_MOTES_CAP = 30;
+const SURGE_MOTES = 8;
+const SURGE_MOTES_CAP = 32;
 /** The gold under-pillar from surgeMult >= 8 (3 doublings). */
 const SURGE_GOLD_FROM = 3;
 const GOLD_PILLAR: Rgb = [1.9, 1.35, 0.45];
+/** P4.2: the collapse rings start this wide (m; >= 3x the hero's width) and contract to nothing (easeInCubic). */
+const COLLAPSE_RING_M = 7.0;
+/** P4.2: orbit stars in the prologue's max surge (the base aura has 2). */
+const PRO_STARS = 6;
 /** Collapse timings (ms from the cue): rings contract 0-500, the pillar narrows 300-700, snaps 700-760, gone after. */
 export const COLLAPSE_MS = { rings: 500, pillarFrom: 300, pillarTo: 700, snapEnd: 760 } as const;
 
@@ -154,6 +158,10 @@ export class HeroAura {
   /** ms into `auraCollapse`, or -1. */
   private collapseAge = -1;
   private gold: AuraQuad | null = null;
+  /** P4.2: a cutscene plays (prologue Part C): the combo rune fades out. */
+  private cutscene = false;
+  /** P4.2: the 4 extra orbit stars of the prologue's max surge (built on first use). */
+  private extraStars: FxQuad[] | null = null;
 
   constructor(
     private readonly world: RenderWorld,
@@ -221,12 +229,21 @@ export class HeroAura {
     }
     if (this.gold === null) this.gold = new AuraQuad(this.world, AuraKind.Column, 7, 2.3, 0.5);
     const steps = surgeSteps(p.surgeMult);
-    if (this.pro !== null && steps > this.proSteps) this.surge();
+    if (this.pro !== null && steps > this.proSteps) {
+      this.surge();
+      // P4.2: a gold ground ring per doubling (the max surge reads in a thumbnail)
+      this.ring(1.6, 1.15, 0.35, 5.5 + steps * 0.8, 0.7);
+    }
     this.proSteps = steps;
     this.pro = p;
   }
   get prologue(): AuraPrologue | null {
     return this.pro;
+  }
+
+  /** P4.2 (prologue only): a cutscene plays, so the mechanical combo rune circle fades out (gone in ~1 s). */
+  setCutscene(on: boolean): void {
+    this.cutscene = on;
   }
 
   /**
@@ -316,6 +333,7 @@ export class HeroAura {
     this.shockT = -1;
     this.gold?.alpha(0);
     for (const s of this.stars) s.intensity(0);
+    for (const s of this.extraStars ?? []) s.intensity(0);
     this.lights.setAura(0, 0, 0, 0, 0, 0, 0, 0);
   }
 
@@ -334,6 +352,8 @@ export class HeroAura {
     if (collapsing) tier = 4;
     else if (pro !== null) tier = Math.max(tier, pro.floor);
     const steps = pro !== null && !collapsing ? this.proSteps : 0;
+    // P4.2: the prologue's x16 reads as the top flare: sunburst, 6 orbit stars, the hue-cycling accent
+    if (steps >= 4) tier = 4;
     let ringK = 1;
     let pillarW = 1;
     let vK = 1;
@@ -370,9 +390,10 @@ export class HeroAura {
     const hz = this.heroZ;
 
     // ---- combo rune (mechanical, steady)
-    const comboTarget = (RUNE_BASE[this.comboTier] as number) * k;
+    const comboTarget = this.cutscene ? 0 : (RUNE_BASE[this.comboTier] as number) * k;
     this.comboShown +=
-      (comboTarget - this.comboShown) * Math.min(1, dt * (comboTarget > this.comboShown ? 8 : 4));
+      (comboTarget - this.comboShown) *
+      Math.min(1, dt * (comboTarget > this.comboShown ? 8 : this.cutscene ? 7 : 4));
     const rI = this.comboShown * (1 + this.comboPulse) * RUNE_GAIN;
     const cc = COMBO_RGB[this.comboTier] as Rgb;
     this.rune
@@ -422,12 +443,23 @@ export class HeroAura {
       for (let i = 0; i < 2; i++) {
         const u = rm ? 0.55 : (time * 0.85 + i * 0.5) % 1;
         const ring = this.rings[i] as AuraQuad;
+        let rs = (3.8 + 1.0 * v) * ringK;
+        let rp = 0.18 + 0.82 * u;
+        let ra = 1.0 * m * fg;
+        if (collapsing) {
+          // P4.2 (P1-6): two rings start 7 m wide and contract to nothing, the second 120 ms behind: easeInCubic, 500 ms
+          const ci = Math.min(1, Math.max(0, (this.collapseAge - i * 120) / COLLAPSE_MS.rings));
+          rs = COLLAPSE_RING_M * (1 - ci * ci * ci) + 0.3;
+          rp = 0.8;
+          ra = 1.5 * Math.min(1, m) * (1 - 0.7 * ci * ci * ci);
+          ring.additive(0.9);
+        }
         ring
           .color(r * 1.15, g * 1.15, b * 1.15)
           .at(hx, 0.055, hz + 0.1)
-          .size((3.8 + 1.0 * v) * ringK)
-          .progress(0.18 + 0.82 * u)
-          .alpha(1.0 * m * fg);
+          .size(rs)
+          .progress(rp)
+          .alpha(ra);
       }
       // pillar of light behind the hero (bright at the feet, fading up) plus two narrow side shafts
       const sway = rm ? 0 : Math.sin(time * 1.3) * 0.08;
@@ -451,16 +483,16 @@ export class HeroAura {
       if (gq !== null) {
         if (snap) {
           gq.additive(1)
-            .color(2, 2, 2)
+            .color(3.2, 3.2, 3.2)
             .at(hx, 2.5, hz - 0.06)
-            .size(0.07, 5.4)
+            .size(0.12, 5.8)
             .alpha(1);
         } else if (steps >= SURGE_GOLD_FROM) {
           gq.additive(0.5)
             .color(GOLD_PILLAR[0], GOLD_PILLAR[1], GOLD_PILLAR[2])
             .at(hx, 2.4, hz - 0.1)
-            .size(0.9 + 0.5 * (steps - SURGE_GOLD_FROM), 4.6)
-            .alpha(0.34 * Math.min(1.1, v));
+            .size(1.0 + 0.5 * (steps - SURGE_GOLD_FROM), 6.0)
+            .alpha(0.7 * Math.min(1.1, v));
         } else gq.alpha(0);
       }
       // halo behind the chest
@@ -508,14 +540,22 @@ export class HeroAura {
 
     // ---- orbit stars (T4)
     const orbit = tier >= 4 && v > 0.5;
-    for (let i = 0; i < 2; i++) {
-      const s = this.stars[i] as FxQuad;
-      if (!orbit) {
+    const proStars = orbit && pro !== null && steps >= 4;
+    if (proStars && this.extraStars === null) {
+      this.extraStars = [];
+      for (let i = 0; i < PRO_STARS - 2; i++)
+        this.extraStars.push(new FxQuad(this.world, FxKind.Star, 9));
+    }
+    const nStars = this.extraStars !== null ? PRO_STARS : 2;
+    for (let i = 0; i < nStars; i++) {
+      const s = (i < 2 ? this.stars[i] : (this.extraStars as FxQuad[])[i - 2]) as FxQuad;
+      if (!orbit || (i >= 2 && !proStars)) {
         s.intensity(0);
         continue;
       }
-      const ph = (rm ? 0 : time * ((Math.PI * 2) / 1.8)) + i * Math.PI;
-      hueRgb(time * T4_HUE_DEG_PER_SEC + i * 120, 2.2, RGB2);
+      const np = proStars ? PRO_STARS : 2;
+      const ph = (rm ? 0 : time * ((Math.PI * 2) / 1.8)) + (i * Math.PI * 2) / np;
+      hueRgb(time * T4_HUE_DEG_PER_SEC + i * (proStars ? 360 / np : 120), 2.2, RGB2);
       s.color(RGB2[0], RGB2[1], RGB2[2])
         .at(
           hx + Math.cos(ph) * 0.95,
@@ -634,6 +674,7 @@ export class HeroAura {
     this.burst.dispose();
     this.shock.dispose();
     for (const s of this.stars) s.dispose();
+    for (const s of this.extraStars ?? []) s.dispose();
     this.gold?.dispose();
   }
 }

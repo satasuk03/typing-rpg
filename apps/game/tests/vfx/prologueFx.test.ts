@@ -81,18 +81,19 @@ describe("the cue numbers (art direction §3)", () => {
     expect(Math.abs(inkRiseOffsetY(850))).toBeLessThan(1e-9);
     expect(Math.abs(inkRiseOffsetY(2000))).toBeLessThan(1e-9);
   });
-  it("skyTear: 0.25 -> 2.2 m in 400 ms, held; the close narrows over 600 ms, a 160 ms line, then gone", () => {
+  it("skyTear: 0.25 -> 3.0 m in 400 ms, held; the close narrows over 600 ms, a 160 ms line, then gone", () => {
     expect(skyTearWidth(0, null)).toBeCloseTo(0.25, 2);
-    expect(skyTearWidth(400, null)).toBeGreaterThan(2.1);
-    expect(skyTearWidth(5000, null)).toBeLessThanOrEqual(2.2 + 1e-9);
+    expect(skyTearWidth(400, null)).toBeGreaterThan(2.9);
+    expect(skyTearWidth(5000, null)).toBeLessThanOrEqual(3.0 + 1e-9);
     expect(skyTearWidth(4000, 4000)).toBeGreaterThan(2);
     expect(skyTearWidth(4300, 4000)).toBeLessThan(skyTearWidth(4000, 4000));
     expect(skyTearWidth(4650, 4000)).toBeCloseTo(0.06, 6);
     expect(skyTearWidth(4800, 4000)).toBe(0);
   });
-  it("theftStream: six hues, one per skill; 40 motes; the stream lands at 820 ms", () => {
+  it("theftStream: six hues, one per skill; 36 motes a strand, 2 strands; the stream lands at 820 ms", () => {
     expect(THEFT_RGB.length).toBe(6);
-    expect(THEFT.motes).toBe(40);
+    expect(THEFT.motes).toBe(36);
+    expect(THEFT.strands).toBe(2);
     expect(THEFT.flyEnd).toBe(820);
     // six hues spread around the wheel: no two adjacent thefts match
     for (let i = 1; i < 6; i++) {
@@ -123,11 +124,11 @@ describe("the cue numbers (art direction §3)", () => {
     expect(nulLift(0)).toBe(0);
     expect(nulLift(LETTER_VORTEX.riseMs)).toBeCloseTo(9, 6);
   });
-  it("silenceFog: fog 0.012 -> 0.03 over 5 s, back to 0.018 by 7 s", () => {
+  it("silenceFog: fog 0.012 -> 0.03 by 3.2 s (the wide), back to 0.016 by 5 s (the close-up cut)", () => {
     expect(silenceFogDensity(0)).toBeCloseTo(0.012, 6);
     expect(silenceFogDensity(SILENCE_FOG.peakMs)).toBeCloseTo(0.03, 6);
-    expect(silenceFogDensity(SILENCE_FOG.backMs)).toBeCloseTo(0.018, 6);
-    expect(silenceFogDensity(20000)).toBeCloseTo(0.018, 6);
+    expect(silenceFogDensity(SILENCE_FOG.backMs)).toBeCloseTo(0.016, 6);
+    expect(silenceFogDensity(20000)).toBeCloseTo(0.016, 6);
   });
   it("ember: ramps in over 600 ms and breathes within +-12%", () => {
     expect(emberLevel(0)).toBe(0);
@@ -135,7 +136,7 @@ describe("the cue numbers (art direction §3)", () => {
       expect(emberLevel(t)).toBeGreaterThan(1 - 0.121);
       expect(emberLevel(t)).toBeLessThan(1 + 0.121);
     }
-    expect(EMBER.radius).toBe(2.4);
+    expect(EMBER.radius).toBe(3.0);
   });
   it("the sun glows dim with the theft ramp (rays / 1.5): 1 -> 0.2/1.5", () => {
     expect(sunDim(0)).toBe(1);

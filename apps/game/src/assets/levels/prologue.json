@@ -97,27 +97,27 @@
                   "__identifier": "mood",
                   "__type": "Json",
                   "__value": {
-                    "amb": [0.26, 0.2, 0.31],
-                    "gamb": [0.22, 0.13, 0.08],
+                    "amb": [0.11, 0.09, 0.14],
+                    "gamb": [0.085, 0.048, 0.03],
                     "sunCol": [2.05, 1.22, 0.52],
                     "sunDir": [-0.38, 0.3, -0.87],
                     "fogCol": [0.7, 0.4, 0.21],
-                    "fog": [0.011, 14, 0.26],
+                    "fog": [0.008, 14, 0.26],
                     "scatter": 0.95,
-                    "exposure": 1.0,
-                    "lift": [0.026, 0.012, 0.042],
+                    "exposure": 0.78,
+                    "lift": [0.01, 0.004, 0.02],
                     "gamma": [1, 1, 1.02],
                     "gain": [1.1, 0.98, 0.83],
                     "sat": 1.18,
-                    "contrast": 1.15,
+                    "contrast": 1.36,
                     "sh": [0.02, 0.0, 0.055],
                     "hi": [0.065, 0.035, 0.0],
                     "bloom": 0.62,
                     "thr": 0.95,
-                    "vig": 0.56,
+                    "vig": 0.72,
                     "clear": [0.7, 0.4, 0.21],
                     "rays": 1.5,
-                    "fill": 0.45,
+                    "fill": 0.3,
                     "ambient": "embers"
                   }
                 },
@@ -694,7 +694,7 @@
             },
             {
               "__identifier": "Anchor",
-              "px": [878, 270],
+              "px": [845, 270],
               "width": 0,
               "height": 0,
               "fieldInstances": [
@@ -750,7 +750,7 @@
             },
             {
               "__identifier": "Prop",
-              "px": [906, 200],
+              "px": [858, 200],
               "width": 0,
               "height": 0,
               "fieldInstances": [
@@ -1312,7 +1312,7 @@
                 {
                   "__identifier": "avoidBattle",
                   "__type": "Float",
-                  "__value": 5.8
+                  "__value": 13
                 },
                 {
                   "__identifier": "keys",
@@ -1365,7 +1365,7 @@
                 {
                   "__identifier": "avoidBattle",
                   "__type": "Float",
-                  "__value": 5.8
+                  "__value": 13
                 },
                 {
                   "__identifier": "keys",
@@ -1418,7 +1418,7 @@
                 {
                   "__identifier": "avoidBattle",
                   "__type": "Float",
-                  "__value": 5.8
+                  "__value": 13
                 },
                 {
                   "__identifier": "keys",
@@ -1471,7 +1471,7 @@
                 {
                   "__identifier": "avoidBattle",
                   "__type": "Float",
-                  "__value": 5.8
+                  "__value": 13
                 },
                 {
                   "__identifier": "keys",

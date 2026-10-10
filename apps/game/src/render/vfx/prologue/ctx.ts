@@ -33,7 +33,7 @@ const POOL = {
   cards: 10,
   glow: 8,
   star: 3,
-  line: 5,
+  line: 8,
   beam: 4,
   disc: 3,
 } as const;
