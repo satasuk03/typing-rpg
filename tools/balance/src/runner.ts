@@ -2,7 +2,7 @@
 // pool only changes wall time, never numbers.
 import { availableParallelism } from "node:os";
 import { Worker } from "node:worker_threads";
-import { type ContentBundle, contentBundle, withCh2Stubs } from "@hd2d/content";
+import { type ContentBundle, contentBundle } from "@hd2d/content";
 import {
   type LevelOptions,
   type Loadout,
@@ -25,13 +25,8 @@ export const CH1_LEVELS = Array.from(
 export const chapterLevels = (chapter: number): string[] =>
   Array.from({ length: 10 }, (_, i) => `ch${chapter}-l${String(i + 1).padStart(2, "0")}`);
 
-/**
- * The bundle a level runs against: the shipped bundle for Ch1; for Ch2 the same plus the placeholder stub levels until
- * T4.3 ships the real ones (withCh2Stubs is then a no-op). Ch1 never sees the stubs, so Ch1 numbers are untouched.
- */
-const stubbed = withCh2Stubs(contentBundle);
-export const bundleForLevel = (levelId: string): ContentBundle =>
-  (parseLevelId(levelId)?.chapter ?? 1) === 1 ? contentBundle : stubbed;
+/** The bundle a level runs against: the shipped bundle (it holds every chapter). */
+export const bundleForLevel = (_levelId: string): ContentBundle => contentBundle;
 
 /** Chapter of a level id (1 when the id does not parse). */
 export const chapterOfLevel = (levelId: string): number => parseLevelId(levelId)?.chapter ?? 1;

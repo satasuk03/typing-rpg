@@ -28,7 +28,7 @@ export interface GateOptions {
   gimmicks: GimmickMode;
   personas?: readonly PersonaId[];
   levels?: readonly string[];
-  /** Chapter to gate (default 1). Ch2 runs the placeholder stub levels until T4.3 (the L10 stub has no boss). */
+  /** Chapter to gate (default 1). Ch2 runs the real Hushwood levels (L10 = the Whispering Willow). */
   chapter?: number;
 }
 

@@ -1,6 +1,6 @@
 // T1.1 chapter plumbing (docs/interfaces.md §8 v2.0, §13.2): parseLevelId, bundleChapters, levelUnlocked (by id),
 // frontierChapterOf, parArmorBp(chapter).
-import { type ContentBundle, contentBundle, withCh2Stubs } from "@hd2d/content";
+import { type ContentBundle, contentBundle } from "@hd2d/content";
 import { describe, expect, test } from "vitest";
 import {
   bundleChapters,
@@ -10,7 +10,11 @@ import {
   parseLevelId,
 } from "../src/index.ts";
 
-const two = withCh2Stubs(contentBundle);
+const two = contentBundle;
+const ch1Only: ContentBundle = {
+  ...contentBundle,
+  levels: contentBundle.levels.filter((l) => l.chapter === 1),
+};
 const clearedSet =
   (...ids: string[]) =>
   (id: string): boolean =>
@@ -40,8 +44,8 @@ describe("parseLevelId", () => {
 });
 
 describe("bundleChapters", () => {
-  test("Ch1 only today; ascending with the Ch2 stubs", () => {
-    expect(bundleChapters(contentBundle)).toEqual([1]);
+  test("Ch1-only bundle; ascending with Ch2", () => {
+    expect(bundleChapters(ch1Only)).toEqual([1]);
     expect(bundleChapters(two)).toEqual([1, 2]);
   });
   test("ascending regardless of array order", () => {
@@ -73,7 +77,7 @@ describe("levelUnlocked (by id, not bundle order)", () => {
     expect(levelUnlocked(clearedSet(), shuffled, "ch1-l01")).toBe(true);
   });
   test("unknown or malformed ids are locked", () => {
-    expect(levelUnlocked(clearedSet(...ids(1)), contentBundle, "ch2-l01")).toBe(false); // not in the Ch1-only bundle
+    expect(levelUnlocked(clearedSet(...ids(1)), ch1Only, "ch2-l01")).toBe(false); // not in the Ch1-only bundle
     expect(levelUnlocked(clearedSet(), two, "nope")).toBe(false);
     expect(levelUnlocked(clearedSet(), two, "ch9-l01")).toBe(false);
   });
@@ -92,7 +96,7 @@ describe("frontierChapterOf", () => {
     expect(frontierChapterOf(1, clearedSet(...ids(1), ...ids(2)), two)).toBe(2);
     expect(frontierChapterOf(5, clearedSet(), two)).toBe(2);
     // today's shipped Ch1-only bundle: nothing to open yet
-    expect(frontierChapterOf(1, clearedSet(...ids(1)), contentBundle)).toBe(1);
+    expect(frontierChapterOf(1, clearedSet(...ids(1)), ch1Only)).toBe(1);
   });
 });
 
