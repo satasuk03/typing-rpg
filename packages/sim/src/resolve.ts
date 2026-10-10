@@ -25,17 +25,17 @@ import type {
   ResolvedSegment,
 } from "./types.ts";
 
-const ticks = (s: number): number => Math.round(s * TICK_HZ);
+export const ticks = (s: number): number => Math.round(s * TICK_HZ);
 
 // v2.0: attackPowerBp / elite are ABSENT unless the ref sets them (Ch1 hashes must not change, §13.1).
-const resolveRef = (r: EnemyRef): ResolvedEnemyRef => ({
+export const resolveRef = (r: EnemyRef): ResolvedEnemyRef => ({
   enemyId: r.enemy,
   gimmick: r.gimmick ?? null,
   ...(r.attackPower !== undefined ? { attackPowerBp: bp(r.attackPower) } : {}),
   ...(r.elite === true ? { elite: true as const } : {}),
 });
 
-const resolveEnemy = (d: EnemyDef): ResolvedEnemy => ({
+export const resolveEnemy = (d: EnemyDef): ResolvedEnemy => ({
   id: d.id,
   archetype: d.archetype,
   baseIntervalTicks: ticks(d.baseIntervalS),
@@ -57,7 +57,7 @@ const resolveEnemy = (d: EnemyDef): ResolvedEnemy => ({
     : {}),
 });
 
-function resolveBoss(b: BossDef, levelGruntHitM: number | null): ResolvedBoss {
+export function resolveBoss(b: BossDef, levelGruntHitM: number | null): ResolvedBoss {
   const mg = b.phase3.minigame;
   const hpM = milli(b.hp);
   const hitM = milli(b.hit);

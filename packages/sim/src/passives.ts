@@ -8,7 +8,9 @@ import type { RunState } from "./state.ts";
 import type { LevelState, PassiveId } from "./types.ts";
 
 export const hasPassive = (run: Readonly<RunState>, id: PassiveId): boolean =>
-  (run.loadout.passives as readonly (string | null)[]).includes(id);
+  run.def.prologue !== undefined
+    ? run.def.prologue.kitPassives.includes(id) // v2.2 (§3.7.3): the prologue reads its kit, not the loadout
+    : (run.loadout.passives as readonly (string | null)[]).includes(id);
 
 /** Reveal (v2.0.3) is running: new plates carry no gimmick until `run.revealUntil`. */
 export const revealActive = (run: Readonly<RunState>, tick: number): boolean =>

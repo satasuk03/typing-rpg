@@ -1,0 +1,46 @@
+{
+  "description": "Scripted-typist replays of the prologue fixture (tests/prologueFixture.ts: the 6-skill kit, HP floor, surge, climax): final-state hash and event-stream hash through replay(). Shared by the Node determinism test and the Chromium parity test.",
+  "simVersion": 1,
+  "goldens": {
+    "perfect-clear": {
+      "state": "2a2b54f6",
+      "events": "5d4d7f3e",
+      "inputs": 101,
+      "endTick": 1709,
+      "outcome": "cleared",
+      "climaxTick": 1708,
+      "skillsCast": 9,
+      "heroHpM": 871063
+    },
+    "random-clear": {
+      "state": "a64a01a1",
+      "events": "658db13d",
+      "inputs": 124,
+      "endTick": 1768,
+      "outcome": "cleared",
+      "climaxTick": 1767,
+      "skillsCast": 10,
+      "heroHpM": 871063
+    },
+    "idle-3000": {
+      "state": "6d867755",
+      "events": "cc6f56fa",
+      "inputs": 0,
+      "endTick": 3000,
+      "outcome": "none",
+      "climaxTick": -1,
+      "skillsCast": 0,
+      "heroHpM": 831063
+    },
+    "typos-hard-floor": {
+      "state": "f408fef5",
+      "events": "db782abd",
+      "inputs": 551,
+      "endTick": 3000,
+      "outcome": "none",
+      "climaxTick": -1,
+      "skillsCast": 0,
+      "heroHpM": 217765
+    }
+  }
+}

@@ -3,6 +3,8 @@
 
 // T1.2: the typing-only level runtime lives in level.ts (createLevel, applyInput, step, getView, getResult).
 export { applyInput, createLevel, getResult, getView, step } from "./level.ts";
+// v2.2: the prologue (interfaces §3.7) lives in prologue.ts.
+export { prologueRunConfig, resolvePrologue } from "./prologue.ts";
 // T1.5: resolveLevel lives in resolve.ts.
 export { resolveLevel } from "./resolve.ts";
 // T5.1: the Typing Trial runtime lives in trial.ts.
