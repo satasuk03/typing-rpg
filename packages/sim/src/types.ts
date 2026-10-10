@@ -54,12 +54,20 @@ export interface LevelOptions {
   goldMultBp: Bp; // replay/stale/soft-cap multiplier from meta; 10_000 on first clear
   allowExternalRevive: boolean; // slice: false (gem revive hook)
   tutorial: boolean; // L1-1: TutorialCue events, gentler first guard (BALANCE.TUTORIAL_*)
+  /**
+   * v2.0 "Ignore capitals" assist (story only). true = every plate compares case-insensitively (beats caseMode, §2 Case).
+   * Absent = false. The client sets the key only when the setting is on, so default runs hash exactly as before.
+   */
+  caseAssist?: boolean;
 }
 
 // ---- Resolved (sim-input) data: integers only, produced by resolveLevel/resolveTrial ----
+// v2.0 rule: every new optional key below is ABSENT (never undefined/null) unless the content uses the feature (§13.1).
 export interface ResolvedEnemyRef {
   enemyId: string;
   gimmick: Gimmick | null;
+  attackPowerBp?: Bp; // v2.0: per-ref P (x par armor); overrides the encounter's / the boss adds' P. Absent = inherit.
+  elite?: true; // v2.0: elite tag (gold name tag, howl telegraph). Presentation only; P comes from attackPowerBp.
 }
 export type ResolvedSegment =
   | { kind: "walk"; ticks: number; heal: boolean }
@@ -82,7 +90,36 @@ export interface ResolvedEnemy {
   shield: number;
   hpWeightBp: Bp;
   hitWeightBp: Bp; // enemy HP = hpPoolM * hpWeightBp / Σ weights in its wave; hit = gruntHitM * hitWeightBp / BP
+  heal?: ResolvedHeal; // v2.0: present only on healers
 }
+/** v2.0 healer (§3.5). Integers; produced from EnemyDef.heal. */
+export interface ResolvedHeal {
+  everyTicks: number; // base cadence at pace 35, standard preset (x PACE_FACTOR_BP[pace] x PRESET_INTERVAL_MULT[difficulty] at run time)
+  fracBp: Bp; // heal per target = mulBp(target.maxHpM, fracBp)
+  maxTargets: number; // 1..4 targets per heal
+  maxHeals: number; // heals per healer per encounter; 0 = unlimited
+}
+export type ResolvedMinigame =
+  | {
+      kind: "fallingRubble";
+      lanes: number;
+      spawnEveryTicks: number;
+      fallTicks: number;
+      clearAtkMultBp: Bp;
+      missHitM: Milli;
+    }
+  | {
+      // v2.0 Riddle of Leaves (§3.6)
+      kind: "riddle";
+      count: number; // riddles asked, then the finisher (5)
+      leaves: 3; // plates per riddle: the answer + 2 decoys, in lanes 0..2
+      readTicks: number;
+      answerTicks: number; // timer at pace 35 = read + answer (x the boss-script pace factor at run time)
+      gapTicks: number; // breather end -> first riddle, and resolution -> next riddle (not pace-scaled)
+      clearAtkMultBp: Bp;
+      missHitM: Milli;
+      lengthRange: [min: number, max: number]; // answer and decoy length band
+    };
 export interface ResolvedBoss {
   id: string;
   name: string;
@@ -108,19 +145,14 @@ export interface ResolvedBoss {
     addsAttackPowerBp?: Bp;
   };
   phase2: { endAtHpBp: Bp; doomEveryTicks: number; minDoomSpells: number };
-  phase3: {
-    minigame: {
-      kind: "fallingRubble";
-      lanes: number;
-      spawnEveryTicks: number;
-      fallTicks: number;
-      clearAtkMultBp: Bp;
-      missHitM: Milli;
-    };
-    finisherText: string;
-  };
+  phase3: { minigame: ResolvedMinigame; finisherText: string }; // v2.0: minigame is a union
   breatherTicks: number;
   introTicks: number;
+}
+/** v2.0: one riddle answer candidate. `clue` = WordEntry.clue ?? WordEntry.definition (§3.6). */
+export interface ResolvedRiddleWord {
+  text: string;
+  clue: string;
 }
 /** The third-star challenge as the sim consumes it: the content StarChallenge with parTime.slack as integer bp. */
 export type ResolvedStar =
@@ -157,6 +189,8 @@ export interface ResolvedLevel {
   tutorial: boolean;
   /** PO ruling: sentence plates (doom, finisher, secondWind, minigame) compare case-insensitively when true (chapter <= BALANCE.SENTENCE_FOLD_CASE_MAX_CHAPTER). */
   foldSentences: boolean;
+  /** v2.0: riddle candidates in bundle order (deduped by text). Present iff the level's boss has a riddle minigame. */
+  riddles?: ResolvedRiddleWord[];
 }
 
 export interface Snapshot<S> {

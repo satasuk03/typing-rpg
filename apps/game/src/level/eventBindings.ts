@@ -290,6 +290,11 @@ export const BINDINGS: BindingTable = {
       "shown by the cause: the EnemyAttack lunge, DoomSpellFailed or MinigameWordMissed (flash and shake are the render column)",
   }),
   HeroHealed: b("HeroHealed", { fx: (e, c) => c.fx?.heroHealed(e) }),
+  // interfaces v2.0 stub: the heal beam and chime are not bound yet (silent no-op)
+  EnemyHealed: b("EnemyHealed", {
+    silent: "v2.0 healer stub: no heal VFX bound yet",
+    fxNone: "v2.0 healer stub: no heal VFX bound yet",
+  }),
   EnemyDeath: b("EnemyDeath", {
     render: (e, c) => {
       c.render.enemyDied(e.enemyId);
@@ -407,6 +412,19 @@ export const BINDINGS: BindingTable = {
   MinigameEnded: b("MinigameEnded", {
     silent: "the finisher plate follows",
     fxNone: "the finisher plate follows",
+  }),
+  // interfaces v2.0 stubs: the riddle panel is HUD state (LevelView.minigame.riddle); no VFX or audio bound yet
+  RiddleStarted: b("RiddleStarted", {
+    silent: "v2.0 riddle stub: the panel is read from LevelView",
+    fxNone: "v2.0 riddle stub: the panel is read from LevelView",
+  }),
+  RiddleLeafPicked: b("RiddleLeafPicked", {
+    silent: "v2.0 riddle stub: the leaf is a HUD plate (PlateView)",
+    fxNone: "v2.0 riddle stub: the leaf is a HUD plate (PlateView)",
+  }),
+  RiddleResolved: b("RiddleResolved", {
+    silent: "v2.0 riddle stub: the result is read from LevelView.minigame.riddle.last",
+    fxNone: "v2.0 riddle stub: the result is read from LevelView.minigame.riddle.last",
   }),
   FinisherShown: b("FinisherShown", {
     render: (_e, c) => c.render.slowMo(0.55, 0.5),

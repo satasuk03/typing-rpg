@@ -12,6 +12,7 @@ import {
   initBossState,
   stepBoss,
 } from "./boss.ts";
+import { rubbleOf } from "./bossPlates.ts";
 import { type Emit, emitTo } from "./bus.ts";
 import {
   chipHit,
@@ -742,7 +743,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
     minigame:
       enc?.boss != null && bossDef !== null && enc.boss.phase === 3
         ? {
-            lanes: bossDef.phase3.minigame.lanes,
+            lanes: rubbleOf(bossDef.phase3.minigame).lanes,
             cleared: enc.boss.cleared,
             missed: enc.boss.missed,
           }

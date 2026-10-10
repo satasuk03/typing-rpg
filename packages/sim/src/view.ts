@@ -27,8 +27,12 @@ export interface PlateView {
   hadTypo: boolean; // current attempt is not perfect
   lastTypoTick: Tick | null;
   lane: number | null; // minigame lane; null for other plates
-  expiresAtTick: Tick | null; // guard impact / doom deadline / minigame landing / second wind deadline
+  expiresAtTick: Tick | null; // guard impact / doom deadline / minigame landing / riddle deadline / second wind deadline
   totalTicks: number | null; // for timer strips
+  /** v2.0: the plate compares case-exactly (PlateState.fold === false). Set only when true. */
+  exactCase?: boolean;
+  /** v2.0 ⇧ cue: exactCase && text[typedIndex] is an uppercase A-Z (untargeted plates too, §3.3). Set only when true. */
+  shiftNext?: boolean;
 }
 export interface StatusView {
   id: StatusId;
@@ -54,6 +58,9 @@ export interface EnemyView {
   attackPowerBp?: number;
   /** v1.9: guard leak preview in bp (0..GUARD_LEAK_CAP_BP 5000): the share of this enemy's hit a typed guard lets through. 0 = no cracked-shield badge. */
   leakBp?: number;
+  elite?: boolean; // v2.0: gold name tag (set only when true)
+  /** v2.0 ✚ badge + charge ring (healers only). ticksLeft null = paused (Broken / Frost Lock) or no heals left. */
+  healer?: { ticksLeft: number | null; totalTicks: number; healsLeft: number | null }; // healsLeft null = unlimited
   shield: number;
   shieldMax: number;
   weaknesses: { type: DamageType; revealed: boolean }[];
@@ -122,7 +129,13 @@ export interface LevelView {
     minDoomSpells?: number;
   } | null;
   doom: { plateId: PlateId; ticksLeft: number; totalTicks: number } | null;
-  minigame: { lanes: number; cleared: number; missed: number } | null;
+  minigame: {
+    lanes: number;
+    cleared: number;
+    missed: number;
+    kind?: "fallingRubble" | "riddle"; // v2.0 (absent = fallingRubble)
+    riddle?: RiddleView | null; // v2.0: present iff kind === "riddle"; null between riddles (gap) and after the last
+  } | null;
   secondWind: { plateId: PlateId; ticksLeft: number; totalTicks: number } | null;
   stats: {
     netWpm: number;
@@ -133,6 +146,16 @@ export interface LevelView {
     activeTicks: number;
   };
   goldCollected: number;
+}
+/** v2.0 riddle panel (§3.6). The HUD draws `clue` in its own panel, never over the leaf plates (readability invariant). */
+export interface RiddleView {
+  riddleIndex: number;
+  riddleCount: number;
+  clue: string;
+  leafPlateIds: [PlateId, PlateId, PlateId]; // lane order 0..2 (the plates themselves are in `plates`, kind "minigame")
+  ticksLeft: number;
+  totalTicks: number;
+  last: { outcome: "right" | "wrong" | "timeout"; answerText: string } | null; // previous riddle's result (bloom/wither, panel line)
 }
 export interface TrialView {
   tick: Tick;

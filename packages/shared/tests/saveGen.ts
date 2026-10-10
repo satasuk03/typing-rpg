@@ -28,6 +28,7 @@ export function blankSave(): SaveBlob {
       reducedFlash: false,
       volumes: { master: 0.8, sfx: 0.8, ambience: 0.6, music: 0.6, ui: 0.7 },
       translationLang: null,
+      caseAssist: false,
     },
     progress: { frontierChapter: 1, levels: {}, starChestsClaimed: {} },
     pace: { calibrationWpm: null, recentNetWpm: [] },

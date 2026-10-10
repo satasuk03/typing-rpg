@@ -92,6 +92,7 @@ export function newSave(nowMs: number, seed: number, bundle: ContentBundle = con
       reducedFlash: false,
       volumes: { ...DEFAULT_VOLUMES },
       translationLang: null,
+      caseAssist: false,
     },
     progress: { frontierChapter: 1, levels: {}, starChestsClaimed: {} },
     pace: { calibrationWpm: null, recentNetWpm: [] },

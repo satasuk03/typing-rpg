@@ -6,7 +6,7 @@ import type { Emit } from "./bus.ts";
 import { BP, mulBp } from "./fixed.ts";
 import type { BossState, EncounterState } from "./state.ts";
 import { PACE_FACTOR_BP } from "./tables.generated.ts";
-import type { LevelState, ResolvedBoss } from "./types.ts";
+import type { LevelState, ResolvedBoss, ResolvedMinigame } from "./types.ts";
 import { addPlate } from "./typing.ts";
 
 // ---- T6.1 knob BALANCE.BOSS_SCRIPT_PACE_SCALE: the boss script's own timers follow the enemy-interval pace factor ----
@@ -26,15 +26,22 @@ const scriptPaceBp = (state: Readonly<LevelState>): number =>
 /** Ticks from a Doom Spell's resolution (or the breather's end) to the next spell. */
 export const doomEveryTicks = (state: Readonly<LevelState>, boss: ResolvedBoss): number =>
   mulBp(boss.phase2.doomEveryTicks, Math.max(BP, scriptPaceBp(state)));
+/** v2.0: narrows the phase-3 minigame union to Falling Rubble. The riddle minigame (T1.3) is not implemented yet. */
+export const rubbleOf = (
+  mg: ResolvedMinigame,
+): Extract<ResolvedMinigame, { kind: "fallingRubble" }> => {
+  if (mg.kind !== "fallingRubble") throw new Error("riddle minigame: not implemented (T1.3)");
+  return mg;
+};
 /** Ticks between two Falling Rubble spawns. */
 export const rubbleSpawnTicks = (state: Readonly<LevelState>, boss: ResolvedBoss): number =>
-  Math.max(1, mulBp(boss.phase3.minigame.spawnEveryTicks, scriptPaceBp(state)));
+  Math.max(1, mulBp(rubbleOf(boss.phase3.minigame).spawnEveryTicks, scriptPaceBp(state)));
 /** Ticks from the minigame's start to the first Falling Rubble word. */
 export const rubbleFirstSpawnTicks = (state: Readonly<LevelState>): number =>
   Math.max(1, mulBp(K.MINIGAME_FIRST_SPAWN_T, scriptPaceBp(state)));
 /** Ticks a Falling Rubble word takes to land. */
 export const rubbleFallTicks = (state: Readonly<LevelState>, boss: ResolvedBoss): number =>
-  Math.max(1, mulBp(boss.phase3.minigame.fallTicks, scriptPaceBp(state)));
+  Math.max(1, mulBp(rubbleOf(boss.phase3.minigame).fallTicks, scriptPaceBp(state)));
 
 /** The boss's own attacks are suspended in phase 3 (the Falling Rubble minigame replaces them, interfaces §3.4). */
 export const bossAttacksSuspended = (
