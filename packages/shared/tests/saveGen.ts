@@ -13,7 +13,8 @@ export function rng(seed: number): () => number {
 
 export function blankSave(): SaveBlob {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    resetEpoch: 0,
     createdAtMs: 1_000,
     updatedAtMs: 1_000,
     playtimeSec: 0,
@@ -43,7 +44,7 @@ export function blankSave(): SaveBlob {
     cachePity: { sinceRare: 0, sinceEpic: 0, sinceLegendary: 0 },
     metaRng: [1, 2, 3, 4],
     srs: { levelsPlayed: 0, entries: {}, mastered: [] },
-    journal: { firstSeen: {} },
+    journal: { firstSeen: {}, notes: {} },
     replays: { day: "2026-01-01", count: 0 },
     lifetime: { words: 0, chars: 0, typos: 0 },
   };

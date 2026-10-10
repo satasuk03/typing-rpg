@@ -4,7 +4,11 @@ import { Rarity } from "@hd2d/content";
 import type { LoadoutSource } from "@hd2d/sim";
 import { z } from "zod";
 
-export const SAVE_SCHEMA_VERSION = 1;
+export const SAVE_SCHEMA_VERSION = 2;
+/** Journal notes limits (interfaces §9.1, v1.8). The Worker's 256 KiB blob cap bounds the total; these bound the shape. */
+export const JOURNAL_NOTE_MAX_CHARS = 120;
+export const JOURNAL_NOTES_MAX = 2000;
+export const JOURNAL_NOTE_KEY_MAX = 64;
 const U32 = z.number().int().min(0).max(0xffffffff);
 const Vol = z.number().min(0).max(1);
 const Mode = z.enum(["smart", "asap"]);
@@ -94,7 +98,19 @@ export const SaveBlobV1 = z.object({
   replays: z.object({ day: z.string(), count: z.number().int() }),
   lifetime: z.object({ words: z.number().int(), chars: z.number().int(), typos: z.number().int() }),
 });
-export const SaveBlob = SaveBlobV1; // alias to the latest version
+export const JournalNotes = z
+  .record(
+    z.string().min(1).max(JOURNAL_NOTE_KEY_MAX),
+    z.string().min(1).max(JOURNAL_NOTE_MAX_CHARS),
+  )
+  .refine((r) => Object.keys(r).length <= JOURNAL_NOTES_MAX, "too many journal notes");
+/** v2: adds `journal.notes` (player translations, wordKey -> text) and `resetEpoch` (New Game generation). */
+export const SaveBlobV2 = SaveBlobV1.omit({ schemaVersion: true, journal: true }).extend({
+  schemaVersion: z.literal(2),
+  resetEpoch: z.number().int().min(0).max(1_000_000),
+  journal: z.object({ firstSeen: z.record(z.string(), z.number().int()), notes: JournalNotes }),
+});
+export const SaveBlob = SaveBlobV2; // alias to the latest version
 export type SaveBlob = z.infer<typeof SaveBlob>;
 /** Compile-time proof that a save can feed buildLoadout. */
 export const saveIsLoadoutSource = (s: SaveBlob): LoadoutSource => s;

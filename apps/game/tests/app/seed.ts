@@ -35,7 +35,7 @@ export async function seedProgress(page: Page, o: SeedOpts): Promise<void> {
           unopenedCaches: number;
         };
         unlocks: { actives: string[]; passives: string[] };
-        journal: { firstSeen: Record<string, number> };
+        journal: { firstSeen: Record<string, number>; notes: Record<string, string> };
         srs: { levelsPlayed: number; entries: Record<string, unknown>; mastered: string[] };
         cachePity: { sinceRare: number; sinceEpic: number; sinceLegendary: number };
       }) => {

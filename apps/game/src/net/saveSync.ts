@@ -8,6 +8,7 @@
 import {
   decodeSaveWire,
   encodeSaveWire,
+  jsonEqual,
   mergeSaves,
   migrateSave,
   type SaveBlob,
@@ -190,7 +191,7 @@ export class SaveSync {
 
         // ---- push
         if (!local) continue;
-        const sentJson = JSON.stringify(local);
+        const sent = local;
         try {
           const put = await this.auth.withToken(async (t) =>
             this.api.putSave(t, rev, {
@@ -202,7 +203,7 @@ export class SaveSync {
           await this.store.set(K_REV, put.revision);
           // If the player edited again while we were uploading, stay dirty.
           const nowLocal = await this.store.get<unknown>(K_LOCAL);
-          await this.store.set(K_DIRTY, JSON.stringify(nowLocal) !== sentJson);
+          await this.store.set(K_DIRTY, !jsonEqual(nowLocal, sent));
           const still = await this.isDirty();
           this.setStatus(still ? "dirty" : "synced");
           if (still) this.schedule(this.debounceMs);

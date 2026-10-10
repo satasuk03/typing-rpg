@@ -101,11 +101,7 @@ export function journalScreen(app: App, _arg: ScreenArg): Screen {
     }
   };
 
-  void app.store.translations().then((n) => {
-    notes = n;
-    const inp = body.querySelector<HTMLInputElement>("#jr-tr");
-    if (inp && sel && !inp.value) inp.value = notes[sel] ?? "";
-  });
+  notes = app.store.translations();
   draw();
 
   const showDetail = (): void => {
@@ -121,7 +117,7 @@ export function journalScreen(app: App, _arg: ScreenArg): Screen {
       showDetail();
     }
   });
-  // translation field: save on input (debounced), stored on this device
+  // translation field: save on input (debounced), saved in your cloud save
   let t = 0;
   root.addEventListener("input", (e) => {
     const inp = e.target as HTMLInputElement;
@@ -130,10 +126,9 @@ export function journalScreen(app: App, _arg: ScreenArg): Screen {
     notes[key] = inp.value;
     window.clearTimeout(t);
     t = window.setTimeout(() => {
-      void app.store.setTranslation(key, inp.value).then(() => {
-        const m = body.querySelector("#jr-saved");
-        if (m) m.textContent = "Saved";
-      });
+      app.store.setTranslation(key, inp.value);
+      const m = body.querySelector("#jr-saved");
+      if (m) m.textContent = "Saved";
     }, 250);
   });
   actions(root, {

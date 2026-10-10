@@ -4,7 +4,13 @@ import { SAVE_SCHEMA_VERSION, SaveBlob, type SaveSummary } from "./save.ts";
 type Save = SaveBlob;
 
 /** MIGRATIONS[n] upgrades a version-n blob to n+1. Old migrations are never edited or deleted. */
-export const MIGRATIONS: Readonly<Record<number, (old: unknown) => unknown>> = {};
+export const MIGRATIONS: Readonly<Record<number, (old: unknown) => unknown>> = {
+  // v1 -> v2: empty journal notes, reset generation 0.
+  1: (old) => {
+    const o = old as { journal?: Record<string, unknown> };
+    return { ...o, schemaVersion: 2, resetEpoch: 0, journal: { ...o.journal, notes: {} } };
+  },
+};
 
 export class SaveVersionError extends Error {
   override name = "SaveVersionError";
@@ -157,6 +163,22 @@ function mergeAccuracy(a: Save["accuracyDaily"], b: Save["accuracyDaily"]): Save
     .map(([day, accuracyBp]) => ({ day, accuracyBp }));
 }
 
+/** Per-key three-way merge: a side that changed a key vs base wins (local on a double change); no base -> union, local wins. */
+function mergeNotes(
+  base: Record<string, string> | null,
+  a: Record<string, string>,
+  b: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of union(Object.keys(a), Object.keys(b))) {
+    const x = a[k];
+    const y = b[k];
+    const v = x === y ? x : base === null ? (x ?? y) : x === base[k] ? y : x;
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
 function minRecord(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {};
   for (const k of union(Object.keys(a), Object.keys(b))) {
@@ -185,6 +207,16 @@ export function mergeSaves(
 ): { merged: Save; needsUserChoice: boolean } {
   const l = local;
   const s = server;
+  // New Game generation: the side with the higher resetEpoch wins wholesale (settings stay local), so older-generation
+  // progress can never come back. Works offline: the local blob carries the bumped epoch until the next sync.
+  if (l.resetEpoch !== s.resetEpoch) {
+    const win = l.resetEpoch > s.resetEpoch ? l : s;
+    const merged = clone(win);
+    merged.settings = clone(l.settings);
+    merged.createdAtMs = win.createdAtMs;
+    merged.updatedAtMs = Math.max(l.updatedAtMs, s.updatedAtMs);
+    return { merged, needsUserChoice: false };
+  }
   const baseG = base ? pickFungible(base) : null;
   const lG = pickFungible(l);
   const sG = pickFungible(s);
@@ -212,7 +244,8 @@ export function mergeSaves(
   const richer = s.playtimeSec > l.playtimeSec ? s : l; // pace follows the side with more play
 
   const merged: Save = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    resetEpoch: l.resetEpoch,
     createdAtMs: Math.min(l.createdAtMs, s.createdAtMs),
     updatedAtMs: Math.max(l.updatedAtMs, s.updatedAtMs),
     playtimeSec: Math.max(l.playtimeSec, s.playtimeSec),
@@ -230,7 +263,10 @@ export function mergeSaves(
       passives: union(l.unlocks.passives, s.unlocks.passives),
     },
     srs: mergeSrs(l.srs, s.srs),
-    journal: { firstSeen: minRecord(l.journal.firstSeen, s.journal.firstSeen) },
+    journal: {
+      firstSeen: minRecord(l.journal.firstSeen, s.journal.firstSeen),
+      notes: mergeNotes(base?.journal.notes ?? null, l.journal.notes, s.journal.notes),
+    },
     lifetime: {
       words: Math.max(l.lifetime.words, s.lifetime.words),
       chars: Math.max(l.lifetime.chars, s.lifetime.chars),

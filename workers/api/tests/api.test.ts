@@ -230,6 +230,41 @@ describe("save", () => {
     expect(dupe.status).toBe(409);
   });
 
+  test("v2 blob with journal notes + resetEpoch is stored opaquely and returned intact; max notes fit the cap", async () => {
+    const { blankSave } = await import("../../../packages/shared/tests/saveGen.ts");
+    const { encodeSaveWire, decodeSaveWire, migrateSave } = await import("@hd2d/shared");
+    const u = await signup(api);
+    const b = blankSave();
+    b.resetEpoch = 3;
+    b.journal.notes = { hello: "hola", world: "mundo" };
+    const p = await api("PUT", "/save", {
+      token: u.token,
+      body: { blob: await encodeSaveWire(b), summary: { ...summary, schemaVersion: 2 } },
+      headers: { "If-Match": '"0"' },
+    });
+    expect(p.status).toBe(200);
+    const g = await api("GET", "/save", { token: u.token });
+    const back = migrateSave(await decodeSaveWire(g.body.blob));
+    expect(back.resetEpoch).toBe(3);
+    expect(back.journal.notes).toEqual({ hello: "hola", world: "mundo" });
+    // worst case: 2000 notes x 120 pseudo-random chars (~240 KB raw) still fits the 256 KiB decoded cap once compressed
+    const big = blankSave();
+    let x = 12345;
+    const rnd = () => {
+      x = (x * 1103515245 + 12345) & 0x7fffffff;
+      return String.fromCharCode(33 + (x % 90));
+    };
+    big.journal.notes = Object.fromEntries(
+      Array.from({ length: 2000 }, (_, i) => [`k${i}`, Array.from({ length: 120 }, rnd).join("")]),
+    );
+    const r = await api("PUT", "/save", {
+      token: u.token,
+      body: { blob: await encodeSaveWire(big), summary: { ...summary, schemaVersion: 2 } },
+      headers: { "If-Match": '"1"' },
+    });
+    expect(r.status).toBe(200);
+  });
+
   test("If-Match != 0 when no save exists -> 404 not_found (not a schema-violating 409)", async () => {
     const u = await signup(api);
     const r = await api("PUT", "/save", {
