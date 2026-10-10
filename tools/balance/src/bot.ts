@@ -287,11 +287,7 @@ export function playLevel(a: PlayArgs): RunRecord {
       // (seeded; the bot knows the answer from the level's clue table), else one of the two decoys.
       if (
         riddle.totalTicks - riddle.ticksLeft <
-        riddleReadTicks(
-          riddle.clue,
-          riddle.leafPlateIds.length,
-          attempt.readWpm ?? RIDDLE_READ.wpm,
-        )
+        riddleReadTicks(riddle.clue, riddle.leafPlateIds.length, attempt.readWpm ?? RIDDLE_READ.wpm)
       ) {
         nextKey = state.tick + 3;
         return;

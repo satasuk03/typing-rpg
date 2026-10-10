@@ -38,7 +38,15 @@ const kit = kitArg as Kit | undefined;
 const jobs: Job[] = [];
 for (const persona of personas)
   for (const levelId of levels)
-    jobs.push({ persona, levelId, seeds, noise, whatif, gear, ...(kit === undefined ? {} : { kit }) });
+    jobs.push({
+      persona,
+      levelId,
+      seeds,
+      noise,
+      whatif,
+      gear,
+      ...(kit === undefined ? {} : { kit }),
+    });
 
 const t0 = process.hrtime.bigint();
 const results = await runJobs(jobs, workers);

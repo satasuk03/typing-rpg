@@ -82,8 +82,7 @@ const BASE_HIT = [7.6, 6.88, 3.95, 4.46, 4.48, 3.85, 4.46, 4.96, 4.18] as const;
  * L3 / L6 and the 2-encounter L1 (no brute, no healer) were under budget.
  */
 const HIT_SHAPE = [1.29, 0.98, 1.1, 0.81, 1.02, 1.25, 0.84, 0.97, 0.74] as const;
-const H = (n: number): number =>
-  hit((BASE_HIT[n - 1] as number) * (HIT_SHAPE[n - 1] as number));
+const H = (n: number): number => hit((BASE_HIT[n - 1] as number) * (HIT_SHAPE[n - 1] as number));
 const E = (n: number): number => hp(encHp(n));
 const P = (n: number, encounters: number): number =>
   parRef(

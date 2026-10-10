@@ -579,7 +579,8 @@ export function gearSection(rep: Report): string[] {
   // Ch2+ (T5.1, CH2_PLAN §4.3): the leak of every attacker class at this gear, from the chapter's knobs.
   const k = CHAPTER_KNOBS[chapter];
   if (chapter >= 2 && k !== undefined) {
-    const lk = (p: number): string => pct1(guardLeakBp(l, chapter, Math.round(p * 10_000)) / 10_000);
+    const lk = (p: number): string =>
+      pct1(guardLeakBp(l, chapter, Math.round(p * 10_000)) / 10_000);
     out.splice(
       out.length - 1,
       0,
