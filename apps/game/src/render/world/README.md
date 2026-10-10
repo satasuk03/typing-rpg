@@ -79,11 +79,12 @@ width / height (px) / 16 = the extent of rect entities along x / z
 | `Prop` | | `key` (SpriteSource key), `y`, `scale`, `flip`, `foreground`, `flame` (torch flame size, 0 = none), `light` (`{color,intensity,radius,dy,dz,scatter,flicker}`), style: `tint`, `rim`, `emis`, `dark`, `wrap` |
 | `Scatter` | x + z extent | `keys[]`, `spacing [min,max]`, `y [min,max]`, `scale [min,max]`, `flipRandom`, `seed`, `foreground`, `avoidBattle` (m kept clear around the battle and walk camera centres), `gap` (0..0.95 chance a slot stays empty), plus `flame`, `light`, style like `Prop`. Deterministic: seeded RNG, one pass along x. |
 | `Light` | | `y`, `radius`, `color`, `intensity`, `scatter`, `flicker` |
+| `Glow` | | `y`, `size`, `color`, `intensity`, `foreground` (lantern halo, the layout twin of `RenderWorld.addGlow`) |
 | `GodRay` | | `y`, `w`, `h`, `rotZ`, `color`, `intensity` |
 | `RayField` | x + z extent | a row of god rays: `spacing`, `w [min,max]`, `h`, `rotZ`, `color`, optional `color2` + `colorFromX`, `intensity [min,max]`, `seed` |
 | `Rune` | | `size`, `intensity` (boss-arena ground circle) |
 | `AmbientZone` | x + z extent | `kind` (`pollen`, `fireflies`, `leaves`, `embers`, `spores`, `dust`, `motes`), `density` (particles/s), `y [min,max]` |
-| `Anchor` | | `name`, `kind` (`start`, `end`, `hero`, `slot`, `boss`, `marker`), `encounter`, `slot` |
+| `Anchor` | | `name`, `kind` (`start`, `end`, `hero`, `slot`, `boss`, `marker`), `encounter`, `slot`, optional `y` (height of an in-air anchor: plate at the Willow's face, riddle leaves) |
 | `WalkPath` | | `points`: `[[x, z], ...]` in world coordinates, x strictly increasing |
 | `Camera` | | `name` (`walk`, `battle:<n>`, `boss`) and optional `y`, `dist`, `pitch`, `fov`; the entity's x is the framing centre |
 
@@ -126,3 +127,14 @@ handle.dispose();                     // removes everything the builder added
 
 `dispose()` removes the meshes, flames, god rays and static lights the builder added; GPU geometry and
 materials are tracked by the RenderWorld and released with `renderWorld.dispose()`.
+
+## Chapter 2 (T2.4)
+
+`ch2-l01..l10.json` follow the same schema. Biomes `hushwood` (L1-L4, `leaf` ground, `*Night` backdrops), `fen` (L5-L9, `fen`
+boardwalk ground, `*Dusk` backdrops) and `grove` (L10, `roots` ground with `arenaX/arenaZ` = the Willow). The hero stop z follows the
+shared path centre line (`pathCenter` in `materials/water.ts`). Every encounter has an `encN.pool` marker (the warm lantern pool over
+the fight). L10's boss encounter has `enc3.slot0` (kind `boss`) plus add slots, and named markers: `boss.face` (plate at the face,
+`y`), `boss.arena`, `riddle.leaf0..2` (the Riddle of Leaves lane, left to right = lane 0..2, `y` = leaf height) and `riddle.clue`
+(the riddle panel anchor). `?scene=level&id=ch2-l10&pose=battle:3&anchors=1` draws all anchors over the frame. The files are
+produced from a seeded authoring script; edit the JSON (or re-run it) and `levels-ch2.test.ts` checks the light budget (<= 9 static
+lights per camX +- 17), the water-twin cap (<= 60 incl. actors) and the foreground framing per battle pose.

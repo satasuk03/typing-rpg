@@ -25,7 +25,7 @@ function clone<T>(v: T): T {
 
 describe("chapter 1 level layouts", () => {
   it("has exactly ch1-l01 .. ch1-l10", () => {
-    expect(levelIds()).toEqual(IDS);
+    expect(levelIds().filter((i) => i.startsWith("ch1-"))).toEqual(IDS);
   });
 
   for (const id of IDS) {

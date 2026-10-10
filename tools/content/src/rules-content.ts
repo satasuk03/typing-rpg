@@ -2,6 +2,7 @@ import type { ContentBundle, LevelDef } from "@hd2d/content";
 import { CONFIG } from "./config.ts";
 import type { Layout } from "./layouts.ts";
 import { biomePool, isPlate, usePool } from "./rules.ts";
+import { ruleCh2Layouts } from "./rules-layouts.ts";
 import { type Issue, issue } from "./types.ts";
 
 /** Files read from the app (null = not available, the matching check is skipped with a warning). */
@@ -490,6 +491,7 @@ export function runContentRules(b: ContentBundle, ctx: ContentContext): Issue[] 
   return [
     ...ruleIdsAndRefs(b),
     ...ruleLayouts(b, ctx.layouts),
+    ...ruleCh2Layouts(ctx.layouts),
     ...ruleLevelWords(b),
     ...ruleGimmicks(b),
     ...ruleStars(b),
