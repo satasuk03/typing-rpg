@@ -2,11 +2,12 @@
 // pool only changes wall time, never numbers.
 import { availableParallelism } from "node:os";
 import { Worker } from "node:worker_threads";
-import { contentBundle } from "@hd2d/content";
+import { type ContentBundle, contentBundle, withCh2Stubs } from "@hd2d/content";
 import {
   type LevelOptions,
   type Loadout,
   parLoadout,
+  parseLevelId,
   type ResolvedLevel,
   resolveLevel,
 } from "@hd2d/sim";
@@ -18,6 +19,21 @@ export const CH1_LEVELS = Array.from(
   { length: 10 },
   (_, i) => `ch1-l${String(i + 1).padStart(2, "0")}`,
 );
+
+/** Level ids of chapter c (10 levels: ch{c}-l01 .. ch{c}-l10). */
+export const chapterLevels = (chapter: number): string[] =>
+  Array.from({ length: 10 }, (_, i) => `ch${chapter}-l${String(i + 1).padStart(2, "0")}`);
+
+/**
+ * The bundle a level runs against: the shipped bundle for Ch1; for Ch2 the same plus the placeholder stub levels until
+ * T4.3 ships the real ones (withCh2Stubs is then a no-op). Ch1 never sees the stubs, so Ch1 numbers are untouched.
+ */
+const stubbed = withCh2Stubs(contentBundle);
+export const bundleForLevel = (levelId: string): ContentBundle =>
+  (parseLevelId(levelId)?.chapter ?? 1) === 1 ? contentBundle : stubbed;
+
+/** Chapter of a level id (1 when the id does not parse). */
+export const chapterOfLevel = (levelId: string): number => parseLevelId(levelId)?.chapter ?? 1;
 
 export interface Job {
   persona: PersonaId;
@@ -32,8 +48,8 @@ export interface Job {
 }
 
 /** Ch1 starter kit (content skills.ts, no unlockLevel): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will, par gear. */
-export function starterLoadout(kit: "starter" | "bare" = "starter"): Loadout {
-  const l = parLoadout(1);
+export function starterLoadout(kit: "starter" | "bare" = "starter", chapter = 1): Loadout {
+  const l = parLoadout(chapter);
   l.actives = kit === "bare" ? ["fireball", null] : ["fireball", "aegis"];
   l.passives =
     kit === "bare" ? ["cleanCut", "steadyHands", null] : ["cleanCut", "steadyHands", "ironWill"];
@@ -44,7 +60,7 @@ const defs = new Map<string, ResolvedLevel>();
 function def(levelId: string): ResolvedLevel {
   let d = defs.get(levelId);
   if (d === undefined) {
-    d = resolveLevel(contentBundle, levelId, { dueWeakWords: [] });
+    d = resolveLevel(bundleForLevel(levelId), levelId, { dueWeakWords: [] });
     defs.set(levelId, d);
   }
   return d;
@@ -53,7 +69,9 @@ function def(levelId: string): ResolvedLevel {
 /** Seed of the i-th run of (persona, level): distinct per level so chest/loot draws never repeat across levels. */
 export const runSeed = (persona: PersonaId, levelId: string, i: number): number => {
   const p = PERSONAS.findIndex((x) => x.id === persona);
-  const l = CH1_LEVELS.indexOf(levelId);
+  const p2 = parseLevelId(levelId);
+  // Ch1: the level's position 0-9 (unchanged); later chapters continue the sequence so seeds stay distinct.
+  const l = p2 === null ? -1 : (p2.chapter - 1) * 10 + p2.index - 1;
   return (20_261_008 + p * 1_000_003 + l * 104_729 + i * 7_919) >>> 0;
 };
 
@@ -75,7 +93,7 @@ export function runJob(job: Job): RunRecord[] {
       caseMode: "auto",
       autoUnlockAfterTypos: 0,
       firstClear: true,
-      frontierChapter: 1,
+      frontierChapter: chapterOfLevel(job.levelId),
       goldMultBp: 10_000,
       allowExternalRevive: false,
       tutorial: d.tutorial,
@@ -83,7 +101,7 @@ export function runJob(job: Job): RunRecord[] {
     out.push(
       playLevel({
         def: level,
-        loadout: starterLoadout(job.kit),
+        loadout: starterLoadout(job.kit, chapterOfLevel(job.levelId)),
         seed,
         attempt,
         options,

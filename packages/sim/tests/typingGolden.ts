@@ -76,7 +76,12 @@ export interface CombatGolden extends TypingGolden {
 }
 
 const GOLEM_LEVEL = "ch1-l10";
-const resolveGolem = () => resolveLevel(contentBundle, GOLEM_LEVEL, { dueWeakWords: [] });
+/** contentVersion is pinned (its value at the start of v2.0) so Ch2 content never churns the Ch1 golden state hashes (§13.1). */
+const GOLEM_PINNED_CONTENT_VERSION = "94be2782";
+const resolveGolem = () => ({
+  ...resolveLevel(contentBundle, GOLEM_LEVEL, { dueWeakWords: [] }),
+  contentVersion: GOLEM_PINNED_CONTENT_VERSION,
+});
 /** Per-scenario seed and pace (default seed 4242, pace 35). */
 const SCENARIO_RUN: Partial<Record<Scenario, { seed: number; pace: number }>> = {
   "golem-40wpm": { seed: 4242, pace: 40 },

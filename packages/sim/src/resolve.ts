@@ -137,13 +137,25 @@ export function resolveLevel(
   // the unfiltered one so a mis-tuned range can never leave a tier empty).
   const [lenLo, lenHi] = lv.plateLength;
   const fits = (w: WordEntry): boolean => w.text.length >= lenLo && w.text.length <= lenHi;
+  // v2.0 pool scoping by WordEntry.chapter ("introduced in", absent = 1): sentence pools take an exact chapter match,
+  // every other pool takes chapter <= the level's. So nothing authored for Ch2 can reach a Ch1 level (§13.1, D39).
+  const chapterOf = (w: WordEntry): number => w.chapter ?? 1;
+  const upToChapter = (w: WordEntry): boolean => chapterOf(w) <= lv.chapter;
+  const exactChapter = (w: WordEntry): boolean => chapterOf(w) === lv.chapter;
   const plateWords = (pred: (w: WordEntry) => boolean): string[] => {
-    const all = textsOf(bundle.words, (w) => w.uses.includes("plate") && pred(w));
-    const ok = textsOf(bundle.words, (w) => w.uses.includes("plate") && pred(w) && fits(w));
+    const all = textsOf(bundle.words, (w) => w.uses.includes("plate") && upToChapter(w) && pred(w));
+    const ok = textsOf(
+      bundle.words,
+      (w) => w.uses.includes("plate") && upToChapter(w) && pred(w) && fits(w),
+    );
     return ok.length > 0 ? ok : all;
   };
-  const usesWords = (use: WordEntry["uses"][number]): string[] =>
-    textsOf(bundle.words, (w) => w.uses.includes(use));
+  const usesWords = (use: WordEntry["uses"][number], sentence: boolean): string[] =>
+    textsOf(
+      bundle.words,
+      (w) => w.uses.includes(use) && (sentence ? exactChapter(w) : upToChapter(w)),
+    );
+  const reviewBiomes = lv.reviewBiomes;
   // SRS weak words (the 5% weak share): ctx.dueWeakWords are SRS keys in due order (srsDue). Each becomes the authored
   // plate text of its bundle entry; unknown keys (content changed), non-plate entries and words outside the level's
   // plateLength are skipped. De-duplicated, due order kept.
@@ -153,6 +165,7 @@ export function resolveLevel(
       (w) =>
         w.kind === "word" &&
         w.uses.includes("plate") &&
+        upToChapter(w) &&
         (w.key === key || w.key === key.toLowerCase()),
     );
     if (entry !== undefined && fits(entry) && !weak.includes(entry.text)) weak.push(entry.text);
@@ -171,14 +184,19 @@ export function resolveLevel(
       current: plateWords(
         (w) => w.tier === lv.wordTier && w.kind === "word" && w.biomes.length === 0,
       ),
-      review: plateWords((w) => w.tier < lv.wordTier && w.kind === "word" && w.biomes.length === 0),
+      // v2.0: a level with reviewBiomes reviews those biomes' plate words at any tier (Ch2: the Ch1 biome words).
+      review: plateWords(
+        reviewBiomes === undefined
+          ? (w) => w.tier < lv.wordTier && w.kind === "word" && w.biomes.length === 0
+          : (w) => w.kind === "word" && w.biomes.some((b) => reviewBiomes.includes(b)),
+      ),
       biome: plateWords((w) => w.biomes.includes(lv.biome)),
       weak,
-      guard: usesWords("guard"),
-      doom: usesWords("doom"),
-      finisher: usesWords("finisher"),
-      secondWind: usesWords("secondWind"),
-      minigame: usesWords("minigame"),
+      guard: usesWords("guard", false),
+      doom: usesWords("doom", true),
+      finisher: usesWords("finisher", true),
+      secondWind: usesWords("secondWind", true),
+      minigame: usesWords("minigame", true),
     },
     tierMixBp: {
       current: lv.tierMix.current * 100,

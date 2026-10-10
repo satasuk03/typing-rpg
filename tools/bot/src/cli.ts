@@ -1,4 +1,4 @@
-// pnpm bot [--quick] [--seeds N] [--workers N] [--gimmicks free|realistic] [--compare-gimmicks]
+// pnpm bot [--chapter N] [--quick] [--seeds N] [--workers N] [--gimmicks free|realistic] [--compare-gimmicks]
 // Headless sim gate: every Ch1 level x 3 personas x N seeds. Exit 1 on any failure. --quick = 5 seeds (check.sh).
 import { MAIN_PERSONAS } from "@hd2d/balance";
 import { type GateResult, gimmickDeltas, pct, runGate, table } from "./index.ts";
@@ -11,6 +11,7 @@ const opt = (n: string): string | undefined => {
 const quick = args.includes("--quick");
 const seeds = Number(opt("--seeds") ?? (quick ? 5 : 20));
 const workers = opt("--workers") === undefined ? undefined : Number(opt("--workers"));
+const chapter = Number(opt("--chapter") ?? 1);
 const gimmicks = (opt("--gimmicks") ?? "free") as "free" | "realistic";
 const compare = args.includes("--compare-gimmicks");
 
@@ -23,14 +24,18 @@ const show = (title: string, g: GateResult, secs: number): void => {
 };
 
 const t0 = Date.now();
-const g = await runGate({ seeds, workers, gimmicks });
-show(`bot gate [gimmicks=${gimmicks}${quick ? ", quick" : ""}]`, g, (Date.now() - t0) / 1000);
+const g = await runGate({ seeds, workers, gimmicks, chapter });
+show(
+  `bot gate${chapter === 1 ? "" : ` ch${chapter} (stub levels)`} [gimmicks=${gimmicks}${quick ? ", quick" : ""}]`,
+  g,
+  (Date.now() - t0) / 1000,
+);
 let failures = g.failures;
 
 if (compare) {
   const t1 = Date.now();
   const otherMode = gimmicks === "free" ? "realistic" : "free";
-  const other = await runGate({ seeds, workers, gimmicks: otherMode });
+  const other = await runGate({ seeds, workers, gimmicks: otherMode, chapter });
   const [free, real] = gimmicks === "free" ? [g, other] : [other, g];
   show(`comparison run [gimmicks=${otherMode}]`, other, (Date.now() - t1) / 1000);
   console.log("\ngimmick realism delta (free -> realistic)");

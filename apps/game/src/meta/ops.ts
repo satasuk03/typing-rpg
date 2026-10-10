@@ -21,6 +21,7 @@ import {
   computePace,
   deriveRng,
   evaluateStars,
+  frontierChapterOf,
   type GearRoll,
   type LevelResult,
   type Loadout,
@@ -38,6 +39,7 @@ import {
   type ShopOffer,
   salvageValue,
   shopOffer,
+  levelUnlocked as simLevelUnlocked,
   srsUpdate,
   starGold,
   transferUpgrade,
@@ -360,7 +362,7 @@ export function applyLevelResult(
   s.updatedAtMs = ctx.nowMs;
 
   return {
-    save: s,
+    save: withFrontier(s, bundle),
     summary: {
       firstClear,
       stars,
@@ -629,13 +631,24 @@ export const isFirstRun = (save: Save): boolean =>
 
 // ------------------------------------------------------------------------------------------------ queries
 
-export const levelUnlocked = (save: Save, bundle: ContentBundle, levelId: string): boolean => {
-  const i = bundle.levels.findIndex((l) => l.id === levelId);
-  if (i < 0) return false;
-  if (i === 0) return true;
-  const prev = bundle.levels[i - 1];
-  return prev !== undefined && (save.progress.levels[prev.id]?.cleared ?? false);
-};
+const clearedIn =
+  (save: Save) =>
+  (levelId: string): boolean =>
+    save.progress.levels[levelId]?.cleared ?? false;
+
+/** By id, not bundle order (interfaces §13.2): delegates to the sim's chapter plumbing. */
+export const levelUnlocked = (save: Save, bundle: ContentBundle, levelId: string): boolean =>
+  simLevelUnlocked(clearedIn(save), bundle, levelId);
+
+/**
+ * Derived frontier chapter (interfaces §8): applied after every result and on load, so a save with Ch1 cleared opens Ch2
+ * with no migration. Returns the same object when nothing changes; never touches `updatedAtMs` (it is derived data).
+ */
+export function withFrontier(save: Save, bundle: ContentBundle = contentBundle): Save {
+  const f = frontierChapterOf(save.progress.frontierChapter, clearedIn(save), bundle);
+  if (f === save.progress.frontierChapter) return save;
+  return { ...save, progress: { ...save.progress, frontierChapter: f } };
+}
 
 export const totalStars = (save: Save): number =>
   Object.values(save.progress.levels).reduce((a, l) => a + l.stars.filter(Boolean).length, 0);

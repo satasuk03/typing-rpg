@@ -5,7 +5,10 @@ export * from "./personas.ts";
 export * from "./pymodel.ts";
 export * from "./report.ts";
 export {
+  bundleForLevel,
   CH1_LEVELS,
+  chapterLevels,
+  chapterOfLevel,
   type Job,
   type JobResult,
   runJob,
