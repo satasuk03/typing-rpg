@@ -75,3 +75,23 @@ Page keys: letters = key click (streak rises), `x` = typo, `Enter` = word comple
 ## Chapter 2 (T3.3)
 
 See `docs/qa/ch2-t3.3/listen-checklist.md` for the Chapter 2 loops, ambiences and the new SFX (keys `5`-`7`, `]` `[` `\`, Shift+letter).
+
+## Prologue (P3.4)
+
+Open `?scene=audio-test` (press any key once to unlock audio), use the **Prologue sounds** and **Prologue music** button rows
+(key `8` = the prologue bed). "full arc (~65 s)" plays the whole music arc: heroic theme, drone (theft), reverse swell,
+`silence(1)`, `silence(0.75)`, the spark motif, the end motif. Recipes: `docs/vfx/prologue-art-direction.md` section 5.
+
+- [ ] **The prologue theme** ("prologue theme" button) sounds heroic and faster than any Ch1 loop; the rising-fifth head motif (D5 to A5) is hummable.
+- [ ] **The catch** ("drone (theft)" button) cuts the music so hard you notice the silence; one low D remains.
+- [ ] **The 6 theft cracks** (`theftCrack 1..6`, or "theft x6 (sequence)") step down in pitch: with your eyes closed, you can count six losses.
+- [ ] **`theftWhoosh`** reads as a reverse whoosh that crosses from the left (hero) to the right (Nul).
+- [ ] **`silence()`** ("silence(1) 1.2 s", "silence(0.75) 2 s", "silence(0) open") has no clicks or zipper noise when it engages, retargets or opens.
+- [ ] **The heartbeat** feels close and is not muddy on laptop speakers.
+- [ ] **The ember chime and the spark motif** are the only warm, rising sounds after the silence; the motif stays clear while `silence(0.75)` is on (it bypasses the low-pass).
+- [ ] **`quillScratch x8`** reads as a pen, not as the player's key sound (it is not confusable with `key`).
+- [ ] **`inkPool`** is a wet bubble that runs backwards; **`skyTear`** is a sky ripping (swell, whispers, a crack); **`skyTearClose`** is a boom heard through cotton.
+- [ ] **`hushBolt`** is a hiss that thuds; **`wardHum`** is a steady glass hum and "wardHum hit" a small bell; **`catchHiss`** is fire smothered in a fist.
+- [ ] **`auraCollapse`** falls and thuds; **`swordClang`** is the sword on stone, heard far off.
+- [ ] **`lineBlip`** (Nul low, Knight higher) is a soft tick that never covers speech or typing; **`gateDark x10`** is tiny lights going out.
+- [ ] No console errors in DevTools during the whole session.

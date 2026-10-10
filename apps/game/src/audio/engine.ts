@@ -181,6 +181,39 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Prologue "silence" (low-pass + duck on music and ambience). No-op before the context exists.
+   * `amount` 0..1, `rampS` seconds (default 1.2).
+   */
+  silence(amount: number, rampS = 1.2): void {
+    this.mixer?.silence(amount, rampS);
+  }
+
+  /** Prologue theft drone: `musicDrone(38)` cuts the layers and holds a low D; `null` releases it (layers stay cut). */
+  musicDrone(midi: number | null): void {
+    this.music?.drone(midi);
+  }
+
+  /** Reverse swell leading into the ink line (10.5 s of the prologue). */
+  musicSwell(): void {
+    this.music?.swell();
+  }
+
+  /** The rising-fifth spark motif; bypasses `silence()`. */
+  musicMotif(name: "spark" | "sparkEnd"): void {
+    this.music?.motif(name);
+  }
+
+  /**
+   * Apply a cutscene `music` cue (`{state?, motif?, silence?}`, interfaces 14.4). `rampS` is the cue's `dur` / 1000
+   * (default 1.2 for `silence`).
+   */
+  applyMusicCue(cue: { state?: MusicState; motif?: "spark"; silence?: number }, rampS = 1.2): void {
+    if (cue.state) this.setMusicState(cue.state);
+    if (cue.motif) this.musicMotif(cue.motif);
+    if (cue.silence !== undefined) this.silence(cue.silence, rampS);
+  }
+
   getBiome(): BiomeName {
     return this.biome;
   }

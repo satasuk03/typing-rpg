@@ -103,6 +103,17 @@ export const AMBIENCE_MIX: Record<BiomeName, AmbienceMix> = {
     frogs: 0,
     insects: 0,
   },
+  // Prologue (P3.4, art direction 5.1): wind 0.7, crackle 0.4 = embers; no birds, no drips.
+  prologue: {
+    wind: 0.7,
+    leaves: 0,
+    caveAir: 0,
+    drone: 0,
+    birds: 0,
+    drips: 0,
+    crackle: 0.4,
+    ...NO_CH2,
+  },
 };
 
 /** Wind bandpass centre and LFO rate for the Ch2 beds (Ch1 keeps the original 480 Hz / 0.09 Hz). */
@@ -121,6 +132,7 @@ export const REVERB_BIAS: Record<BiomeName, number> = {
   hushwood: 1.0,
   fen: 1.2,
   grove: 1.6,
+  prologue: 1.1, // a stone arch
 };
 
 interface Loop {

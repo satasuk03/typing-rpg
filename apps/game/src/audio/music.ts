@@ -12,7 +12,7 @@ import {
   STEPS_PER_BAR,
   StepScheduler,
 } from "./musicScheduler";
-import type { Synth } from "./synth";
+import { clampHz, type Synth } from "./synth";
 import { midiToHz } from "./tiers";
 import type { BiomeName, MusicState } from "./types";
 
@@ -34,6 +34,9 @@ export class Music {
   private melody = melodyPattern("forest");
   /** Willow boss phase (1..3); phase 3 (the riddle) thins the drums to the hat and adds celesta. */
   private bossPhase: 1 | 2 | 3 = 1;
+  /** Prologue theft: the layers are cut and a single low drone sounds (`drone(midi)`). */
+  private cut = false;
+  private droneStop: (() => void) | null = null;
   /** The Willow is freed: the grove theme resolves to D major. */
   private freed = false;
 
@@ -83,6 +86,7 @@ export class Music {
   }
 
   setState(st: MusicState): void {
+    this.cut = false; // an explicit state change always brings the layers back
     // A new fight starts clean. `walk` is deliberately not a reset: EncounterCleared (walk) follows the freeing blow.
     if (st === "battle" || (st === "boss" && this.state !== "boss")) {
       this.bossPhase = 1;
@@ -90,6 +94,119 @@ export class Music {
     }
     this.state = st;
     this.applyState(false);
+  }
+
+  /**
+   * Prologue theft (art direction 5.2): `drone(38)` cuts every layer in 40 ms and sustains one low D (sine + a
+   * triangle an octave up at 0.3, lp 600, 0.6 s attack). `drone(null)` releases the drone but the layers stay cut
+   * (the "silence" that follows) until the next `setState`.
+   */
+  drone(midi: number | null): void {
+    const { ctx } = this.s;
+    const t = this.s.now();
+    this.droneStop?.();
+    this.droneStop = null;
+    if (midi === null) return;
+    this.cut = true;
+    for (const l of MUSIC_LAYERS) this.layers[l].gain.setTargetAtTime(0, t, 0.013); // ~40 ms
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(1, t + 0.6);
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 600;
+    lp.connect(g);
+    g.connect(this.s.mixer.buses.music);
+    const oscs: OscillatorNode[] = [];
+    for (const [type, m, gain] of [
+      ["sine", midi, 0.2],
+      ["triangle", midi + 12, 0.2 * 0.3],
+    ] as const) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = midiToHz(m);
+      const og = ctx.createGain();
+      og.gain.value = gain;
+      o.connect(og);
+      og.connect(lp);
+      o.start(t);
+      oscs.push(o);
+    }
+    this.droneStop = () => {
+      const t1 = this.s.now();
+      g.gain.cancelScheduledValues(t1);
+      g.gain.setValueAtTime(g.gain.value, t1);
+      g.gain.setTargetAtTime(0, t1, 0.12);
+      for (const o of oscs) o.stop(t1 + 1.2);
+    };
+  }
+
+  /** A reverse swell on the music bus (noise bandpass 300 -> 1200, 0.9 s, rising gain): leads into the ink line. */
+  swell(): void {
+    this.s.noise(this.s.now(), 0.9, 0.12, "bandpass", 300, 1200, {
+      bus: "music",
+      a: 0.85,
+      wet: 0.4,
+      q: 1.5,
+    });
+  }
+
+  /**
+   * The rising-fifth "spark" motif. Plays through `mixer.musicDirect`, so it bypasses the `silence()` low-pass and duck.
+   * `spark` = bell D5 then A5 0.6 s later. `sparkEnd` = the same plus a soft triangle pad on D-A and a D major add9 bloom.
+   */
+  motif(name: "spark" | "sparkEnd"): void {
+    const t = this.s.now() + 0.02;
+    this.directBell(74, t, 1.6, 0.07);
+    this.directBell(81, t + 0.6, 2.0, 0.07);
+    if (name === "spark") return;
+    for (const m of [62, 69]) this.directOsc("triangle", m, t + 0.6, 2.4, 0.03, 0.8);
+    for (const m of [62, 66, 69, 76]) this.directBell(m, t + 1.4, 2.6, 0.025);
+  }
+
+  private directOsc(
+    type: OscillatorType,
+    midi: number,
+    t: number,
+    dur: number,
+    gain: number,
+    a: number,
+  ): void {
+    const { ctx, mixer } = this.s;
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = midiToHz(midi);
+    const g = ctx.createGain();
+    this.s.env(g, t, a, gain, dur - a);
+    o.connect(g);
+    g.connect(mixer.musicDirect);
+    const send = ctx.createGain();
+    send.gain.value = 0.5 * this.s.reverbBias;
+    g.connect(send);
+    send.connect(mixer.musicDirectReverb);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  /** Bell partials [1, 2.76, 5.4], wet 0.8, straight to the direct music send. */
+  private directBell(midi: number, t: number, dur: number, gain: number): void {
+    const { ctx, mixer } = this.s;
+    const f = midiToHz(midi);
+    [1, 2.76, 5.4].forEach((r, i) => {
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = clampHz(f * r);
+      const g = ctx.createGain();
+      this.s.env(g, t, 0.004, gain / (1 + i * 0.9), dur / (1 + i * 0.6));
+      o.connect(g);
+      g.connect(mixer.musicDirect);
+      const send = ctx.createGain();
+      send.gain.value = 0.8 * this.s.reverbBias;
+      g.connect(send);
+      send.connect(mixer.musicDirectReverb);
+      o.start(t);
+      o.stop(t + 0.004 + dur / (1 + i * 0.6) + 0.05);
+    });
   }
 
   start(): void {
@@ -114,6 +231,7 @@ export class Music {
   }
 
   private step(i: number, t: number): void {
+    if (this.cut) return; // the theft: everything is cut, only the drone sounds
     if (this.pendingBiome && i % STEPS_PER_BAR === 0) {
       this.applyBiome(this.pendingBiome);
       this.pendingBiome = null;
@@ -174,6 +292,25 @@ export class Music {
           const k = style === "willow" ? 3 : 1;
           s.osc("sine", f, f, t, stepDur * 2.5, 0.06 * k, { ...m("melody"), wet: 0.55 });
           s.bell(f, t, stepDur * 2, 0.06 * k * 0.3, 0.5, [1, 4], "music", this.layers.melody);
+        } else if (style === "brass") {
+          // Two detuned saws (+-6 cents) through lp 2400 q 1.2, attack 30 ms, plus a square an octave down at 0.25.
+          const len = stepDur * 3;
+          for (const detune of [-6, 6])
+            s.osc("sawtooth", f, f, t, len, 0.03, {
+              ...m("melody"),
+              a: 0.03,
+              lp: 2400,
+              q: 1.2,
+              wet: 0.35,
+              detune,
+            });
+          s.osc("square", f / 2, f / 2, t, len, 0.03 * 0.25, {
+            ...m("melody"),
+            a: 0.03,
+            lp: 2400,
+            q: 1.2,
+            wet: 0.2,
+          });
         } else if (style === "fen") {
           s.osc("triangle", f, f, t, 0.25, 0.07, { ...m("melody"), wet: 0.5, lp: 2400 });
           if (i % 8 === 6) {

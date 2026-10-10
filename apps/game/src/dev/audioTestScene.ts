@@ -2,7 +2,8 @@
  * DEV-ONLY audio test page (`?scene=audio-test`).
  *  - letters: keystroke clicks with a rising streak (tier stings at 10/25/50/100)
  *  - x: typo (resets the streak)      - Enter: word complete (Shift+Enter forces perfect)
- *  - 1-7: biome ambience + music (forest, ruins, cave, boss, hushwood, fen, grove)
+ *  - 1-8: biome ambience + music (forest, ruins, cave, boss, hushwood, fen, grove, prologue)
+ *  - Prologue (P3.4): "Prologue sounds" / "Prologue music" button rows (theft x6, drone, silence, spark motif, full arc)
  *  - Shift+letter: capital-key accent (Ch2 `CharCorrect.shifted`)
  *  - ] / [ : play the next / previous Chapter 2 sound, backslash: replay it (every Ch2 sound also has a button)
  *  - URL: &biome=fen&state=battle pre-selects the bed (applied on the first key/click)
@@ -42,6 +43,25 @@ export const CH2_TEST_SFX: readonly Sfx[] = [
   "chapterSting",
 ];
 
+/** Prologue (P3.4) sounds, in art-direction 5.3 order. `theftCrack` / `theftWhoosh` get one button per kit slot. */
+export const PROLOGUE_TEST_SFX: readonly Sfx[] = [
+  "inkPool",
+  "skyTear",
+  "skyTearClose",
+  "hushBolt",
+  "wardHum",
+  "catchHiss",
+  "quillScratch",
+  "theftCrack",
+  "theftWhoosh",
+  "auraCollapse",
+  "swordClang",
+  "heartbeat",
+  "emberChime",
+  "lineBlip",
+  "gateDark",
+];
+
 export interface AudioTestHook {
   engine: AudioEngine;
   /** Streak currently driving the key pitch. */
@@ -54,6 +74,8 @@ export interface AudioTestHook {
   errors: string[];
   /** Clicks every Ch2 button once (smoke test helper); returns how many were pressed. */
   pressAllCh2(): number;
+  /** Clicks every prologue button once (smoke test helper); returns how many were pressed. */
+  pressAllPrologue(): number;
 }
 
 declare global {
@@ -73,6 +95,7 @@ export function start(_glCanvas?: HTMLCanvasElement): void {
     lastDispatchMs: 0,
     errors: [],
     pressAllCh2: () => 0,
+    pressAllPrologue: () => 0,
   };
   window.__audioTest = hook;
   window.addEventListener("error", (e) => hook.errors.push(String(e.message)));
@@ -84,7 +107,7 @@ export function start(_glCanvas?: HTMLCanvasElement): void {
     "position:fixed;inset:0;z-index:20;overflow:auto;background:#05060a;color:#f3e7c0;font:14px/1.5 system-ui,sans-serif;padding:16px;display:grid;gap:12px;align-content:start";
   root.innerHTML = `
     <h1 style="margin:0;font-size:20px">Audio test</h1>
-    <p style="margin:0">Type letters for clicks (streak rises; tier stings at 10/25/50/100). <b>x</b> = typo, <b>Enter</b> = word complete (Shift+Enter = perfect), <b>1-7</b> = forest / ruins / cave / boss / hushwood / fen / grove. Shift+letter = capital accent. <b>]</b> / <b>[</b> / <b>\\</b> = next / previous / replay Chapter 2 sound.</p>
+    <p style="margin:0">Type letters for clicks (streak rises; tier stings at 10/25/50/100). <b>x</b> = typo, <b>Enter</b> = word complete (Shift+Enter = perfect), <b>1-8</b> = forest / ruins / cave / boss / hushwood / fen / grove / prologue. Shift+letter = capital accent. <b>]</b> / <b>[</b> / <b>\\</b> = next / previous / replay Chapter 2 sound.</p>
     <div id="at-status" aria-live="polite">streak 0 | tier 0 | biome forest | music walk</div>
   `;
   const status = root.querySelector<HTMLElement>("#at-status") as HTMLElement;
@@ -122,7 +145,7 @@ export function start(_glCanvas?: HTMLCanvasElement): void {
     if (to > from) engine.play("tierUp", { tier: to });
   };
 
-  const ch2Set = new Set<Sfx>(CH2_TEST_SFX);
+  const ch2Set = new Set<Sfx>([...CH2_TEST_SFX, ...PROLOGUE_TEST_SFX]);
   const sfxRow = group("Effects");
   for (const id of SFX_IDS) {
     if (ch2Set.has(id)) continue;
@@ -191,6 +214,84 @@ export function start(_glCanvas?: HTMLCanvasElement): void {
     return n;
   };
 
+  // ---- Prologue (P3.4) ----
+  const proRow = group("Prologue sounds");
+  const proBed = group("Prologue music");
+  const proButtons: HTMLElement[] = [];
+  const addPro = (parent: HTMLElement, label: string, fn: () => void): void => {
+    btn(parent, label, fn);
+    proButtons.push(parent.lastElementChild as HTMLElement);
+  };
+  for (const id of PROLOGUE_TEST_SFX) {
+    if (id === "theftCrack" || id === "theftWhoosh") {
+      for (let i = 0; i < 6; i++)
+        addPro(proRow, `${id} ${i + 1}`, () => engine.play(id, { count: i }));
+    } else if (id === "lineBlip") {
+      addPro(proRow, "lineBlip (Nul)", () => engine.play(id, { boss: true }));
+      addPro(proRow, "lineBlip (Knight)", () => engine.play(id, {}));
+    } else if (id === "wardHum") {
+      addPro(proRow, "wardHum", () => engine.play(id));
+      addPro(proRow, "wardHum hit", () => engine.play(id, { heavy: true }));
+    } else if (id === "quillScratch") {
+      addPro(proRow, "quillScratch x8", () => {
+        for (let i = 0; i < 8; i++) window.setTimeout(() => engine.play(id, { count: i }), i * 110);
+      });
+    } else if (id === "gateDark") {
+      addPro(proRow, "gateDark x10", () => {
+        for (let i = 0; i < 10; i++) window.setTimeout(() => engine.play(id, { count: i }), i * 90);
+      });
+    } else addPro(proRow, id, () => engine.play(id));
+  }
+  addPro(proRow, "theft x6 (sequence)", () => {
+    for (let i = 0; i < 6; i++) {
+      window.setTimeout(() => engine.play("theftCrack", { count: i }), i * 1100);
+      window.setTimeout(() => engine.play("theftWhoosh", { count: i }), i * 1100);
+    }
+  });
+  addPro(proBed, "prologue theme (heroic, battle)", () => {
+    engine.silence(0, 0.3);
+    setBiome("prologue");
+    engine.setMusicState("battle");
+  });
+  addPro(proBed, "drone (theft)", () => engine.musicDrone(38));
+  addPro(proBed, "swell", () => engine.musicSwell());
+  addPro(proBed, "silence(1) 1.2 s", () => {
+    engine.musicDrone(null);
+    engine.silence(1, 1.2);
+  });
+  addPro(proBed, "silence(0.75) 2 s", () => engine.silence(0.75, 2));
+  addPro(proBed, "spark motif", () => engine.musicMotif("spark"));
+  addPro(proBed, "spark motif (end)", () => engine.musicMotif("sparkEnd"));
+  addPro(proBed, "silence(0) open", () => {
+    engine.silence(0, 1.2);
+    engine.setMusicState("walk");
+  });
+  addPro(proBed, "full arc (~65 s)", () => {
+    const at = (ms: number, fn: () => void): void => void window.setTimeout(fn, ms);
+    engine.silence(0, 0.2);
+    setBiome("prologue");
+    engine.setMusicState("battle");
+    // Part C starts at +6 s: drone at C0, swell into the ink line (C 10.5), silence at C 20, ember at C 41, end at C 53.
+    at(6000, () => engine.musicDrone(38));
+    at(15600, () => engine.musicSwell());
+    at(26000, () => {
+      engine.musicDrone(null);
+      engine.silence(1, 1.2);
+    });
+    at(47000, () => engine.silence(0.75, 2));
+    at(47600, () => engine.musicMotif("spark"));
+    at(59000, () => engine.musicMotif("sparkEnd"));
+  });
+  hook.pressAllPrologue = (): number => {
+    let n = 0;
+    for (const b of proButtons) {
+      if (b.textContent?.startsWith("full arc")) continue;
+      b.click();
+      n++;
+    }
+    return n;
+  };
+
   const tierRow = group("Tier stings");
   for (const tier of [1, 2, 3, 4])
     btn(tierRow, `tier ${tier}`, () => engine.play("tierUp", { tier }));
@@ -246,7 +347,7 @@ export function start(_glCanvas?: HTMLCanvasElement): void {
       const perfect = e.shiftKey || wordTypos === 0;
       engine.play(perfect ? "perfectWord" : "wordComplete");
       wordTypos = 0;
-    } else if (k >= "1" && k <= "7") {
+    } else if (k >= "1" && k <= "8") {
       setBiome(BIOMES[Number(k) - 1] as BiomeName);
     } else if (k === "]" || k === "[" || k === "\\") {
       ch2Index =
