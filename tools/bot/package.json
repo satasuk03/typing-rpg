@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@hd2d/balance": "workspace:*"
+    "@hd2d/balance": "workspace:*",
+    "@hd2d/content": "workspace:*",
+    "@hd2d/sim": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

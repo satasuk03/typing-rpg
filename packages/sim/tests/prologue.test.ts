@@ -395,12 +395,13 @@ describe("the N-slot kit (§3.7.3)", () => {
     expect(s.run.prologue?.waitTicks[0]).toBe(0); // reset by the cast
   });
 
-  test("the view mode flips to asap once the wait is reached; asap never casts a pointless skill", () => {
-    const s = armed([{ id: "mendingLight", startChargePct: 100 }]); // full HP: Mending is pointless in both modes
-    step(s, 600);
-    expect(count(step(s, 1), "SkillCast")).toBe(0);
-    expect(getView(s).skills[0]?.mode).toBe("asap");
-    expect(getView(s).skills[0]?.ready).toBe(true);
+  test("v2.2.1: asap Mending Light casts at full HP on the prologue (a show heal, HP stays at max); smart does not", () => {
+    const s = armed([{ id: "mendingLight", startChargePct: 100 }]); // full HP
+    const force = s.run.def.prologue?.forceAfterTicks as number;
+    expect(count(step(s, force - 2), "SkillCast")).toBe(0); // smart: HP is not below 60%
+    expect(getView(s).skills[0]?.mode).toBe("smart");
+    expect(count(step(s, 3), "SkillCast")).toBe(1); // asap after forceAfterTicks of ready-wait
+    expect(s.run.heroHpM).toBe(s.run.heroMaxHpM);
   });
 
   test("hasPassive reads the kit, never the loadout", () => {

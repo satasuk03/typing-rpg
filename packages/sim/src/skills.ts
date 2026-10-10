@@ -85,7 +85,7 @@ function canCast(state: LevelState, id: ActiveSkillId, mode: CastMode): boolean 
     case "mendingLight":
       return smart
         ? run.heroHpM < mulBp(run.heroMaxHpM, K.MENDING_HP_BELOW_BP)
-        : run.heroHpM < run.heroMaxHpM;
+        : run.def.prologue !== undefined || run.heroHpM < run.heroMaxHpM; // v2.2.1: a prologue show heal at full HP
     case "frostLock":
       return smart
         ? alive.some((e) => e.windupShown && e.frozenUntil === null)
