@@ -66,6 +66,8 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
 - **Ch1 flipped-normal fix (proposal).** Mirrored Ch1 props are lit from the wrong side. Negate `nn.x` for mirrored meshes. The effect is subtle in daylight. This changes the Ch1 look, so it needs a before/after (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt
+- **Re-measure on a quiet machine with no agents running.** `apps/game/tests/hud/typingPerf.spec.ts` read 0.65 ms/key against the 0.45 budget during T3.1, but `main` read 0.649 under the same load, so no regression is proven. Get a quiet-machine number before Ch2 sign-off.
+- **Ch2 HUD follow-ups:** the 250 ms slide-in for the riddle panel, gold trim on elite-owned plates, and possibly a ✚ pulse on the healer's word plate (art §5).
 - The bot doesn't model the extra cost of Shift for capitals. That matters for the Ch2 Hush Spells, so do it in T5.1.
 - The `tools/content` validator has no riddle-boss pool rule yet; it's only a comment. T4.3 should add it.
 - `tools/balance/src/gear.ts` copies the sim's upgrade-step rule and the `guardLeakBp` formula, because the sim exports neither. Export them from `packages/sim` and have the tool import them, so they can't drift.
