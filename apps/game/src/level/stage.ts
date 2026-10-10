@@ -12,6 +12,7 @@ import type { EnemyDef } from "@hd2d/content";
 import type { EnemyView, LevelView } from "@hd2d/sim";
 import type { HudAnchor, HudProjector } from "../hud";
 import type { CameraPose, RenderWorld, SpriteActor, SpriteFrame } from "../render";
+import { ELITE_SCALE, eliteKey } from "../render/sprites/ch2Monsters";
 import { HERO_LUM_CAP } from "../render/vfx/colors";
 
 /** W4: enemy sprites never exceed this max channel on the bright forest (fades out toward the cave): flash lights + hit flash no longer clip a pale slime white. */
@@ -78,6 +79,8 @@ const easeOut = (t: number): number => 1 - (1 - clamp01(t)) ** 3;
 /** Hero faces right; the walk camera leads the hero by this much (POC framing). */
 const WALK_LEAD = 3.2;
 const FLY_Y = 1.7;
+/** Ticks before a heal at which the healer lifts into its cast frame (brief 5.1: 600 ms at 60 Hz). */
+const HEAL_WINDUP_TICKS = 36;
 /** How long a dead enemy waits for its EnemyDeath to be presented before dissolving anyway (s). */
 const DEATH_WAIT = 1.6;
 
@@ -99,6 +102,17 @@ interface EnemyActor {
   actor: SpriteActor;
   idle: readonly SpriteFrame[];
   atk: readonly SpriteFrame[];
+  /** The sprite id of the def (`def.spriteId`, e.g. "willow"): the combat VFX key off it (`enemyInfo`). */
+  sprite: string;
+  /** T3.2: render variant of an `EnemyView.elite` enemy (gold-rimmed sprite, x1.08). */
+  elite: boolean;
+  /** T3.2 Ch2 telegraph / cast poses; empty for every Ch1 sprite, so Ch1 draws exactly as before. */
+  howl: readonly SpriteFrame[];
+  crouch: readonly SpriteFrame[];
+  cast: readonly SpriteFrame[];
+  /** T3.2 the Willow's face states (intro / p1 / spell / riddle / freed); null for every other enemy. */
+  states: Readonly<Record<string, readonly SpriteFrame[]>> | null;
+  wLast: string;
   scale: number;
   flyY: number;
   baseX: number;
@@ -249,13 +263,17 @@ export class LevelStage {
     // The hero stays at the stop; the next walk starts from here.
   }
 
-  spawnEnemy(id: number, defId: string, slot: number, isBoss: boolean): void {
+  spawnEnemy(id: number, defId: string, slot: number, isBoss: boolean, elite = false): void {
     if (this.foes.has(id)) return;
     const def = this.opts.enemies.get(defId);
     const src = this.world.source;
     let key = `monster.${def?.spriteId ?? "goblin"}`;
     if (!src.has(key)) key = "monster.goblin";
-    const scale = def?.scale ?? (isBoss ? 1.6 : 1.35);
+    const baseKey = key;
+    // T3.2: an elite takes its gold-rimmed sprite variant (when the source has one) and x1.08; the aura is Ch2Fx's
+    const eliteVariant = elite && src.has(eliteKey(key));
+    if (eliteVariant) key = eliteKey(key);
+    const scale = (def?.scale ?? (isBoss ? 1.6 : 1.35)) * (eliteVariant ? ELITE_SCALE : 1);
     const flyY = def?.flying === true ? FLY_Y : 0;
     const pos = this.slotPosition(this.curEnc > 0 ? this.curEnc : 1, slot);
     const actor = this.world.addActor(key, "idle", { scale, rim: 1.4, blobW: scale * 1.1 });
@@ -263,6 +281,17 @@ export class LevelStage {
     if (isBoss) actor.setLumCap(BOSS_LUM_CAP);
     const idle = src.frames(key, "idle");
     const atk = src.frames(key, "atk");
+    const extra = (anim: string): readonly SpriteFrame[] => {
+      try {
+        return src.frames(key, anim);
+      } catch {
+        return [];
+      }
+    };
+    const states: Record<string, readonly SpriteFrame[]> | null =
+      baseKey === "monster.willow"
+        ? Object.fromEntries(["intro", "p1", "spell", "riddle", "freed"].map((a) => [a, extra(a)]))
+        : null;
     const e: EnemyActor = {
       id,
       defId,
@@ -271,6 +300,13 @@ export class LevelStage {
       actor,
       idle,
       atk,
+      sprite: baseKey.slice("monster.".length),
+      elite: eliteVariant,
+      howl: states ? [] : extra("howl"),
+      crouch: states ? [] : extra("crouch"),
+      cast: states ? [] : extra("cast"),
+      states,
+      wLast: "p1",
       scale,
       flyY,
       baseX: pos.x,
@@ -401,6 +437,7 @@ export class LevelStage {
     id: number,
     out: {
       frame: SpriteFrame | null;
+      sprite?: string;
       scale: number;
       x: number;
       y: number;
@@ -411,6 +448,7 @@ export class LevelStage {
     const e = this.foes.get(id);
     if (!e) return false;
     out.frame = e.frame;
+    out.sprite = e.sprite;
     out.scale = e.scale;
     out.x = e.baseX;
     out.y = e.flyY;
@@ -601,7 +639,8 @@ export class LevelStage {
         e.deadWait += dt;
         if (e.deadWait >= DEATH_WAIT) e.deadT = 0;
       }
-      if (e.deadT !== Infinity) {
+      // the freed Willow stays standing (brief 5.6: no dissolve); everything else dissolves as before
+      if (e.deadT !== Infinity && !e.states) {
         e.actor.setDissolve(clamp01(e.deadT / 0.7));
         if (e.deadT >= 0.7) e.actor.visible = false;
       }
@@ -634,7 +673,28 @@ export class LevelStage {
     void tickF;
 
     const bob = e.flyY > 0 ? Math.sin(this.time * 3 + e.slot) * 0.18 : 0;
-    const frames = useAtk && e.atk.length > 0 ? e.atk : e.idle;
+    let frames = useAtk && e.atk.length > 0 ? e.atk : e.idle;
+    if (ev.alive && e.attackT >= 0.4) {
+      // Ch2 telegraph poses (empty arrays on every Ch1 sprite): the wolf's howl and the toad's crouch are held through the
+      // wind-up; the moth lifts into its cast frame for the 600 ms before a heal (derived from the heal cadence)
+      const hl = ev.healer;
+      if (ev.pose === "windup" && e.howl.length > 0) frames = e.howl;
+      else if (ev.pose === "windup" && e.crouch.length > 0) frames = e.crouch;
+      else if (
+        e.cast.length > 0 &&
+        hl &&
+        hl.ticksLeft !== null &&
+        hl.ticksLeft > 0 &&
+        hl.ticksLeft <= HEAL_WINDUP_TICKS
+      )
+        frames = e.cast;
+    }
+    if (e.states) {
+      const st = this.willowState(e, ev, view);
+      e.wLast = st;
+      const sf = e.states[st];
+      if (sf && sf.length > 0) frames = sf;
+    }
     const idx = frames.length > 1 ? Math.floor(this.time * 2.2 + e.slot) % frames.length : 0;
     const f = frames[idx] ?? frames[0];
     if (f) {
@@ -643,6 +703,15 @@ export class LevelStage {
     }
     e.actor.setFlash(flash, flashCol);
     e.actor.place(e.baseX + dx, e.flyY + bob, e.baseZ + dz);
+  }
+
+  /** The Willow's face for this frame: intro / p1 / spell / riddle from the view, freed once its death is presented. */
+  private willowState(e: EnemyActor, ev: EnemyView, view: LevelView | null): string {
+    if (!ev.alive) return e.deadT !== Number.POSITIVE_INFINITY ? "freed" : e.wLast;
+    if (view?.phase === "bossIntro") return "intro";
+    if (view?.minigame?.kind === "riddle") return "riddle";
+    if (view?.doom || ev.pose === "windup" || e.attackT < 0.4) return "spell";
+    return "p1";
   }
 
   // ------------------------------------------------------------------------------------------- camera

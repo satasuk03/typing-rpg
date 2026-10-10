@@ -16,6 +16,8 @@ import type { EventRouter } from "./eventBindings";
 import type { LevelStage } from "./stage";
 import type { SessionTypingFx } from "./typingFx";
 
+const PLATE_RECT = { x: 0, y: 0, w: 0, h: 0 };
+
 export interface SessionCombatFxOptions {
   stage: LevelStage;
   world: RenderWorld;
@@ -48,6 +50,23 @@ export function attachCombatFx(o: SessionCombatFxOptions): SessionCombatFx {
     heroSnapshot: (out) => stage.heroSnapshot(out),
     enemyInfo: (id, out) => stage.enemyInfo(id, out),
     rim: (who, amount, rgb) => stage.rimFlash(who, amount, rgb),
+    // T3.2 keep-out: the Ch2 effects stay dim within 40 px of any plate on screen
+    plateRectOf: (id, out) => hud.getPlateRectInto(id, out),
+    plateRects: (out) => {
+      const v = stage.view;
+      if (!v) return 0;
+      let n = 0;
+      for (const p of v.plates) {
+        if (n >= out.length / 4) break;
+        if (!hud.getPlateRectInto(p.id, PLATE_RECT)) continue;
+        out[n * 4] = PLATE_RECT.x;
+        out[n * 4 + 1] = PLATE_RECT.y;
+        out[n * 4 + 2] = PLATE_RECT.w;
+        out[n * 4 + 3] = PLATE_RECT.h;
+        n++;
+      }
+      return n;
+    },
     postFlash: worldFx ? (a, rgb, ms, cap) => worldFx.postFlash(a, rgb, ms, cap) : undefined,
     seed: o.seed,
   });

@@ -5,6 +5,7 @@
  * directly except through these.
  */
 import type { LevelView } from "@hd2d/sim";
+import { Vector3 } from "three";
 import { FxKind } from "../../materials/fx";
 import type { RenderWorld } from "../../RenderWorld";
 import type { SpriteFrame } from "../../sprites/SpriteSource";
@@ -35,6 +36,8 @@ export interface HeroSnap {
 export interface EnemyInfo {
   frame: SpriteFrame | null;
   scale: number;
+  /** The sprite id the stage built the actor from (`def.spriteId`, e.g. "willow"); absent when unknown. */
+  sprite?: string;
   /** Foot position (the resting x, without lunges) and sprite height in world units. */
   x: number;
   y: number;
@@ -51,6 +54,13 @@ export interface CombatDeps {
   heroSnapshot(out: HeroSnap): SpriteFrame | null;
   enemyInfo(id: number, out: EnemyInfo): boolean;
   rim(who: "hero" | number, amount: number, rgb: readonly [number, number, number]): void;
+  /**
+   * T3.2 keep-out: writes the CSS-px rects (x, y, w, h per plate) of the plates that are on screen now into `out`
+   * and returns how many. Absent (tests, `?fx=0` dev scenes) = nothing to keep clear.
+   */
+  plateRects?(out: Float32Array): number;
+  /** The CSS-px rect of one plate (the riddle leaf plates anchor the world leaves). False when the HUD has no such plate. */
+  plateRectOf?(plateId: number, out: { x: number; y: number; w: number; h: number }): boolean;
   /** Capped full-screen flash (typing world fx `postFlash`); absent = no flashes. */
   postFlash?(amount: number, rgb: Rgb, ms: number, cap: number): void;
   seed?: number;
@@ -62,6 +72,13 @@ export const ENEMY_LIGHT_R = 7;
 export const HERO_LIGHT_R = LIGHT_MAX_RADIUS;
 
 const BIG_TARGET_K = 0.35;
+
+/** Brief K2 (Ch2 VFX): nothing brighter than 1.5 HDR within this many CSS px of an active plate. */
+export const KEEP_OUT_PX = 40;
+/** What a bright Ch2 effect is dimmed to inside the keep-out band (a 2.5-3 HDR spec colour drops to <= 1.5). */
+export const KEEP_OUT_DIM = 0.4;
+const KEEP_OUT_CAP = 16;
+const KO_NDC = new Vector3();
 
 /** W5: the cave star core HDR cap (the cave dim itself is `RenderWorld.discGain`). */
 const CAVE_STAR_CAP = 2.2;
@@ -90,6 +107,12 @@ export class FxKit {
   private crackNext = 0;
   private readonly ownsPools: boolean;
   readonly hero: HeroSnap = { x: 0, y: 0, z: 0 };
+  /** Plate rects (CSS px x, y, w, h), refreshed once a frame by `update` when `deps.plateRects` exists. */
+  private readonly koRects = new Float32Array(KEEP_OUT_CAP * 4);
+  private koN = 0;
+  /** Keep-out probe counters: bright Ch2 spawns checked / dimmed. */
+  keepOutChecked = 0;
+  keepOutDimmed = 0;
 
   constructor(readonly deps: CombatDeps) {
     const w = deps.world;
@@ -471,6 +494,7 @@ export class FxKit {
     c: Rgb,
     c2: Rgb,
     i: number,
+    ground = false,
   ): void {
     const g = this.scale.k <= 0 ? 0 : 0.5 + 0.5 * this.scale.k;
     if (g <= 0) return;
@@ -482,6 +506,7 @@ export class FxKit {
     q.s1 = s1;
     q.life = life;
     q.i = i * g;
+    q.ground = ground;
     q.ease = true;
     q.r = c[0];
     q.g = c[1];
@@ -578,11 +603,50 @@ export class FxKit {
     );
   }
 
+  // ------------------------------------------------------------------------------- keep-out (brief K2)
+
+  /** True when the world point projects within `pad` CSS px of an active plate rect. */
+  insideKeepOut(x: number, y: number, z: number, pad = KEEP_OUT_PX): boolean {
+    if (this.koN === 0 || typeof window === "undefined") return false;
+    const n = this.deps.world.camera.project(x, y, z, KO_NDC);
+    const px = (n.x * 0.5 + 0.5) * window.innerWidth;
+    const py = (-n.y * 0.5 + 0.5) * window.innerHeight;
+    const r = this.koRects;
+    for (let i = 0; i < this.koN; i++) {
+      const rx = r[i * 4] as number;
+      const ry = r[i * 4 + 1] as number;
+      if (
+        px >= rx - pad &&
+        px <= rx + (r[i * 4 + 2] as number) + pad &&
+        py >= ry - pad &&
+        py <= ry + (r[i * 4 + 3] as number) + pad
+      )
+        return true;
+    }
+    return false;
+  }
+
+  /** 1 with no plate on screen; `KEEP_OUT_DIM` while any plate is (for area lights and wide flares that cannot be placed around a rect). */
+  get plateK(): number {
+    return this.koN > 0 ? KEEP_OUT_DIM : 1;
+  }
+
+  /** Intensity factor for a bright effect centred at the world point: 1 clear of the plates, KEEP_OUT_DIM inside the band. */
+  keepOutK(x: number, y: number, z: number): number {
+    this.keepOutChecked++;
+    if (!this.insideKeepOut(x, y, z)) return 1;
+    this.keepOutDimmed++;
+    return KEEP_OUT_DIM;
+  }
+
   // ------------------------------------------------------------------------------- per frame
 
   /** @hot `dt` is the stage's dilated dt. */
   update(dt: number): void {
     this.time += dt;
+    this.koN = this.deps.plateRects
+      ? Math.min(KEEP_OUT_CAP, this.deps.plateRects(this.koRects))
+      : 0;
     this.arcs.gain = (0.3 + 0.7 * Math.min(1, (this.glare - 0.4) / 0.6)) * this.deps.world.arcGain; // 0.3 forest .. 1 cave (W4: 0.4 clipped the crit arc core)
     this.arcs.update(dt);
     this.ghosts.update(dt);

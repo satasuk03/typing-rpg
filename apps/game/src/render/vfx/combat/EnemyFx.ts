@@ -228,14 +228,15 @@ export class EnemyFx {
   // ------------------------------------------------------------------------------- death
 
   /** `EnemyDeath` presented (after any chip hit): the sprite's own pixels lift off as light. */
-  dissolve(enemyId: number, isBoss: boolean): void {
+  dissolve(enemyId: number, isBoss: boolean, quiet = false): void {
     const kit = this.kit;
     const ok = kit.deps.enemyInfo(enemyId, INFO);
     if (!ok) return;
     this.lastDeath.x = INFO.x;
     this.lastDeath.z = INFO.z;
     this.lastDeath.valid = true;
-    if (kit.scale.k <= 0) return;
+    // `quiet`: the freed Willow (T3.2) stands; the rewards still start from where it stood
+    if (kit.scale.k <= 0 || quiet) return;
     const s = INFO.scale;
     const f = INFO.frame;
     const ps = f ? pixelSamples(f) : null;

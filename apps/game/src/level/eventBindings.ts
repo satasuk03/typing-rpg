@@ -30,7 +30,8 @@ export interface RenderActions {
   walkStarted(tick: number, untilTick: number): void;
   encounterStarted(index: number): void;
   encounterCleared(): void;
-  spawnEnemy(id: number, defId: string, slot: number, isBoss: boolean): void;
+  /** `elite` (v2.0 `EnemySpawned.elite`): the gold-rimmed sprite variant at x1.08 (T3.2); the aura is the combat VFX's. */
+  spawnEnemy(id: number, defId: string, slot: number, isBoss: boolean, elite?: boolean): void;
   enemyHit(id: number, strength: number): void;
   enemyAttack(id: number): void;
   enemyDied(id: number): void;
@@ -152,8 +153,9 @@ export const BINDINGS: BindingTable = {
     fxNone: "enemies arrive through EnemySpawned; the wave banner is HUD",
   }),
   EnemySpawned: b("EnemySpawned", {
-    render: (e, c) => c.render.spawnEnemy(e.enemyId, e.defId, e.slot, e.isBoss),
-    fxNone: "the stage slides the enemy in; the boss entrance is BossIntroStarted",
+    render: (e, c) => c.render.spawnEnemy(e.enemyId, e.defId, e.slot, e.isBoss, e.elite === true),
+    fxNone:
+      "the stage slides the enemy in; the boss entrance is BossIntroStarted; the elite aura (T3.2) is driven per frame by EnemyView.elite",
   }),
   EncounterCleared: b("EncounterCleared", {
     render: (_e, c) => c.render.encounterCleared(),
@@ -187,7 +189,10 @@ export const BINDINGS: BindingTable = {
     silent: "target highlight comes from PlateView.isTarget",
     fxNone: "plates are HUD objects (PlateView), not world effects",
   }),
-  CharCorrect: b("CharCorrect", { fxNone: "typing VFX (T2.6) owns this event" }),
+  CharCorrect: b("CharCorrect", {
+    fxNone:
+      "typing VFX (T2.6) owns this event; the Hush Spell capital accent on CharCorrect.shifted (T3.2, CapitalAccent) runs inside the typing handle",
+  }),
   Typo: b("Typo", { fxNone: "typing VFX (T2.6) owns this event" }),
   WordCompleted: b("WordCompleted", { fxNone: "typing VFX (T2.6) owns this event" }),
   SentenceWordDone: b("SentenceWordDone", { fxNone: "typing VFX (T2.6) owns this event" }),
@@ -290,11 +295,8 @@ export const BINDINGS: BindingTable = {
       "shown by the cause: the EnemyAttack lunge, DoomSpellFailed or MinigameWordMissed (flash and shake are the render column)",
   }),
   HeroHealed: b("HeroHealed", { fx: (e, c) => c.fx?.heroHealed(e) }),
-  // interfaces v2.0 stub: the heal beam and chime are not bound yet (silent no-op)
-  EnemyHealed: b("EnemyHealed", {
-    silent: "v2.0 healer stub: no heal VFX bound yet",
-    fxNone: "v2.0 healer stub: no heal VFX bound yet",
-  }),
+  // v2.0 healer (T3.2): the green beam, motes, pop and target rim flash; the "+N" pop and HP-bar fill are the HUD's
+  EnemyHealed: b("EnemyHealed", { fx: (e, c) => c.fx?.enemyHealed(e) }),
   EnemyDeath: b("EnemyDeath", {
     render: (e, c) => {
       c.render.enemyDied(e.enemyId);
@@ -413,19 +415,12 @@ export const BINDINGS: BindingTable = {
     silent: "the finisher plate follows",
     fxNone: "the finisher plate follows",
   }),
-  // interfaces v2.0 stubs: the riddle panel is HUD state (LevelView.minigame.riddle); no VFX or audio bound yet
-  RiddleStarted: b("RiddleStarted", {
-    silent: "v2.0 riddle stub: the panel is read from LevelView",
-    fxNone: "v2.0 riddle stub: the panel is read from LevelView",
-  }),
-  RiddleLeafPicked: b("RiddleLeafPicked", {
-    silent: "v2.0 riddle stub: the leaf is a HUD plate (PlateView)",
-    fxNone: "v2.0 riddle stub: the leaf is a HUD plate (PlateView)",
-  }),
-  RiddleResolved: b("RiddleResolved", {
-    silent: "v2.0 riddle stub: the result is read from LevelView.minigame.riddle.last",
-    fxNone: "v2.0 riddle stub: the result is read from LevelView.minigame.riddle.last",
-  }),
+  // v2.0 Riddle of Leaves (T3.2): the panel and the leaf plates are HUD (LevelView.minigame.riddle, PlateView); the world
+  // side is the three drifting leaves, the pick highlight and the bloom / wither. The Willow's `riddle` face comes from the
+  // minigame kind in the stage; the hero's hit on a wrong / timed-out riddle is HeroDamaged (cause "minigame").
+  RiddleStarted: b("RiddleStarted", { fx: (e, c) => c.fx?.riddleStarted(e) }),
+  RiddleLeafPicked: b("RiddleLeafPicked", { fx: (e, c) => c.fx?.riddleLeafPicked(e) }),
+  RiddleResolved: b("RiddleResolved", { fx: (e, c) => c.fx?.riddleResolved(e) }),
   FinisherShown: b("FinisherShown", {
     render: (_e, c) => c.render.slowMo(0.55, 0.5),
     fxNone: "the finisher cinematic (T2.6 FinisherCinematic) owns the scene",
@@ -435,8 +430,9 @@ export const BINDINGS: BindingTable = {
       c.render.hitStop(0.12);
       c.render.punch(1.5, 0.006, 0.03);
     },
-    fxNone:
-      "the finisher cinematic (T2.6 FinisherCinematic) draws the arcs, camera push and landing",
+    // Ch1: the cinematic (T2.6 FinisherCinematic) draws the arcs, camera push and landing. Ch2 adds the freed-Willow
+    // finale on the Willow only (a no-op for every other boss).
+    fx: (e, c) => c.fx?.finisherCompleted(e),
   }),
 
   // ---- rewards ----
