@@ -53,6 +53,9 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
 | Key streak: typo drops one tier (PO 2026-10-09) | Sim (sonnet) | **done** (merged) | `keyStreakAfterTypo`; rule-named tests (120→50, chains T4→0, re-fire T4 tier-up); goldens regenerated (state/event hashes only; outcomes, Trial wpm/acc unchanged); balance byte-identical; T3+T4 key share 40 WPM 15.8→24.4%, 75 WPM 22.1→32.9% (T4 alone 6.5→8.9% at 75 WPM, ~0.1% at 40). interfaces v1.7. Consumers: world step-down feedback → W3; HUD tierChanged on drop → H3 |
 | HUD typing FX perf | UI (sonnet) | **done** (merged 530f0cc) | typingPerf 0.40–0.42 ms/key vs main 0.46 (budget 0.45), A/B by orchestrator; pixel diff ≤0.048% px changed; tests/hud 26/26; typing-fx 2/2 |
 
+| **PO round 3: slow-drip unlocks** | Balance (opus) | **done** (interfaces v2.1) | 4 unlocks per chapter after the 1+1 starter kit; 6 held for later chapters; `pnpm balance` and `pnpm bot` pass; `docs/balance-ch1.md` §10 and `docs/balance-ch2.md` §10 |
+| **PO round 3: Prologue "The Unwriting"** | P0.1–R2 (opus/sonnet/haiku) | **done; awaiting PO sign-off** | Plan: `docs/PROLOGUE_PLAN.md`; interfaces v2.2–v2.2.3. 1000-run can't-lose fuzz; bot timing gate; Metal full run with 0 console errors (A 7.9 s, B about 50 s, C 57.6 s); p95 ≤ 16.8 ms at all parts and tiers; readability 0 violations at 40 and 90 WPM; R2 "ready for PO". Pack: `docs/qa/prologue-signoff/` |
+
 ## Notes
 - Stack pins: three 0.186.1, vite 8.3.4, typescript 7.0.2 (native tsc), vitest 5.0.3, playwright 1.64.0, biome 2.5.15, hono 4.13.13, wrangler 4.149.0, zod 4.
 - Biome excludes `poc/` and `docs/` (POC html is reference-only).
