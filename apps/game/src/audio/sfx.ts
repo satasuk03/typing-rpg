@@ -1,4 +1,5 @@
 import { CH2_SFX_VOICES } from "./sfxCh2";
+import { PROLOGUE_SFX_VOICES } from "./sfxPrologue";
 import { impact } from "./sfxShared";
 import type { Synth } from "./synth";
 import { keyVoice, midiToHz as NOTE } from "./tiers";
@@ -330,6 +331,8 @@ export const SFX_VOICES: Record<Sfx, SfxVoice> = {
 
   // ---- Chapter 2 (T3.3): see sfxCh2.ts ----
   ...CH2_SFX_VOICES,
+  // ---- Prologue (P3.4): see sfxPrologue.ts ----
+  ...PROLOGUE_SFX_VOICES,
 
   /**
    * NEW (Ch2, `CharCorrect.shifted`): the normal `key` voice plus ONE sine an octave below the click
@@ -344,5 +347,5 @@ export const SFX_VOICES: Record<Sfx, SfxVoice> = {
 
 /** Which bus each effect plays on. Everything is `sfx` except UI blips. */
 export function busFor(id: Sfx): BusId {
-  return id === "uiClick" || id === "uiConfirm" ? "ui" : "sfx";
+  return id === "uiClick" || id === "uiConfirm" || id === "lineBlip" ? "ui" : "sfx";
 }

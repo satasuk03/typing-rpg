@@ -83,7 +83,7 @@ export interface BiomeMusic {
   density: number;
   seed: number;
   /** Ch2 voicing (T3.3). Absent = the Ch1 voicing, byte-identical to before. */
-  style?: "celesta" | "fen" | "willow";
+  style?: "celesta" | "fen" | "willow" | "brass";
 }
 
 export const STEPS_PER_BAR = 16;
@@ -185,6 +185,21 @@ export const BIOME_MUSIC: Record<BiomeName, BiomeMusic> = {
     seed: 0x3177,
     style: "willow",
   },
+  // ---- Prologue (P3.4, art direction 5.2): the heroic D-major theme. Melody head = the rising fifth D5 -> A5. ----
+  prologue: {
+    bpm: 112,
+    root: 62,
+    scale: [0, 2, 4, 7, 9], // D major pentatonic
+    chords: [
+      [0, 4, 7], // I
+      [-5, -1, 2], // V
+      [-3, 0, 4], // vi
+      [-7, -3, 0], // IV
+    ],
+    density: 0.7,
+    seed: 0x9201,
+    style: "brass",
+  },
 };
 
 /** The Willow resolved to D major once freed (Dmaj9 on the last bar, then the plain triad). */
@@ -213,6 +228,12 @@ export function melodyPattern(biome: BiomeName): (number | null)[] {
     deg = Math.min(span - 1, Math.max(0, deg + (walk[Math.floor(rng() * walk.length)] ?? 0)));
     const strong = i % STEPS_PER_BAR === 0;
     if (strong || rng() < cfg.density) steps[i] = deg;
+  }
+  if (cfg.style === "brass") {
+    // The "spark" motif: D5 -> A5 on the first bar of the pattern (the voice sounds degree + 12, so deg 0 = D5, deg 3 = A5).
+    steps[0] = 0;
+    steps[2] = null;
+    steps[4] = 3;
   }
   return steps;
 }
