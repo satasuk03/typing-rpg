@@ -316,3 +316,12 @@ the §4 retime), P2-1, P2-2 (cue), P2-3 (card, bars), P2-7, P2-8 (camera), P2-12
 - **Pacing:** overlay (non-gating) lines are approved, as `mode?: "gate" | "overlay"` on the line cue (client-only, interfaces v2.2.3). WP-B implements it.
 - **P2-11 (the knight is never hurt in the boss fight):** deferred to the backlog. Content alone can't make a strike unblockable (P1.3 found this), and the v2.2.1 show-heal already makes Mending Light cast. Never being hurt fits the power fantasy; Last Stand not triggering is acceptable.
 - **WP-A also owns the P4.1 hitch:** pre-warm the prologue VFX and HUD before `startPlay` (first Part B frames: 50 ms at tier 0, 133 ms at tier 2 with 4× throttle).
+- **WP-A merged (2026-10-11).** Left over for WP-B:
+  - **P1-5:** `gateDarken` `dur` runs to the end of Part C.
+  - **P2-10:** move `WORD_GATE.slots` together with `enc1.slot0–2` in `prologue.json`.
+  - **P1-8:** the HUD ember and shards land in the palm.
+  - **P1-6:** the camera push-in.
+  - **P1-7:** the recoil.
+  - **P2-3:** the card, bars and Nul lift.
+  - **New regression from the re-grade (orchestrator):** in Part B the knight is a near-black silhouette and his face is unreadable (`docs/qa/prologue-p4.2a/p1-1-grade-boss-fight.jpg`, bottom-right). Add a prologue-gated warm hero fill or rim light (stage) so his face and cape read. Target: hero face luma ≥ 0.25 and silhouette ≥ 0.75.
+  - **Still short:** mask:cloak 5.3 (target ≥ 6), fog vs knight 1.6 (target ≥ 2.5). R2 judges these.
