@@ -61,7 +61,7 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
 ## Open items for later tasks
 - T1.5 (ruled): adds use the EnemyDef stats scaled to ≈58.8 HP in L10; `doomEveryS` counts from the previous Doom's resolution; Frost Lock delays attacks only, not Doom or phase timers; `untouched` counts hits that dealt HP damage.
 - T1.6: `resolveLevel` must filter pools by level `plateLength`; `unlockLevel` = first clear unlocks.
-- Content: add 'hollow' vocab for L10; skill text placeholders `{heal}` / `{hits}`; gear and skill icon art ids are placeholders.
+- Content: ~~add 'hollow' vocab for L10~~ (done 2026-10-10); skill text placeholders `{heal}` / `{hits}`; gear and skill icon art ids are placeholders.
 - **T6.1 balance (key risks):** normal-level active time at 40/75 WPM is 1.3 / 0.65 min against §9's 2.4–3.0 / 1.7–2.2 (much too fast); 20 WPM boss 9.4 min with rubble misses 43% (scale spawn/fall by pace); 75 WPM boss 2.7 min against 3.4; Fireball −35%.
 - T3.2/T6.3: boss intro name card is drawn over the boss while plates are live and covers an add's HP bar (show the card before typing goes live); L10 layout needs anchors for the boss adds; the LEVEL CLEAR banner ghosts behind the results panel; BREAK pop density on the hero; `EncounterStarted.encounterIndex` is 0-based (add to the interface doc).
 - T6.3: L9 too dark, L10 orange instead of violet.
@@ -89,3 +89,5 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
 - 2026-10-09: Ch1 boss time targets come from the economy sim's Ch1 model: 8.1 / 4.4 / 2.8 min ±15% (20/40/75 WPM). §9's ~5.4/4.2/3.4 are 30-chapter averages.
 - 2026-10-09: Ch1 should carry some risk. Weaken the starter Aegis and Iron Will so the 20 WPM boss first-try clear is ~80–90%, with the other §9 clear targets held.
 - 2026-10-09: Ch1 sentence plates fold case (capitals display, the lowercase key counts; punctuation still required). Exact case comes in a later chapter. Trial stays case-sensitive.
+- 2026-10-10: Typed guards should not always fully protect, so that gear and upgrades matter. The PO chose option G, a deterministic guard leak: leak = clamp(1 − G/P, 0, 50%), with no RNG (`docs/qa/block-chance-analysis.md`, interfaces v1.9). The PO rejected the literal 20–30% dice roll: in the sim the Beginner boss clear fell to 36%.
+- 2026-10-10: The game's name is "Typing Adventure" (pixel-art title logo). Skill icons are pixel art.

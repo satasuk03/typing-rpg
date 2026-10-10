@@ -1043,8 +1043,8 @@ export class Hud {
     this.popTexts.length = 0;
     const placed: Rect[] = [];
     for (const p of this.pops.pops) {
-      const pose = this.popPose(c, p, set);
-      const base: Rect = { x: pose.x - pose.w / 2, y: pose.y - pose.h / 2, w: pose.w, h: pose.h };
+      let pose = this.popPose(c, p, set);
+      let base: Rect = { x: pose.x - pose.w / 2, y: pose.y - pose.h / 2, w: pose.w, h: pose.h };
       const at = (ox: number, oy: number): Rect => ({ ...base, x: base.x + ox, y: base.y + oy });
       // T6.3 R2 P2-4: a boss BREAK pop stays within 160 design px of the boss head, else drops under the bar
       const bossBreak =
@@ -1091,6 +1091,9 @@ export class Hud {
           p.size *= fit.k;
           p.offX = fit.x;
           p.offY = fit.y;
+          // the drawn and recorded box must be the shrunk one, else popRects/placed keep the full-size box
+          pose = this.popPose(c, p, set);
+          base = { x: pose.x - pose.w / 2, y: pose.y - pose.h / 2, w: pose.w, h: pose.h };
         }
       }
       if (Number.isNaN(p.offX) && bossBreak) {

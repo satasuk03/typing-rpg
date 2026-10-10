@@ -11,14 +11,17 @@ The slice is done: every DoD line is met and the PO signed off on "typing feels 
 - **Turnstile:** verify the anti-bot check against the real deployment.
 - **Word blocklist:** a human reviews it before release.
 
-## Cleanup round (no PO input needed)
-- **Journal translations:** add them to the SaveBlob (`journal.notes`). This needs a `@hd2d/shared` schema bump and an interfaces.md entry.
-- **New Game reset:** New Game resets only the local save, so a cloud merge can bring old progress back. Reset or tombstone the cloud save too.
-- **Visual nits:**
-  - P3-3: the title screen's "Press any key" pulse should stay at alpha 0.55–1.0 and get a 2 px dark stroke (`src/app/screens/title.ts`).
-  - In crowded frames a small enemy's BREAK pop can sit about 290 px from its head; the 160 px clamp only applies to the boss.
-  - An enemy's own white hit-flash sprite lasts a few frames on cave hits; the W5 glare probe doesn't count it.
-- **Lint:** fix the one Biome warning, an optional chain in `hud/plates.ts` `getPlateLabelRectInto`.
+## Cleanup round
+Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow vocab, stale docs, visual nits, and the HUD lint fix are all merged.
+- **Lint:** about 63 Biome warnings remain outside the HUD (`level/bot.ts`, `render/post/pipeline.ts`, …). They don't fail the check.
+- **New Game:** there's no e2e test for New Game → reload (unit tests cover it). Two devices that each reset offline from the same epoch tie and merge normally (see interfaces v1.8).
+
+## PO feedback 2026-10-10 (done)
+- The title logo now reads "Typing Adventure" in pixel art. The skill icons are now 16×16 pixel art.
+- **Guard leak (option G, `docs/qa/block-chance-analysis.md`).** Typed guards always work. A stronger attack leaks `clamp(1 − armor/attack, 0, 50%)`.
+  - In Ch1 only the Golem and its adds leak (P = 1.25× par). `BOSS_LEVEL_HIT_MULT` went 1.3 → 1.15.
+  - The HUD shows a cracked-shield badge, a crimson leak pop, and a hint on the results screen.
+- **For Ch2:** set grunt attack power around 1.07× par and elites/bosses 1.25–1.35×. Re-solve `HIT_MULT` per chapter. Check that par−3 upgrades land near 1.3× the damage budget.
 
 ## Next big step
 - Chapter 2 content and systems, per `docs/IMPLEMENTATION_PLAN.md` and the brainstorm docs.
