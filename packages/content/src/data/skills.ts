@@ -5,7 +5,7 @@ import type { ActiveSkillDef, PassiveDef } from "../schemas.ts";
  * Description placeholders are filled by the UI from BALANCE.SKILLS[id]:
  *   {dmg}    = atk_mult (or atk_mult_all) as a percent of ATK, e.g. "120%"
  *   {charge} = charge (words)
- *   {secs}   = burn_s or freeze_s
+ *   {secs}   = burn_s, freeze_s or duration_s
  * `iconId` / `vfxId` are forward keys for the HUD (T2.4) and the VFX library (T2.3). `sfxId` is an existing procedural
  * sound (apps/game/src/audio/types.ts SFX_IDS; tools/content checks it).
  * `unlockLevel` is the level whose first clear unlocks the skill (absent = part of the starter kit).
@@ -71,7 +71,7 @@ export const ACTIVES: ActiveSkillDef[] = [
     id: "reveal",
     name: "Reveal",
     description:
-      "A clear light strips every fading or scrambled word for eight seconds. It casts when a plate hides its letters.",
+      "A clear light strips every fading or scrambled word for {secs} s. It casts when a plate hides its letters.",
     iconId: "icon.skill.reveal",
     vfxId: "vfx.skill.reveal",
     sfxId: "skillMagic",

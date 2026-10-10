@@ -90,7 +90,7 @@ export function settingsScreen(app: App, _arg: ScreenArg): Screen {
           {
             key: "caseMode",
             label: "Case mode",
-            help: "Auto ignores capitals in Chapter 1 sentences",
+            help: "Auto ignores capitals in Chapter 1 sentences. For no capitals at all, turn on Ignore capitals.",
             options: [
               { v: "auto", label: "Auto" },
               { v: "strict", label: "Exact" },

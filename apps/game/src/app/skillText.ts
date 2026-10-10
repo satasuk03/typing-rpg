@@ -32,7 +32,7 @@ export function fillSkillText(text: string, id: string): string {
         return v === undefined ? m : num(v);
       }
       case "secs": {
-        const v = n("burn_s") ?? n("freeze_s");
+        const v = n("burn_s") ?? n("freeze_s") ?? n("duration_s");
         return v === undefined ? m : num(v);
       }
       case "heal": {
