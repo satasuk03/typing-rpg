@@ -25,6 +25,10 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
   - Reachable fix: armor +3 costs 1,148 gold in Gear; L1-L9 first-clear gold with 1 star each is about 1,210, so the Golem leak drops from 20% to 3% (test in `apps/game/tests/app/ops.test.ts`).
 - **For Ch2:** set grunt attack power around 1.07× par and elites/bosses 1.25–1.35×. Re-solve `HIT_MULT` per chapter. Check that par−3 upgrades land near 1.3× the damage budget.
 
+## PO feedback 2026-10-10 (round 3): unlock pace + prologue
+- **Unlock pace: "slow drip".** Skills unlock too fast (12 unlocks over Ch1's 10 levels). Keep the 1 active + 1 passive starter kit (Fireball + Clean Cut). After that, one new skill every 2–3 levels, alternating active/passive: about 4 in Ch1 and 4 in Ch2. Hold the rest for later chapters, which fits the "regain your power" story arc. Rebalance Ch1/Ch2 for this.
+- **Prologue.** It's the first thing on New Game: prologue → story card → calibration → L1. Esc skips it, and the title screen can replay it. It's a short playable section (~30–60 s of typing with the FULL skill kit, fixed easy words, can't lose), then a longer in-engine cutscene. The cutscene shows full magical VFX against a boss and a group of monsters, and the hero loses all his power. The boss is a **new villain**, the main antagonist who strips the hero's power: new sprite, intro and VFX.
+
 ## PO feedback 2026-10-10: starter kit
 - **Done 2026-10-10.** New players start with Fireball + Clean Cut. Aegis unlocks at L1, Steady Hands at L4 and Iron Will at L6. Iron Will's text now states its real effect. A content rule enforces the kit.
 
