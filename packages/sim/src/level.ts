@@ -4,6 +4,7 @@
 import type { WeaponArchetype } from "@hd2d/content";
 import { K } from "./balance.ts";
 import {
+  answerRiddle,
   bossHold,
   clearRubble,
   completeDoom,
@@ -12,7 +13,7 @@ import {
   initBossState,
   stepBoss,
 } from "./boss.ts";
-import { rubbleOf } from "./bossPlates.ts";
+import { riddleOf, rubbleOf } from "./bossPlates.ts";
 import { type Emit, emitTo } from "./bus.ts";
 import {
   chipHit,
@@ -41,7 +42,7 @@ import { computeHeroStats, guardRatingBp } from "./meta/loadout.ts";
 import { emitPassive, hasPassive, tutorialCue } from "./passives.ts";
 import { below, deriveRng } from "./rng.ts";
 import { chargeSkills, checkSkillCasts, resolveSkillImpacts, tickDots } from "./skills.ts";
-import type { EncounterState, EnemyState, RunState } from "./state.ts";
+import type { EncounterState, EnemyState, RiddleState, RunState } from "./state.ts";
 import { stepFreezes } from "./statuses.ts";
 import type {
   LevelOptions,
@@ -65,6 +66,7 @@ import type {
   HeroPose,
   LevelView,
   PlateView,
+  RiddleView,
   SkillView,
   StatusView,
 } from "./view.ts";
@@ -537,7 +539,8 @@ const HOOKS: TypingHooks = {
       return;
     }
     if (plate.kind === "minigame") {
-      clearRubble(state, plate, emit);
+      if (enc.boss?.riddle !== undefined) answerRiddle(state, plate, emit);
+      else clearRubble(state, plate, emit);
       return;
     }
     const enemy = enemyById(enc, plate.ownerId);
@@ -598,6 +601,25 @@ const skillViews = (state: Readonly<LevelState>): SkillView[] => {
   return out;
 };
 
+const isUpperAz = (c: string): boolean => c.length === 1 && c >= "A" && c <= "Z";
+
+/** The riddle panel: null between riddles, after the last, and while a Second Wind has taken the leaves away. */
+function riddleView(rd: RiddleState | undefined, count: number, t: number): RiddleView | null {
+  const a = rd?.active;
+  if (rd === undefined || a == null) return null;
+  const ids = a.leaves.map((l) => l.plateId);
+  if (ids.some((id) => id === null)) return null;
+  return {
+    riddleIndex: a.index,
+    riddleCount: count,
+    clue: a.clue,
+    leafPlateIds: ids as [number, number, number],
+    ticksLeft: Math.max(0, a.deadline - t),
+    totalTicks: a.totalTicks,
+    last: rd.last,
+  };
+}
+
 export function getView(state: Readonly<LevelState>): LevelView {
   const run = state.run;
   const enc = state.enc;
@@ -617,6 +639,9 @@ export function getView(state: Readonly<LevelState>): LevelView {
     lane: p.lane,
     expiresAtTick: p.expiresAt,
     totalTicks: p.totalTicks,
+    // v2.0 (set only when true): the plate compares case-exactly; the next letter is a capital (the shift cue)
+    ...(p.fold ? {} : { exactCase: true as const }),
+    ...(!p.fold && isUpperAz(p.text.charAt(p.typed)) ? { shiftNext: true as const } : {}),
   }));
   const enemies: EnemyView[] = (enc?.enemies ?? []).map((e) => {
     const plate = findPlate(enc as EncounterState, e.plateId);
@@ -750,11 +775,19 @@ export function getView(state: Readonly<LevelState>): LevelView {
         : null,
     minigame:
       enc?.boss != null && bossDef !== null && enc.boss.phase === 3
-        ? {
-            lanes: rubbleOf(bossDef.phase3.minigame).lanes,
-            cleared: enc.boss.cleared,
-            missed: enc.boss.missed,
-          }
+        ? bossDef.phase3.minigame.kind === "riddle"
+          ? {
+              lanes: riddleOf(bossDef.phase3.minigame).leaves,
+              cleared: enc.boss.cleared,
+              missed: enc.boss.missed,
+              kind: "riddle" as const,
+              riddle: riddleView(enc.boss.riddle, bossDef.phase3.minigame.count, t),
+            }
+          : {
+              lanes: rubbleOf(bossDef.phase3.minigame).lanes,
+              cleared: enc.boss.cleared,
+              missed: enc.boss.missed,
+            }
         : null,
     secondWind:
       swPlate === undefined || state.phaseUntil === null

@@ -41,6 +41,10 @@ export interface BotParams {
   guardAttempt?: number;
   /** Ticks before the bot notices a new guard plate (default 15 = 0.25 s). */
   reactionTicks?: number;
+  /** v2.0 Riddle of Leaves: probability of picking the right leaf (default 1). Draws only happen on a riddle level. */
+  riddleAccuracy?: number;
+  /** Ticks the bot "reads" a riddle before it commits to a leaf (default 120 = 2 s). */
+  riddleReadTicks?: number;
   /** Safety stop (default: level timeout). */
   maxTicks?: number;
 }
@@ -76,6 +80,9 @@ export function runBot(
   const attacksPerEncounter: number[] = [];
   const combatTicksPerEncounter: number[] = [];
   const decided = new Map<number, boolean>(); // guard plate id -> attempt?
+  const riddleAcc = p.riddleAccuracy ?? 1;
+  const riddleRead = p.riddleReadTicks ?? 120;
+  const leafChoice = new Map<number, number>(); // riddle index -> the leaf (plate id) the bot commits to
   let nextKey = 0;
   const maxTicks = p.maxTicks ?? 72_000;
 
@@ -120,8 +127,9 @@ export function runBot(
     // T1.5: a Doom Spell is urgent like a guard word (a deadline), falling-rubble words are typed soonest-landing first
     const doom = plates.find((x) => x.kind === "doom" && noticed(x, state.tick));
     const urgent = guard ?? doom;
+    const riddle = v.minigame?.riddle ?? null;
     const rubble = plates
-      .filter((x) => x.kind === "minigame")
+      .filter((x) => x.kind === "minigame" && riddle === null)
       .sort((x, y) => (x.expiresAtTick ?? 0) - (y.expiresAtTick ?? 0))[0];
     let pick: PlateView | undefined;
     if (v.phase === "secondWind") {
@@ -141,6 +149,25 @@ export function runBot(
       pick = target;
     } else if (urgent !== undefined) {
       pick = urgent;
+    } else if (riddle !== null) {
+      // the bot knows the answer from the level's clue table (def.riddles); it reads, then picks the right leaf with
+      // probability riddleAccuracy, else one of the two decoys
+      if (riddle.totalTicks - riddle.ticksLeft < riddleRead) {
+        nextKey = state.tick + 3;
+        return;
+      }
+      let id = leafChoice.get(riddle.riddleIndex);
+      if (id === undefined) {
+        const answer = def.riddles?.find((r) => r.clue === riddle.clue)?.text;
+        const leaves = riddle.leafPlateIds.map((pid) => plates.find((x) => x.id === pid));
+        const right = leaves.find((x) => x?.text === answer);
+        const decoys = leaves.filter((x) => x !== undefined && x !== right);
+        const ok = below(rng, 10_000) < Math.round(riddleAcc * 10_000);
+        const chosen = ok || decoys.length === 0 ? right : decoys[below(rng, decoys.length)];
+        id = chosen?.id ?? -1;
+        leafChoice.set(riddle.riddleIndex, id);
+      }
+      pick = plates.find((x) => x.id === id);
     } else if (rubble !== undefined) {
       pick = rubble;
     } else {
