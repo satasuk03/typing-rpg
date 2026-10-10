@@ -618,6 +618,20 @@ export function markIntroSeen(save: Save, chapter: number, nowMs: number): Save 
   return s;
 }
 
+/** Prologue "The Unwriting" flag (interfaces v2.2 §14.6): the reserved `journal.firstSeen` key, hidden from the journal. */
+export const PROLOGUE_SEEN_KEY = "#prologue";
+export const prologueSeen = (save: Save): boolean =>
+  save.journal.firstSeen[PROLOGUE_SEEN_KEY] !== undefined;
+
+/** Written like `markIntroSeen` (value: levelsPlayed). A no-op when already seen. First-run mode only, never on replay. */
+export function markPrologueSeen(save: Save, nowMs: number): Save {
+  if (prologueSeen(save)) return save;
+  const s = clone(save);
+  s.journal.firstSeen[PROLOGUE_SEEN_KEY] = s.srs.levelsPlayed;
+  s.updatedAtMs = nowMs;
+  return s;
+}
+
 export function patchSettings(
   save: Save,
   patch: Partial<Omit<Save["settings"], "volumes">> & {

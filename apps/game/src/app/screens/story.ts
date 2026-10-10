@@ -4,14 +4,14 @@ import { el } from "../dom";
 
 export const STORY_PANELS = [
   {
-    eyebrow: "Long ago",
+    eyebrow: "The Silence",
     title: "The Words Are Fading",
-    text: "The Ember Road once carried stories between every village. Then the Silence came, and words began to vanish from the world.",
+    text: "Nul, the Silent King, took your power. Now his Silence spreads, and words vanish from the world.",
   },
   {
     eyebrow: "Your gift",
     title: "Your Blade Is Your Voice",
-    text: "Here, a sword answers to your fingers. Every letter you type becomes power. Every word you finish becomes a strike.",
+    text: "One spark is left. Here, a sword answers to your fingers. Every letter you type becomes power. Every word you finish becomes a strike.",
   },
   {
     eyebrow: "The road ahead",

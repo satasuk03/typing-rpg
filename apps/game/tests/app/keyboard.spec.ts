@@ -29,15 +29,19 @@ test("title, map and every hub screen with the keyboard only", async ({ page }) 
   await page.keyboard.press("ArrowDown");
   await expect.poll(() => focused(page)).toBe("new");
   await page.keyboard.press("ArrowDown");
+  await expect.poll(() => focused(page)).toBe("prologue"); // P3.5: the replay button
+  await page.keyboard.press("ArrowDown");
   await expect.poll(() => focused(page)).toBe("trial");
   await page.keyboard.press("ArrowDown");
   await expect.poll(() => focused(page)).toBe("settings");
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
   await expect.poll(() => focused(page)).toBe("continue");
 
   // settings from the title, Escape returns to the title
+  await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");

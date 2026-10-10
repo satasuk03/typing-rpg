@@ -139,6 +139,8 @@ export interface ScreenActions {
   next(): void;
   /** Back to the map (the app). Absent on the dev route. */
   exit?(): void;
+  /** Prologue mode (P3.5): "Skip prologue" in the pause menu. */
+  skip?(): void;
 }
 
 const CSS = `
@@ -307,13 +309,28 @@ export class Screens {
     this.panel = null;
   }
 
-  showPause(reason: string): void {
+  /** `prologue` (P3.5): the pause menu variant of the prologue run, Resume / Skip prologue only. */
+  showPause(reason: string, prologue = false): void {
     const why =
       reason === "menu"
         ? "Game paused"
         : reason === "stall"
           ? "The game stalled and was paused"
           : "The window lost focus";
+    if (prologue) {
+      this.mount(
+        "pause",
+        `<h1 class="hd-title">PAUSED</h1><p class="hd-sub" style="margin-bottom:16px">${esc(why)}</p>
+       <div class="btns"><button class="hd-btn primary" data-act="resume">Resume (Esc)</button><button class="hd-btn" data-act="skip">Skip prologue</button></div>`,
+        {
+          Escape: () => this.actions.resume(),
+          "act:resume": () => this.actions.resume(),
+          "act:skip": () => this.actions.skip?.(),
+        },
+      );
+      this.panel?.setAttribute("data-variant", "prologue");
+      return;
+    }
     this.mount(
       "pause",
       `<h1 class="hd-title">PAUSED</h1><p class="hd-sub" style="margin-bottom:16px">${esc(why)}</p>
