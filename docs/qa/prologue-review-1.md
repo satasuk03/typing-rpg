@@ -311,3 +311,8 @@ the §4 retime), P2-1, P2-2 (cue), P2-3 (card, bars), P2-7, P2-8 (camera), P2-12
 | `13-swirl-rise-vortex.jpg` | 31.8 s rise, 33 s vortex, 23 s swirl (P2-7, P2-8) |
 | `14-surge-catch-arrival-glare.jpg` | max surge (P3.6 still), catch at 0.3 s with pops, theft-3 arrival glare (P2-4, P2-6, P1-7) |
 | `20`–`25` `-1920-*.jpg` | 1920 singles: boss intro, boss fight, mask push, colour swirl, ember, A crane |
+
+## Orchestrator rulings (2026-10-11)
+- **Pacing:** overlay (non-gating) lines are approved, as `mode?: "gate" | "overlay"` on the line cue (client-only, interfaces v2.2.3). WP-B implements it.
+- **P2-11 (the knight is never hurt in the boss fight):** deferred to the backlog. Content alone can't make a strike unblockable (P1.3 found this), and the v2.2.1 show-heal already makes Mending Light cast. Never being hurt fits the power fantasy; Last Stand not triggering is acceptable.
+- **WP-A also owns the P4.1 hitch:** pre-warm the prologue VFX and HUD before `startPlay` (first Part B frames: 50 ms at tier 0, 133 ms at tier 2 with 4× throttle).
