@@ -31,7 +31,7 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
 ## Ch2 art backlog
 - **The single source is now `docs/qa/ch2-review-1.md`** (R2, 2026-10-10): 3 P1, 12 P2, 23 P3. It supersedes the per-task lists that used to be here.
 - **After the variety pass** (`docs/qa/ch2-variety/`):
-  - ~~Hushwood L3 and L4 read close to L1~~: done. L3 is now the heaviest Ch2 level (uncapped p95 14.0 ms vs the 16.8 budget), so include it in the perf re-measure. The L3 hero is dim at battle:2.
+  - ~~Hushwood L3 and L4 read close to L1~~: done. L3 is the heaviest Ch2 level; the perf re-measure passed at vsync. The L3 hero is dim at battle:2.
   - L6's shrine gate is cut by the top of the frame.
   - L7's reed wall looks coarse up close.
 - **After the Willow fix** (`docs/qa/ch2-willow-fix/`):
@@ -44,7 +44,7 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
 - **Ch1 flipped-normal fix:** this proposal is tracked there too (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt
-- **Re-measure on a quiet machine with no agents running.** `apps/game/tests/hud/typingPerf.spec.ts` read 0.65 ms/key against the 0.45 budget during T3.1, but `main` read 0.649 under the same load, so no regression is proven. Get a quiet-machine number before Ch2 sign-off.
+- ~~**Re-measure on a quiet machine with no agents running.**~~ Done 2026-10-10: 0.41 ms/key, and the Ch2 frame budget is 16/16 at vsync (`docs/perf.md`). `apps/game/tests/hud/typingPerf.spec.ts` read 0.65 ms/key against the 0.45 budget during T3.1, but `main` read 0.649 under the same load, so no regression is proven. Get a quiet-machine number before Ch2 sign-off.
 - **Ch2 HUD follow-ups:** the 250 ms slide-in for the riddle panel, gold trim on elite-owned plates, and possibly a ✚ pulse on the healer's word plate (art §5).
 - The `tools/content` validator has no riddle-boss pool rule yet; it's only a comment. T4.3 should add it.
 - `tools/balance/src/gear.ts` copies the sim's upgrade-step rule and the `guardLeakBp` formula, because the sim exports neither. Export them from `packages/sim` and have the tool import them, so they can't drift.

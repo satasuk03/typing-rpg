@@ -94,3 +94,17 @@ against a recording fake AudioContext and fails if any oscillator or filter freq
 - **typingSettings:** 3/3.
 - **Frame budget (Metal):** 8/8; p95 16.7–16.8 ms at all tiers; tier 2 at 4× throttle cpu avg 3.4–3.6 ms (was 4.7–6.6 before round 2).
 - **typing-fx:** L1 2/2 clean. **L10 fails ~1 run in 3** on the new H3 next-letter keep-out invariant ("typing FX touch the next letter or a streak head (70 px)", tick ≈8413). Being fixed.
+
+## Ch2 quiet-machine re-measure (2026-10-10, M4 Pro, real Metal, no agents running, load 2.5–4)
+- **Typing:** `typingPerf.spec.ts` gives **0.4125 and 0.4108 ms/key**, under the 0.450 budget. The T3.1/T3.2 readings of 0.65 came from machine load, not a regression.
+- **Frame budget:** `frame-budget.spec.ts` with `PERF_LEVELS=ch1-l05,ch2-l03,ch2-l07,ch2-l10`, bot at 60 WPM, typing VFX on. **16/16 pass.**
+  - Every tier, including tier 2 at 4× CPU throttle, holds vsync: p95 16.7–16.8 ms.
+  - CPU p95 by level:
+
+    | Level | Tier 0 | Tier 2, 4× throttle |
+    |---|---|---|
+    | ch1-l05 | 3.4 ms | 5.7 ms |
+    | ch2-l03 (heaviest, 3.5k tris) | 1.6 ms | 5.1 ms |
+    | ch2-l07 | 1.4 ms | 5.6 ms |
+    | ch2-l10 Willow | 3.5 ms | 6.2 ms |
+
