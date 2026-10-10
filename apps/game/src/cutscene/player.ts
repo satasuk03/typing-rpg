@@ -3,12 +3,13 @@
  *
  * - The clock only moves when `tick(dtMs)` is called, and not while `pause()`d (blur / hidden / pause menu).
  * - A `line` cue holds the clock at its `at` until `lineHoldMs` has passed or Space/Enter is pressed. Letter keys
- *   never advance a line (the player is often still typing when the climax hits).
+ *   never advance a line (the player is often still typing when the climax hits). An `overlay` line (v2.2.3) never holds
+ *   the clock: Space/Enter only fades it out early.
  * - All input is ignored for `INPUT_GUARD_MS` after `start()` and after `climax()`.
  * - `seek(t)` is a pure re-evaluation: it fires no edge cues (sfx/music) and gives identical state every time.
  * - `skip()` lands on `endState`.
  */
-import { endState, evaluate, lineHoldMs } from "./timeline";
+import { endState, evaluate, isOverlay, lineHoldMs } from "./timeline";
 import type {
   ActorRef,
   Cue,
@@ -53,6 +54,9 @@ export class CutscenePlayer {
   private paused = false;
   private guardLeft = 0;
   private readonly lines: readonly Extract<Cue, { kind: "line" }>[];
+  private readonly overlays: readonly Extract<Cue, { kind: "line" }>[];
+  /** `at` of the overlay line the reader dismissed with Space/Enter (null = none). */
+  private dismissedAt: Ms | null = null;
   private readonly guardMs: Ms;
   private lastMood = -1;
 
@@ -60,9 +64,9 @@ export class CutscenePlayer {
     readonly timeline: Timeline,
     private readonly opts: PlayerOptions,
   ) {
-    this.lines = timeline.cues.filter(
-      (c): c is Extract<Cue, { kind: "line" }> => c.kind === "line",
-    );
+    const all = timeline.cues.filter((c): c is Extract<Cue, { kind: "line" }> => c.kind === "line");
+    this.lines = all.filter((c) => !isOverlay(c));
+    this.overlays = all.filter(isOverlay);
     this.guardMs = opts.guardMs ?? INPUT_GUARD_MS;
   }
 
@@ -88,7 +92,13 @@ export class CutscenePlayer {
   get state(): CutsceneState {
     return this.finished
       ? endState(this.timeline, this.opts.env)
-      : evaluate(this.timeline, this.t, this.held ? this.lineClock : -1, this.opts.env);
+      : evaluate(
+          this.timeline,
+          this.t,
+          this.held ? this.lineClock : -1,
+          this.opts.env,
+          this.dismissedAt,
+        );
   }
 
   // ------------------------------------------------------------------------------------------- control
@@ -101,6 +111,7 @@ export class CutscenePlayer {
     this.held = false;
     this.lineClock = -1;
     this.cursor = 0;
+    this.dismissedAt = null;
     this.guardLeft = this.guardMs;
     this.fire(-1, 0);
     this.enterLineIfDue();
@@ -159,7 +170,17 @@ export class CutscenePlayer {
   key(key: string): boolean {
     if (!this.started || this.finished || this.paused) return false;
     if (this.guardLeft > 0) return false;
-    if (!this.held || !isAdvanceKey(key)) return false;
+    if (!isAdvanceKey(key)) return false;
+    if (!this.held) {
+      // an overlay line on screen: Space/Enter fades it out early (nothing is skipped, the clock never stopped)
+      const on = this.overlays.find(
+        (c) => c.at !== this.dismissedAt && this.t >= c.at && this.t < c.at + lineHoldMs(c.text),
+      );
+      if (!on) return false;
+      this.dismissedAt = on.at;
+      this.apply();
+      return true;
+    }
     this.releaseLine();
     this.apply();
     return true;
@@ -193,6 +214,7 @@ export class CutscenePlayer {
     this.finished = false;
     this.held = false;
     this.lineClock = -1;
+    this.dismissedAt = null;
     this.cursor = this.lines.filter((l) => l.at < this.t).length;
     const here = this.lines[this.cursor];
     if (lineClock >= 0 && here && here.at === this.t) {

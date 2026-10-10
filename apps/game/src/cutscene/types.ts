@@ -44,6 +44,7 @@ export type PrologueHudCue =
 export type HeroCutsceneAnim = HeroAnim | HeroCutsceneAnimKey;
 export type NulAnim = "idle" | "cast" | "write" | "catch" | "reach" | "hurt" | "rise";
 export type Speaker = "nul" | "knight";
+export type LineMode = "gate" | "overlay";
 
 export const HERO_CUTSCENE_ANIMS: readonly HeroCutsceneAnim[] = [
   "idle",
@@ -112,7 +113,12 @@ export type Cue = { at: Ms; dur?: Ms } & (
     }
   | { kind: "mood"; to: "base" | "unwritten" | number }
   | { kind: "hud"; cue: PrologueHudCue }
-  | { kind: "line"; speaker: Speaker; text: string }
+  /**
+   * A dialogue line. `mode` "gate" (default) holds the whole timeline clock until the reader presses Space/Enter or
+   * `lineHoldMs` passes. "overlay" (interfaces v2.2.3, client-only) never stops the clock: the HUD shows the line for
+   * `lineHoldMs` from its `at` while the camera, VFX and cues keep running; Space/Enter just fades it out early.
+   */
+  | { kind: "line"; speaker: Speaker; text: string; mode?: LineMode }
   | { kind: "startPlay" }
   | { kind: "end" }
 );
@@ -185,7 +191,7 @@ export interface CutsceneState {
   vfx: readonly ActiveVfx[];
   hud: HudState;
   music: { state: MusicState | null; silence: number };
-  line: { speaker: Speaker; text: string; ageMs: Ms; holdMs: Ms } | null;
+  line: { speaker: Speaker; text: string; ageMs: Ms; holdMs: Ms; mode: LineMode } | null;
   /** True once `startPlay` has been reached. */
   playStarted: boolean;
   ended: boolean;

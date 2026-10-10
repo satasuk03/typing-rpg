@@ -24,6 +24,7 @@ import type { ActorRef, Cue, CutsceneState, Timeline } from "../cutscene/types";
 import { Hud } from "../hud";
 import { loadHudFonts } from "../hud/fonts";
 import type { PrologueHud } from "../hud/prologue";
+import { heroHandOffset } from "../hud/prologue/geometry";
 import type { HudSettings } from "../hud/settings";
 import { KeyboardCapture, pressKey } from "../input/keyboard";
 import { isQualityTier, type QualityTier, RenderWorld } from "../render";
@@ -135,6 +136,8 @@ interface ProState {
   cState: CutsceneState | null;
   /** Test hook (`proSeek`): the cutscene clock is parked on the sought frame. */
   frozen: boolean;
+  /** P1-8: the smoothed hand offset (m from the knight's foot) the HUD ember / shards follow; null = snap to the current frame. */
+  handOff: { dx: number; dy: number } | null;
   /** Part C began before the boss appeared (idle auto-advance): the stage stands Nul up for the cutscene. */
   nulStandIn: boolean;
   /** P4.2: the prewarm ran / frames of HUD prewarm left. */
@@ -627,6 +630,7 @@ export class PlaySession {
       swordMesh: null,
       cState: null,
       frozen: false,
+      handOff: null,
       nulStandIn: false,
       warmed: false,
       warmHud: 0,
@@ -638,9 +642,16 @@ export class PlaySession {
     hudPro.setStarterKit(starterKitIds());
     hudPro.setAnchors({
       hand: () => {
+        // P1-8: the open palm (reach) / closed fist (kneel) of the CURRENT hero frame, eased between poses
         const hp = { x: 0, z: 0 };
         this.stage.heroPos(hp);
-        return this.stage.project(hp.x + 0.5, 0.75, hp.z);
+        const h = pro.cState?.actors.hero;
+        const want = heroHandOffset(h?.anim ?? null, h?.animAgeMs ?? 0);
+        const cur = pro.handOff ?? { ...want };
+        cur.dx += (want.dx - cur.dx) * 0.25;
+        cur.dy += (want.dy - cur.dy) * 0.25;
+        pro.handOff = { dx: cur.dx, dy: cur.dy };
+        return this.stage.project(hp.x + cur.dx, cur.dy, hp.z);
       },
       tear: () => this.stage.project(tear.x, tear.y ?? 7, tear.z),
     });
@@ -1051,6 +1062,7 @@ export class PlaySession {
       b ? { anim: b.anim, ageMs: b.animAgeMs, dx: b.dx, dz: b.dz, visible: b.visible } : null,
     );
     this.stage.setFogDensity(cs ? fx.fx.out.fogDensity : null);
+    this.stage.setHeroFillBlend(cs?.moodBlend ?? 0); // P4.2: the knight's fill light cools and dims as the colour drains
     // the knight's sword, stuck in the ground at the `sword` marker for the fall (a `prop:` actor of the timeline)
     const sw = cs?.actors[`prop:${SWORD_KEY}` as ActorRef];
     if (sw?.visible && !pro.swordMesh) {
@@ -1075,6 +1087,7 @@ export class PlaySession {
     pro.frozen = true;
     pro.holdMs = 0;
     pro.cState = pro.player.seek(tMs, lineClockMs);
+    pro.handOff = null;
     pro.hudPro.setCutscene(pro.cState, jumped);
     pro.hudPro.settle();
     return true;

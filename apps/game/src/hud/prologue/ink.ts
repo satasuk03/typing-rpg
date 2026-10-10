@@ -102,7 +102,14 @@ export function drawInk(
   c.restore();
 }
 
-export function drawCaption(c: Ctx, W: number, H: number, text: string, alpha: number): void {
+export function drawCaption(
+  c: Ctx,
+  W: number,
+  H: number,
+  text: string,
+  alpha: number,
+  y = 0.46,
+): void {
   if (alpha <= 0.01) return;
   c.save();
   c.globalAlpha = alpha;
@@ -113,10 +120,10 @@ export function drawCaption(c: Ctx, W: number, H: number, text: string, alpha: n
   c.lineJoin = "round";
   c.strokeStyle = "rgba(6,4,10,0.9)";
   c.lineWidth = 8;
-  c.strokeText(text, W / 2, H * 0.46);
+  c.strokeText(text, W / 2, H * y);
   c.shadowColor = "rgba(255,200,120,0.55)";
   c.shadowBlur = 14;
   c.fillStyle = "#fbefd0";
-  c.fillText(text, W / 2, H * 0.46);
+  c.fillText(text, W / 2, H * y);
   c.restore();
 }

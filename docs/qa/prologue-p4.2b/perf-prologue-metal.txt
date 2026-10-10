@@ -1,0 +1,17 @@
+PROLOGUE-PERF tier0
+Part A: n 381 avg 16.7 p50 16.7 p95 16.8 p99 16.8 max 16.8 ms
+Part B: n 3107 avg 16.7 p50 16.7 p95 16.8 p99 16.8 max 16.8 ms
+Part B at max surge x4: n 427 avg 16.7 p50 16.7 p95 16.8 p99 16.8 max 16.8 ms
+Part C: n 3366 avg 16.7 p50 16.7 p95 16.7 p99 16.8 max 16.8 ms
+Part C theft beats (14-22 s): n 480 avg 16.7 p50 16.7 p95 16.7 p99 16.8 max 16.8 ms
+Part C vortex + fog (30-43 s): n 780 avg 16.7 p50 16.7 p95 16.7 p99 16.8 max 16.8 ms
+worst frames: B t=0 dt=16.8 | B t=0 dt=16.8 | B t=0 dt=16.8 | B t=0 dt=16.8 | B t=0 dt=16.8
+PROLOGUE-PERF tier0 console errors 0, in-app 0
+PROLOGUE-PERF tier2-4x
+Part A: n 381 avg 16.7 p50 16.7 p95 16.8 p99 16.8 max 16.8 ms
+Part B: n 3075 avg 16.7 p50 16.7 p95 16.7 p99 16.8 max 16.8 ms
+Part B at max surge x4: n 395 avg 16.7 p50 16.7 p95 16.7 p99 16.8 max 16.8 ms
+Part C: n 3366 avg 16.7 p50 16.7 p95 16.7 p99 16.8 max 16.8 ms
+Part C theft beats (14-22 s): n 480 avg 16.7 p50 16.7 p95 16.8 p99 16.8 max 16.8 ms
+Part C vortex + fog (30-43 s): n 780 avg 16.7 p50 16.7 p95 16.7 p99 16.8 max 16.8 ms
+worst frames: B t=0 dt=33.3 | B t=0 dt=16.8 | B t=0 dt=16.8 | B t=0 dt=16.8 | B t=0 dt=16.8

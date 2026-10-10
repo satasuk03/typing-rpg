@@ -45,6 +45,7 @@ import {
   popAlpha,
   popScale,
 } from "./pops";
+import { NUL_HEIGHT_M } from "./prologue/geometry";
 import type { PrologueAnchorSource, PrologueDebug, PrologueDrawEnv } from "./prologue/PrologueHud";
 import { PrologueHud } from "./prologue/PrologueHud";
 import {
@@ -608,14 +609,17 @@ export class Hud {
       case "WaveStarted":
         if (e.waveIndex > 0) this.banners.show("wave", `WAVE ${e.waveIndex + 1}`, "", 1.5);
         break;
-      case "BossIntroStarted":
-        this.banners.show(
-          "boss",
-          e.name.toUpperCase(),
-          e.title,
-          Math.max(1, (e.untilTick - e.tick) / 60),
-        );
+      case "BossIntroStarted": {
+        const dur = Math.max(1, (e.untilTick - e.tick) / 60);
+        // P2-3: in the prologue Nul steps out of the tear first (lift 0.6 -> 1.6 s); the card follows at 1.8 s, under his hem
+        if (this.prologue && dur > 2.4)
+          this.banners.show("boss", e.name.toUpperCase(), e.title, dur - 1.8, {
+            delay: 1.8,
+            cy: 0.84,
+          });
+        else this.banners.show("boss", e.name.toUpperCase(), e.title, dur);
         break;
+      }
       case "LevelCleared":
         this.banners.show("victory", "LEVEL CLEAR", `+${e.gold} GOLD`, 3.2);
         break;
@@ -822,6 +826,13 @@ export class Hud {
     this.alpha = clamp(alpha, 0, 1);
     this.time += dt;
     this.prologue?.update(dt, view, this.W, this.H, this.s);
+    // P1-4 (HUD half): the cutscene starts clean: no pops, PARRY / BREAK tags or edge flashes left over from Part B
+    if (this.prologue?.hasCutscene()) {
+      this.pops.clear();
+      this.typoFlash = 0;
+      this.hurtFlash = 0;
+      this.tierFlash = 0;
+    }
     this.pops.update(dt);
     this.introFade = view.phase === "bossIntro" ? 0 : Math.min(1, this.introFade + dt / 0.3);
     // The boss card lives exactly as long as the intro window; it must never outlast it onto live plates.
@@ -890,6 +901,13 @@ export class Hud {
     }
     const en = this.view?.enemies.find((x) => x.id === a.id);
     if (en) {
+      if (this.prologue && en.isBoss && en.defId === "nul") {
+        // P1-9: Nul's pops and tags sit at his cloak side away from the hero (x + 0.9 m, 2.3 m up), never on the mask or crown
+        const hd = this.anchorDesign(en, "head");
+        const ft = this.anchorDesign(en, "feet");
+        const pxm = Math.max(1, ft.y - hd.y) / NUL_HEIGHT_M;
+        return { x: (hd.x + 0.9 * pxm) * this.s, y: (ft.y - 2.3 * pxm) * this.s };
+      }
       const p = this.anchorDesign(en, a.part ?? "body");
       return { x: p.x * this.s, y: p.y * this.s };
     }
@@ -969,6 +987,7 @@ export class Hud {
     }
     this.bannerRects.length = 0;
     for (const b of this.banners.banners) {
+      if (b.age < 0) continue; // a delayed card has not appeared yet
       const br = bannerRect(c, b, W, H);
       avoid.push(br);
       this.bannerRects.push(this.toCss(br));
@@ -1087,7 +1106,11 @@ export class Hud {
           if (view.boss && view.boss.enemyId === e.id) drawBossPlate(pc, view, e, st);
         } else if (!introHold) {
           const f = this.anchorDesign(e, "feet");
-          drawEnemyBars(pc, e, f.x, f.y, st);
+          // P3-4: the prologue hides the "? ?" weakness slots and the shield pips under every grunt (noise in the first minute)
+          const eb = pm
+            ? { ...e, weaknesses: e.weaknesses.filter((w) => w.revealed), shield: 0, shieldMax: 0 }
+            : e;
+          drawEnemyBars(pc, eb, f.x, f.y, st);
         }
       }
       if (!boss) drawTopLabel(pc, view);
@@ -1103,7 +1126,7 @@ export class Hud {
               (p) => p.skills.find((x) => x.slot === sk.slot)?.chargeFrac,
             ),
           );
-      drawComboDisplay(pc, view);
+      if (!csOn) drawComboDisplay(pc, view); // P1-4: no combo ring in the cutscene
       if (riddle && this.riddleRectDesign) {
         // brief 5.4: the panel slides down into its reserved rect over 250 ms (instant in reduced motion)
         const sl = riddleSlide(this.time - (this.riddleShownAt ?? this.time), set.reducedMotion);

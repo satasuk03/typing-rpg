@@ -36,14 +36,18 @@ so story levels behave identically. While `setCameraOverride(pose)` is set the s
 cutscene frames (unknown anims fall back to idle until P2.3's sheet lands). P3.1 added `setActorState` to the interface.
 
 ## Dev route
-`?scene=prologue&part=cutscene&t=<ms>&freeze=1[&lc=<ms>][&id=ch1-l04][&reduced=1]` (`src/dev/prologueScene.ts`) renders the exact frame
-(standalone setup: hero at the layout `start` anchor). Without `freeze` it plays live. Tests: `src/cutscene/cutscene.test.ts` (Node) and
+`?scene=prologue&part=cutscene[&tl=open|unwriting|test]&t=<ms>&freeze=1[&lc=<ms>][&id=<level>][&reduced=1]` (`src/dev/prologueScene.ts`) renders the exact
+frame. P4.2 (P3-7): by default it plays the REAL timelines on the Word Gate layout (`tl=open` = Part A then Part C; `tl=unwriting` = Part C
+alone); `tl=test` or any `id=` plays the small TEST timeline over a ruins level. Without `freeze` it plays live. Tests: `src/cutscene/cutscene.test.ts` (Node) and
 `tests/cutscene/cutscene.spec.ts` (`CUTSCENE_PORT=5409 pnpm exec playwright test -c tests/cutscene/playwright.config.ts`, Metal).
 
 ## P3.6: the real timelines and how the session plays them
-- **Authoring rule.** A `line` cue holds the timeline clock (and every scripted cue, VFX and camera ease with it), so a line sits at
-  the END of the shot it belongs to and the next move starts after it. Part C is 54.5 s of timeline plus the line holds (about 74 s
-  at the minimum reading time); Part A is 8 s plus Nul's line.
+- **Authoring rule (P4.2 WP-B: overlay lines, interfaces v2.2.3).** A `line` cue is `mode: "gate"` (default: it holds the timeline clock and
+  every scripted cue, VFX and camera ease with it) or `mode: "overlay"`: the clock never stops, the HUD shows the line for
+  `lineHoldMs(text)` from its `at`, and Space/Enter only fades it out early (`CutscenePlayer.key`). `validate()` rejects an overlay
+  window that overlaps the next line or runs past `durationMs`, which guarantees the minimum reading time by construction. The
+  prologue uses overlay everywhere, so Part C is 57.0 s (58 s on the wall) and Part A 8.0 s, every shot that carries a line creeps (fov /
+  dist) over it, and no frame is static for more than 1.5 s (a unit test checks the camera gaps).
 - **Cue fields added in P3.6** (all optional, additive): `music` `drone: number | null` (MIDI note / release), `swell: true`,
   `motif: "spark" | "sparkEnd"`; `sfx` `count` / `boss` (the `SfxParams` the prologue voices read: theft slot, letter / glyph index,
   speaker); `hud` `{ id: "fade", to }` (a linear black fade over the cue's `dur`, `HudState.fade`); `NulAnim` `"reach"`.

@@ -18,6 +18,7 @@ import { FONT_UI, GOLD_HI } from "../theme";
 import type { GrimoireGeom } from "./geometry";
 import { CHIP, CHIP_PITCH, GR_PAD, ORB, ORB_PITCH, ROW_GAP } from "./geometry";
 import { GREY, GREY_DARK, passiveGlyph, THEFT_COLOURS } from "./palette";
+import { getPassiveIcon, PASSIVE_ICON_PX } from "./passiveIcons";
 import { drawShatter, SHATTER_DONE_S } from "./shatter";
 
 const S = 2; // texel scale of an orb (ORB = FRAME_CELLS * 2)
@@ -212,12 +213,29 @@ export function drawGrimoire(
     if (ch.dim < 1) {
       c.globalAlpha = env.alpha * (0.35 + 0.65 * lit);
     }
-    txt(c, pg.code, 0, 1, 10, lit > 0.5 ? pg.colour : GREY, {
-      align: "center",
-      f: FONT_UI,
-      w: 700,
-      stroke: false,
-    });
+    const pic = getPassiveIcon(ch.id);
+    if (pic) {
+      // P2-12: the 12x12 pixel gem at 2x (colour while lit, the grey outline once dimmed)
+      c.imageSmoothingEnabled = false;
+      c.drawImage(
+        lit > 0.5 ? pic.color : pic.dim,
+        0,
+        0,
+        PASSIVE_ICON_PX,
+        PASSIVE_ICON_PX,
+        -PASSIVE_ICON_PX,
+        -PASSIVE_ICON_PX,
+        PASSIVE_ICON_PX * 2,
+        PASSIVE_ICON_PX * 2,
+      );
+    } else {
+      txt(c, pg.code, 0, 1, 10, lit > 0.5 ? pg.colour : GREY, {
+        align: "center",
+        f: FONT_UI,
+        w: 700,
+        stroke: false,
+      });
+    }
     c.globalAlpha = env.alpha;
     if (ch.flash > 0.01 && env.intensity > 0) {
       c.globalCompositeOperation = "lighter";

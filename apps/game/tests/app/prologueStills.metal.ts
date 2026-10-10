@@ -108,7 +108,7 @@ test("the 16 keyframes (A, B, C) from the real session on Metal", async ({ page 
   await seekShot(page, "a1-crane", PART_A_KEYFRAMES.crane);
   await seekShot(page, "a2-ink-drips", PART_A_KEYFRAMES.inkDrips);
   await seekShot(page, "x-a-caption", 1200, -1, 1200);
-  await seekShot(page, "x-a-nul-line", 7000, 1800, 900);
+  await seekShot(page, "x-a-nul-line", 6400, -1, 900); // an overlay line (v2.2.3): on screen by time, no line clock
   await unpark(page);
 
   // ---- Part B: the first Fireball, Slash Wave on the crowd, the boss intro card (live, wpm-bot)
@@ -146,30 +146,30 @@ test("the 16 keyframes (A, B, C) from the real session on Metal", async ({ page 
   expect(gotFire, "never saw a Fireball cast").toBe(true);
   console.log(`B stills: fireball ${gotFire}, slash crowd ${gotSlash}, intro ${gotIntro}`);
 
-  // ---- Part C keyframes (timeline ms; a held line shows when the time equals its `at`)
+  // ---- Part C keyframes (timeline ms; every prologue line is an overlay line, shown by time)
   await waitProPhase(page, "C", 60_000);
   const C = PART_C_KEYFRAMES;
   await seekShot(page, "c01-catch", C.catch);
   await seekShot(page, "c02-mask-push", C.maskPush);
-  await seekShot(page, "c03-knight-flare", C.knightFlare, 1800, 1200);
+  await seekShot(page, "c03-knight-flare", C.knightFlare, -1, 1200);
   // the ink line is a HUD animation that holds 1.2 s once written: seek un-jumped, shoot inside the hold, then let it fade
   await seekShot(page, "c04-ink-line", C.inkLine, -1, 450, false);
   await page.waitForTimeout(2400);
   await seekShot(page, "c05-theft-3", C.theft3);
   await seekShot(page, "c06-theft-6", C.theft6);
   await seekShot(page, "c07-collapse-kneel", C.collapseKneel, -1, 1500);
-  await seekShot(page, "c08-colour-swirl", C.colourSwirl, 1800, 1500);
+  await seekShot(page, "c08-colour-swirl", C.colourSwirl, -1, 1500);
   await seekShot(page, "c09-vortex-fog", C.vortexFog);
   await seekShot(page, "c10a-shards", C.shards, -1, 1200);
   await seekShot(page, "c10b-ember", C.ember, -1, 1200);
   // extras (not part of the 16): the line plates, the rise into the tear, the gate going dark, the end caption
-  await seekShot(page, "x-line-enough", 4400, 1800, 700);
-  await seekShot(page, "x-line-quiet", 23000, 1800, 700);
-  await seekShot(page, "x-rise-1", 31800, -1, 900);
-  await seekShot(page, "x-rise-2", 32800, -1, 900);
-  await seekShot(page, "x-gate-dark", 28500, -1, 900);
-  await seekShot(page, "x-theft-1", 13600, -1, 900);
-  await seekShot(page, "x-end-caption", 49000, -1, 900);
+  await seekShot(page, "x-line-enough", 4000, -1, 700);
+  await seekShot(page, "x-line-quiet", 27000, -1, 700);
+  await seekShot(page, "x-rise-1", 36800, -1, 900);
+  await seekShot(page, "x-rise-2", 37800, -1, 900);
+  await seekShot(page, "x-gate-dark", 34000, -1, 900);
+  await seekShot(page, "x-theft-1", 16400, -1, 900);
+  await seekShot(page, "x-end-caption", 51500, -1, 900);
   await page.evaluate((t) => window.__play?.proSeek?.(t), UNWRITING_END_MS - 100);
   await unpark(page);
 
