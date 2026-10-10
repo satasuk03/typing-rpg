@@ -12,6 +12,7 @@ import { TypingHudFx } from "../../hud/fx/typing/TypingHudFx";
 import type { Hud } from "../../hud/hud";
 import type { QualityTier } from "../quality";
 import type { RenderWorld } from "../RenderWorld";
+import { CapitalAccent } from "./CapitalAccent";
 import { CHIP_DELAY_MS, flushesQueue, PresentationQueue } from "./PresentationQueue";
 import { TimeDilation } from "./TimeDilation";
 import { TypingWorldFx } from "./TypingWorldFx";
@@ -59,6 +60,8 @@ export interface TypingFxHandle {
   /** Mutable: where held-back events come out. */
   onPresent: (e: SimEvent) => void;
   readonly hud: TypingHudFx;
+  /** T3.2 Hush Spell capital accent (HUD above layer). */
+  readonly capital: CapitalAccent;
   readonly worldFx: TypingWorldFx;
   readonly timeDilation: TimeDilation;
   readonly queue: PresentationQueue;
@@ -88,6 +91,9 @@ function defaultCameraPose(world: RenderWorld): TypingFxCallbacks["cameraPose"] 
 export function createTypingFx(o: TypingFxOptions): TypingFxHandle {
   const hudFx = new TypingHudFx(o.hud, { seed: o.seed, quality: o.quality ?? 0 });
   hudFx.attach();
+  // T3.2: the Hush Spell capital accent (CharCorrect.shifted), drawn in the HUD above layer
+  const capital = new CapitalAccent(o.hud);
+  const detachCapital = capital.attach();
   const td = new TimeDilation();
   const queue = new PresentationQueue();
   const callbacks: TypingFxCallbacks = {
@@ -110,14 +116,19 @@ export function createTypingFx(o: TypingFxOptions): TypingFxHandle {
     callbacks,
     onPresent: o.onPresent ?? (() => {}),
     hud: hudFx,
+    capital,
     worldFx,
     timeDilation: td,
     queue,
     onEvent(e) {
       if (!enabled) return true;
       hudFx.onEvent(e);
+      capital.onEvent(e);
       worldFx.onEvent(e);
-      if (e.type === "LevelStarted") queue.clear();
+      if (e.type === "LevelStarted") {
+        queue.clear();
+        capital.clear();
+      }
       if (e.type === "FinisherCompleted") {
         // EnemyDeath and the finishing Hit wait for the cinematic (1060 ms; 300 ms at intensity 0)
         const k0 = o.hud.getSettings().effectsIntensity;
@@ -166,6 +177,7 @@ export function createTypingFx(o: TypingFxOptions): TypingFxHandle {
       hudFx.setEnabled(on);
       worldFx.setEnabled(on);
       if (!on) {
+        capital.clear();
         queue.flushAll(release);
         td.reset();
       }
@@ -173,6 +185,7 @@ export function createTypingFx(o: TypingFxOptions): TypingFxHandle {
     dispose() {
       offView();
       queue.clear();
+      detachCapital();
       hudFx.dispose();
       worldFx.dispose();
     },

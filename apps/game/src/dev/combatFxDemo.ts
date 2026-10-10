@@ -14,6 +14,7 @@
 import type { EventOf, SimEvent, SimEventType } from "@hd2d/sim";
 import { BINDINGS, type BindingCtx, type EventBinding } from "../level/eventBindings";
 import type { PlaySession } from "../level/session";
+import { makeCh2Demo } from "./ch2FxDemo";
 
 export const DEMO_NAMES = [
   "slash",
@@ -77,7 +78,13 @@ export function makeDemo(session: PlaySession): (name: string) => boolean {
   };
   requestAnimationFrame(pump);
 
+  let ch2: ((name: string) => boolean) | null = null;
   return (name: string): boolean => {
+    // T3.2: `ch2:<name>` Chapter II demos (dev/ch2FxDemo.ts); built on first use
+    if (name.startsWith("ch2:")) {
+      ch2 ??= makeCh2Demo(session);
+      return ch2(name);
+    }
     const fx = session.combat?.fx;
     if (!fx) return false;
     if (name === "off") {
