@@ -5,8 +5,10 @@
  * Everything here is pure data + validation (no three.js), so it can be unit-tested in node.
  */
 import { z } from "zod";
-import type { BiomeId, BiomeMood } from "../biomes";
+import { AMBIENT_MOOD_KINDS, type BiomeId, type BiomeMood } from "../biomes";
 import type { CameraPose } from "../camera";
+import type { GroundKind } from "../materials/ch2Ground";
+import type { BackdropKind } from "../sprites/SpriteSource";
 
 // ------------------------------------------------------------------------------------------ model
 
@@ -14,7 +16,15 @@ export type V2 = readonly [number, number];
 export type V3 = readonly [number, number, number];
 
 /** Layout biome ids. Content uses "hollow" for the boss arena; the renderer calls it "boss". */
-export const LAYOUT_BIOMES = ["forest", "ruins", "cave", "hollow", "boss"] as const;
+export const LAYOUT_BIOMES = [
+  "forest",
+  "ruins",
+  "cave",
+  "hollow",
+  "boss",
+  "hushwood",
+  "grove",
+] as const;
 export type LayoutBiome = (typeof LAYOUT_BIOMES)[number];
 
 export function toRenderBiome(b: LayoutBiome): BiomeId {
@@ -29,6 +39,7 @@ export const AMBIENT_KINDS = [
   "spores",
   "dust",
   "motes",
+  "wisps",
 ] as const;
 export type AmbientKind = (typeof AMBIENT_KINDS)[number];
 
@@ -175,6 +186,10 @@ export interface GroundDef {
   /** x range over which the ground dithers from forest dirt/grass to cave slabs. */
   caveFrom: number;
   caveTo: number;
+  /** Ground look: forest/cave dither (default), `leaf` litter (hushwood) or `roots` arena (grove). */
+  kind: GroundKind;
+  /** World x/z the `roots` ground radiates from (the boss). */
+  arena: V2;
 }
 
 export interface WallDef {
@@ -188,7 +203,7 @@ export interface WallDef {
 }
 
 export interface BackdropDef {
-  kind: "sky" | "mountains" | "treeline";
+  kind: BackdropKind;
   width: number;
   height: number;
   pos: V3;
@@ -295,7 +310,7 @@ const MOOD_NUM = [
   "fill",
 ] as const;
 const moodShape: Record<string, z.ZodType> = {
-  ambient: z.enum(["pollen", "embers", "none"]).optional(),
+  ambient: z.enum(AMBIENT_MOOD_KINDS as [string, ...string[]]).optional(),
 };
 for (const k of MOOD_VEC3) moodShape[k] = vec3.optional();
 for (const k of MOOD_NUM) moodShape[k] = num.optional();
@@ -343,10 +358,16 @@ const FIELDS = {
     mood: moodTweak.default({}),
     blend: num.min(0).default(12),
   }),
-  Ground: z.strictObject({ caveFrom: num, caveTo: num }),
+  Ground: z.strictObject({
+    caveFrom: num,
+    caveTo: num,
+    kind: z.enum(["forest", "leaf", "roots"]).default("forest"),
+    arenaX: num.default(0),
+    arenaZ: num.default(0),
+  }),
   Wall: z.strictObject({ cy: num, height: num.positive(), z: num, edgeX: num }),
   Backdrop: z.strictObject({
-    kind: z.enum(["sky", "mountains", "treeline"]),
+    kind: z.enum(["sky", "mountains", "treeline", "skyNight", "mountainsNight", "treelineNight"]),
     width: num.positive(),
     height: num.positive(),
     pos: vec3,
@@ -520,7 +541,7 @@ export function parseLevelLayout(raw: unknown): LevelLayout {
     biome: head.biome,
     seed: head.seed,
     segments: [],
-    ground: { x0: 0, x1: 0, z0: 0, z1: 0, caveFrom: 0, caveTo: 1 },
+    ground: { x0: 0, x1: 0, z0: 0, z1: 0, caveFrom: 0, caveTo: 1, kind: "forest", arena: [0, 0] },
     backdrops: [],
     props: [],
     scatters: [],
@@ -573,6 +594,8 @@ export function parseLevelLayout(raw: unknown): LevelLayout {
           z1: round(z0 + d),
           caveFrom: p.caveFrom,
           caveTo: p.caveTo,
+          kind: p.kind,
+          arena: [p.arenaX, p.arenaZ],
         };
         break;
       }

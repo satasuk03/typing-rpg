@@ -1,6 +1,7 @@
 export { AmbientDirector, type FlameRef } from "./ambient/ambient";
 export { type ParticleSpawn, Particles } from "./ambient/particles";
 export {
+  type AmbientKind,
   BIOME_IDS,
   BIOMES,
   type BiomeId,

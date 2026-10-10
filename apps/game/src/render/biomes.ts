@@ -4,7 +4,18 @@
  */
 import { lerp, type Vec3Tuple } from "./util";
 
-export type BiomeId = "forest" | "ruins" | "cave" | "boss";
+export type BiomeId = "forest" | "ruins" | "cave" | "boss" | "hushwood" | "grove";
+
+/** Ambient particle flavours the `AmbientDirector` knows. */
+export type AmbientKind = "pollen" | "embers" | "none" | "wisps" | "fireflies" | "leaves";
+export const AMBIENT_MOOD_KINDS: readonly AmbientKind[] = [
+  "pollen",
+  "embers",
+  "none",
+  "wisps",
+  "fireflies",
+  "leaves",
+];
 
 export interface BiomeMood {
   /** Sky-side ambient colour (linear). */
@@ -47,7 +58,7 @@ export interface BiomeMood {
   /** Strength of the warm fill light that follows the camera (lifts the foreground). */
   fill: number;
   /** Ambient particle flavour. */
-  ambient: "pollen" | "embers" | "none";
+  ambient: AmbientKind;
 }
 
 const forest: BiomeMood = {
@@ -140,8 +151,85 @@ const cave: BiomeMood = {
 /** Boss hollow: the cave mood plus the cinematic letterbox the POC uses on the boss intro. */
 const boss: BiomeMood = { ...cave, bars: 0.1 };
 
-export const BIOMES: Readonly<Record<BiomeId, BiomeMood>> = { forest, ruins, cave, boss };
-export const BIOME_IDS: readonly BiomeId[] = ["forest", "ruins", "cave", "boss"];
+/**
+ * Ch2 moods (C0.2 brief section 1.1, values pasted from docs/vfx/ch2-mock/src/moods.ts). Cool moonlight
+ * with warm lantern pools; violet is reserved for the Silence and never appears in the fog.
+ */
+const hushwood: BiomeMood = {
+  amb: [0.13, 0.16, 0.3],
+  gamb: [0.05, 0.058, 0.075],
+  sunCol: [0.5, 0.62, 1.0],
+  sunDir: [-0.55, 0.72, -0.12],
+  fogCol: [0.045, 0.062, 0.12],
+  fog: [0.018, 14, 0.32],
+  scatter: 0.9,
+  exposure: 1.45,
+  lift: [0.008, 0.012, 0.032],
+  gamma: [1, 1, 1.02],
+  gain: [0.97, 1.0, 1.08],
+  sat: 1.12,
+  contrast: 1.15,
+  sh: [0.0, 0.012, 0.045],
+  hi: [0.045, 0.024, 0.0],
+  bloom: 0.62,
+  thr: 0.9,
+  vig: 0.52,
+  rangeFar: 13,
+  tilt: 0.24,
+  clear: [0.045, 0.062, 0.12],
+  bars: 0,
+  caveK: 0.45,
+  rays: 1.1,
+  fill: 0.8,
+  ambient: "wisps",
+};
+
+/** Grove (the Willow's Heart, boss): the hushwood split-tone one notch darker. Bars only on the intro. */
+const grove: BiomeMood = {
+  amb: [0.08, 0.11, 0.2],
+  gamb: [0.04, 0.04, 0.06],
+  sunCol: [0.45, 0.62, 1.0],
+  sunDir: [0.12, 0.92, -0.3],
+  fogCol: [0.03, 0.055, 0.1],
+  fog: [0.02, 12, 0.32],
+  scatter: 1.0,
+  exposure: 1.35,
+  lift: [0.008, 0.01, 0.03],
+  gamma: [1, 1, 1.02],
+  gain: [0.98, 1.0, 1.06],
+  sat: 1.15,
+  contrast: 1.14,
+  sh: [0.0, 0.012, 0.05],
+  hi: [0.045, 0.026, 0.0],
+  bloom: 0.66,
+  thr: 0.88,
+  vig: 0.56,
+  rangeFar: 13,
+  tilt: 0.26,
+  clear: [0.03, 0.055, 0.1],
+  bars: 0.1,
+  caveK: 0.6,
+  rays: 1.2,
+  fill: 0.6,
+  ambient: "leaves",
+};
+
+export const BIOMES: Readonly<Record<BiomeId, BiomeMood>> = {
+  forest,
+  ruins,
+  cave,
+  boss,
+  hushwood,
+  grove,
+};
+export const BIOME_IDS: readonly BiomeId[] = [
+  "forest",
+  "ruins",
+  "cave",
+  "boss",
+  "hushwood",
+  "grove",
+];
 
 export function isBiomeId(v: unknown): v is BiomeId {
   return typeof v === "string" && (BIOME_IDS as readonly string[]).includes(v);
@@ -199,7 +287,7 @@ export function validateMood(m: BiomeMood): string[] {
   if (m.thr <= 0) errs.push("thr must be > 0");
   const sd = m.sunDir;
   if (Math.hypot(sd[0], sd[1], sd[2]) < 1e-6) errs.push("sunDir has zero length");
-  if (m.ambient !== "pollen" && m.ambient !== "embers" && m.ambient !== "none") {
+  if (!AMBIENT_MOOD_KINDS.includes(m.ambient)) {
     errs.push("ambient: unknown kind");
   }
   return errs;
