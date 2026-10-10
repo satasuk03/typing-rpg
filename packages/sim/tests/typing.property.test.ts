@@ -270,7 +270,7 @@ describe("property: distinct first letters and ordered events", () => {
     expect(stats.rubbleShown).toBeGreaterThan(3);
     // stats are asserted loosely so the numbers can be quoted in reports
     expect(stats.runs).toBe(120);
-  }, 30_000);
+  }, 120_000); // ~21 s alone; agents running in parallel pushed it past 30 s three times
 
   test("the same seed reproduces the same randomized run exactly", () => {
     const a: Stats = {
