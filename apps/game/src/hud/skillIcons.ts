@@ -162,6 +162,28 @@ const FROST: IconDef = {
   ],
 };
 
+const REVEAL: IconDef = {
+  pal: { k: "#2a1c06", w: "#fff6d8", g: "#ffd860", b: "#c8942c" },
+  rows: [
+    "................",
+    "................",
+    ".....kkkkkk.....",
+    "...kkwwwwwwkk...",
+    "..kwwwwggwwwwk..",
+    ".kwwwwgbbbgwwwk.",
+    "kwwwwgbbkkbgwwwk",
+    "kwwwwgbkwkbgwwwk",
+    "kwwwwgbbkkbgwwwk",
+    ".kwwwwgbbbgwwwk.",
+    "..kwwwwggwwwwk..",
+    "...kkwwwwwwkk...",
+    ".....kkkkkk.....",
+    "................",
+    "................",
+    "................",
+  ],
+};
+
 const FALLBACK: IconDef = {
   pal: { k: "#14081c", p: "#d49aff", w: "#fff0ff", d: "#7a3ab0" },
   rows: [
@@ -223,6 +245,7 @@ const DEFS: Record<string, IconDef> = {
   piercingThrust: PIERCE,
   mendingLight: MENDING,
   frostLock: FROST,
+  reveal: REVEAL,
 };
 
 /** Accent colour per skill (charge ring). */
@@ -233,6 +256,7 @@ export const SKILL_ACCENT: Record<string, string> = {
   piercingThrust: "#8ad0ff",
   mendingLight: "#7aeb90",
   frostLock: "#8ae0ff",
+  reveal: "#ffe08a",
 };
 export const DEFAULT_ACCENT = "#d49aff";
 

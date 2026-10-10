@@ -13,7 +13,10 @@ export type ActiveSkillId =
   | "fireball"
   | "frostLock"
   | "mendingLight"
-  | "aegis";
+  | "aegis"
+  | "reveal"; // Ch2 (v2.0.3): strips plate gimmicks for a while; deals no damage
+/** Active skills that can deal damage (everything except Reveal): the keys of the per-skill damage table. */
+export type DamageSkillId = Exclude<ActiveSkillId, "reveal">;
 export type PassiveId =
   | "cleanCut"
   | "bulwarkStreak"
@@ -22,7 +25,8 @@ export type PassiveId =
   | "ironWill"
   | "openingGambit"
   | "lastStand"
-  | "comeback";
+  | "comeback"
+  | "calmMind"; // Ch2 (v2.0.3): guard words last longer
 export type CastMode = "smart" | "asap";
 export type ComboMode = "gentle" | "strict" | "zen";
 export type Difficulty = "story" | "standard" | "hard" | "zen"; // zen: enemies never attack
@@ -341,7 +345,7 @@ export interface LevelResult {
     secondWindUsed: boolean;
     damageByOriginM: Record<HitOrigin, number>; // skill share = skill / Σ (T1.4 AC)
     /** T1.4 (additive): actual HP removed by each active skill, burn included (per-skill tuning, T6.1). */
-    damageBySkillM?: Record<ActiveSkillId, number>;
+    damageBySkillM?: Record<DamageSkillId, number>;
   };
   words: WordResult[]; // every completed or typo'd word/guard plate, in order
 }

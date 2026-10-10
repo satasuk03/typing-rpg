@@ -14,6 +14,7 @@ import type { Tick } from "./time.ts";
 import type {
   ActiveSkillId,
   ChestContents,
+  DamageSkillId,
   Gimmick,
   LevelOptions,
   Loadout,
@@ -205,7 +206,7 @@ export interface RunStats {
   hitsTaken: number;
   autoAttacks: number;
   damageByOriginM: Record<HitOrigin, number>; // actual HP removed, by origin (skill-share metric)
-  damageBySkillM: Record<ActiveSkillId, number>; // ... of which each active skill (burn included), for tuning
+  damageBySkillM: Record<DamageSkillId, number>; // ... of which each active skill (burn included), for tuning
   skillsCast: number;
 }
 
@@ -236,6 +237,8 @@ export interface RunState {
   weaponAttacks: number; // resolved auto-attack impacts (Dagger: every 3rd applies Bleed)
   lastWordPerfect: boolean; // the last completed word/guard plate was perfect (Clean Cut)
   comebackLost: number; // combo lost to typo penalties since the last perfect word (Comeback)
+  /** v2.0.3 Reveal: gimmicks are stripped from new plates until this tick. ABSENT until Reveal is first cast (Ch1 state is unchanged). */
+  revealUntil?: Tick;
   lastStandOn: boolean; // HP below the Last Stand threshold (edge for PassiveTriggered)
   cues: string[]; // TutorialCue ids already emitted (options.tutorial)
   secondWindUsed: boolean;

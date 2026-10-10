@@ -7,7 +7,7 @@ import type { Emit } from "./bus.ts";
 import { type DamageSpec, dealDamage, healHero, resolveDamage } from "./combat.ts";
 import { enemyById } from "./encounter.ts";
 import { mulBp } from "./fixed.ts";
-import { tutorialCue } from "./passives.ts";
+import { revealActive, tutorialCue } from "./passives.ts";
 import type { EncounterState, EnemyState, PlateState } from "./state.ts";
 import { applyDot, freezeEnemy, grantBarrier } from "./statuses.ts";
 import type { ActiveSkillId, CastMode, LevelState } from "./types.ts";
@@ -77,6 +77,13 @@ function canCast(state: LevelState, id: ActiveSkillId, mode: CastMode): boolean 
       return smart
         ? run.barrier === 0 && alive.some((e) => e.windupShown)
         : run.barrier < K.BARRIER_CAP;
+    case "reveal":
+      // smart: a plate is hiding its letters right now (faded / scrambled) and no Reveal is running.
+      // asap: any gimmick enemy is alive. Both: never a pointless cast (no gimmick in the fight).
+      if (revealActive(run, state.tick)) return false;
+      return smart
+        ? enc.plates.some((p) => p.faded || p.scrambled)
+        : alive.some((e) => e.gimmick !== null);
   }
 }
 
@@ -111,6 +118,8 @@ function castSkill(state: LevelState, slot: 0 | 1, id: ActiveSkillId, emit: Emit
   } else if (id === "slashWave" || id === "frostLock") {
     targetIds = aliveEnemies(enc).map((e) => e.id);
   }
+  // Reveal is "running" from the cast, so it cannot be recast during the impact delay (applyReveal sets the same value)
+  if (id === "reveal") run.revealUntil = impactTick + K.REVEAL_T;
   emit({ type: "SkillCast", tick: state.tick, slot, skillId: id, targetIds, impactTick });
   enc.pending.push({
     tick: impactTick,
@@ -141,6 +150,25 @@ const skillSpec = (
   hitIndex,
   hitCount,
 });
+
+/**
+ * Reveal (v2.0.3): every visible plate loses its gimmick now (faded letters return, scrambled plates unscramble with
+ * WordUnscrambled), and plates created until `revealUntil` carry none (encounter.ts). Recasting while active is blocked.
+ */
+function applyReveal(state: LevelState, emit: Emit): void {
+  const enc = state.enc as EncounterState;
+  state.run.revealUntil = state.tick + K.REVEAL_T; // == the cast-time value (impact tick)
+  for (const p of enc.plates) {
+    p.fadeAt = null;
+    p.faded = false;
+    if (p.scrambled) {
+      p.scrambled = false;
+      p.display = p.text;
+      if (p.ownerId !== null)
+        emit({ type: "WordUnscrambled", tick: state.tick, plateId: p.id, enemyId: p.ownerId });
+    }
+  }
+}
 
 /** Step 2 of the tick (after auto-attacks): skills whose impact tick has arrived take effect. */
 export function resolveSkillImpacts(state: LevelState, emit: Emit): void {
@@ -209,6 +237,9 @@ export function resolveSkillImpacts(state: LevelState, emit: Emit): void {
         break;
       case "aegis":
         grantBarrier(state, K.AEGIS_BARRIER_HITS, "skill", id, emit);
+        break;
+      case "reveal":
+        applyReveal(state, emit);
         break;
     }
   }

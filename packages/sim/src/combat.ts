@@ -24,7 +24,7 @@ import { emitPassive, hasPassive } from "./passives.ts";
 import { below } from "./rng.ts";
 import type { EncounterState, EnemyState, RunState } from "./state.ts";
 import { applyDot, consumeBarrier } from "./statuses.ts";
-import type { ActiveSkillId, LevelState } from "./types.ts";
+import type { ActiveSkillId, DamageSkillId, LevelState } from "./types.ts";
 import { addAtb, addPlate, dropTarget, removePlate } from "./typing.ts";
 
 /** The last phase gate: a boss never drops below this HP from damage; reaching it shows the Finisher. */
@@ -110,7 +110,7 @@ export function dealDamage(
   const { dmgM, weak, broken } = resolveDamage(state, enemy, spec);
   enemy.hpM -= dmgM;
   run.stats.damageByOriginM[spec.origin] += dmgM;
-  if (spec.skillId !== null) run.stats.damageBySkillM[spec.skillId] += dmgM;
+  if (spec.skillId !== null) run.stats.damageBySkillM[spec.skillId as DamageSkillId] += dmgM;
   const killed = enemy.hpM === 0;
   emit({
     type: "Hit",

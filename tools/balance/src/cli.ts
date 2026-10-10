@@ -1,5 +1,5 @@
 // pnpm balance [--chapter N] [--seeds N] [--workers N] [--no-noise] [--persona id,id] [--level ch1-l05,...] [--json path] [--md path]
-//              [--gear par|par-N|armor+N|weapon+N|all+N] [--kit starter|bare] [--whatif key=value,...] [--strict]
+//              [--gear par|par-N|armor+N|weapon+N|all+N] [--kit starter|bare|ch2] [--whatif key=value,...] [--strict]
 // Runs the economy_sim personas through Chapter 1 on the real sim and prints the plan §9 verdicts, the parity with the
 // Python model, and per-level tables. Exit code 1 when a §9 or parity cell FAILs (PASS(±15%) passes; a documented
 // structural miss, FAIL*, only fails with --strict).
@@ -29,7 +29,7 @@ const jsonPath = resolve(opt("--json") ?? resolve(here, `../out/balance-ch${chap
 const mdPath = opt("--md");
 const whatif = parseWhatIf(opt("--whatif"));
 const gear = gearLabel(parseGear(opt("--gear")));
-const kit = (opt("--kit") ?? "starter") as "starter" | "bare";
+const kit = (opt("--kit") ?? "starter") as "starter" | "bare" | "ch2";
 
 const jobs: Job[] = [];
 for (const persona of personas)

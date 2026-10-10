@@ -9,6 +9,7 @@ import type { ActiveSkillDef, PassiveDef } from "../schemas.ts";
  * `iconId` / `vfxId` are forward keys for the HUD (T2.4) and the VFX library (T2.3). `sfxId` is an existing procedural
  * sound (apps/game/src/audio/types.ts SFX_IDS; tools/content checks it).
  * `unlockLevel` is the level whose first clear unlocks the skill (absent = part of the starter kit).
+ * Ch2 (v2.0.3): Reveal (active, ch2-l03) and Calm Mind (passive, ch2-l05). Scholar (ch2-l07) is deferred, see interfaces ICP v2.0.3.
  * Starter kit: actives Fireball + Aegis (the HUD mock's pair), passives Clean Cut + Steady Hands + Iron Will.
  */
 export const ACTIVES: ActiveSkillDef[] = [
@@ -65,6 +66,16 @@ export const ACTIVES: ActiveSkillDef[] = [
     vfxId: "vfx.skill.frostLock",
     sfxId: "skillMagic",
     unlockLevel: "ch1-l08",
+  },
+  {
+    id: "reveal",
+    name: "Reveal",
+    description:
+      "A clear light strips every fading or scrambled word for eight seconds. It casts when a plate hides its letters.",
+    iconId: "icon.skill.reveal",
+    vfxId: "vfx.skill.reveal",
+    sfxId: "skillMagic",
+    unlockLevel: "ch2-l03",
   },
 ];
 
@@ -129,5 +140,13 @@ export const PASSIVES: PassiveDef[] = [
     tag: "tech",
     iconId: "icon.passive.comeback",
     unlockLevel: "ch1-l09",
+  },
+  {
+    id: "calmMind",
+    name: "Calm Mind",
+    description: "Every guard word stays on screen half a second longer.",
+    tag: "defense",
+    iconId: "icon.passive.calmMind",
+    unlockLevel: "ch2-l05",
   },
 ];

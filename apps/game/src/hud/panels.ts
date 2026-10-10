@@ -268,6 +268,7 @@ function skillName(id: string): string {
     frostLock: "FROST LOCK",
     mendingLight: "MENDING",
     aegis: "AEGIS",
+    reveal: "REVEAL",
   };
   return m[id] ?? id.toUpperCase();
 }

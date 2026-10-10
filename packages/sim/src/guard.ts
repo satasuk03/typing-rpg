@@ -9,7 +9,7 @@ import { bossAttacksSuspended } from "./bossPlates.ts";
 import type { Emit } from "./bus.ts";
 import { SimError } from "./errors.ts";
 import { mulBp } from "./fixed.ts";
-import { tutorialCue } from "./passives.ts";
+import { hasPassive, tutorialCue } from "./passives.ts";
 import type { EncounterState, EnemyState, PlateState } from "./state.ts";
 import { PACE_FACTOR_BP } from "./tables.generated.ts";
 import type { LevelState, ResolvedEnemy } from "./types.ts";
@@ -38,12 +38,13 @@ export function attackIntervalTicks(state: LevelState, defId: string): number {
   );
 }
 
-/** guardTicks = max(1.5 s, 2.5 s x paceFactor) (+1 s on the story preset; x2 for the tutorial's first guard). */
+/** guardTicks = max(1.5 s, 2.5 s x paceFactor) (+1 s on the story preset; x2 for the tutorial's first guard; +0.5 s Calm Mind). */
 export function guardSpanTicks(state: LevelState): number {
   const run = state.run;
   let g = Math.max(K.GUARD_MIN_T, mulBp(K.GUARD_T, paceFactorBp(run.options.pace)));
   if (run.options.difficulty === "story") g += K.STORY_GUARD_BONUS_T;
   if (run.options.tutorial && run.guardsShown === 0) g = mulBp(g, K.TUTORIAL_FIRST_GUARD_MULT_BP);
+  if (hasPassive(run, "calmMind")) g += K.CALM_MIND_GUARD_T; // v2.0.3 Calm Mind: telegraph +0.5 s
   return g;
 }
 
