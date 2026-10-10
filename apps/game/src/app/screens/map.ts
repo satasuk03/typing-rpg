@@ -3,6 +3,7 @@ import type { LevelDef, StarChallenge } from "@hd2d/content";
 import { levelGold } from "@hd2d/sim";
 import { levelUnlocked } from "../../meta/ops";
 import type { App, Screen, ScreenArg } from "../app";
+import { CHAPTERS, chapterState, defaultChapter } from "../chapters";
 import { actions, el, esc, header } from "../dom";
 import { openTrial } from "../trialLink";
 
@@ -42,12 +43,22 @@ const BIOME_NAME: Record<string, string> = {
   ruins: "Ruins",
   cave: "Cave",
   hollow: "Hollow",
+  hushwood: "Hushwood",
+  fen: "Fen",
+  grove: "Grove",
 };
 
 export function mapScreen(app: App, arg: ScreenArg): Screen {
   const root = el("app-screen map");
   const save = app.store.save;
-  const levels = app.bundle.levels.filter((l) => l.chapter === 1);
+  const chapter = Number(arg.chapter) || defaultChapter(save, app.bundle, arg.focus);
+  const info = CHAPTERS.find((c) => c.n === chapter) ?? (CHAPTERS[0] as (typeof CHAPTERS)[number]);
+  const cstate = chapterState(save, app.bundle, chapter);
+  const levels = app.bundle.levels.filter((l) => l.chapter === chapter);
+  const lockedMsg = (l: LevelDef): string =>
+    l.index === 1 && l.chapter > 1
+      ? `Clear Chapter ${"I".repeat(l.chapter - 1)} first`
+      : `Clear level ${l.index - 1} first`;
   const stateOf = (l: LevelDef): "locked" | "new" | "cleared" =>
     !levelUnlocked(save, app.bundle, l.id)
       ? "locked"
@@ -84,10 +95,34 @@ export function mapScreen(app: App, arg: ScreenArg): Screen {
     })
     .join("");
 
-  root.append(header(app, "Chapter I", "The Ember Road", "Esc Title"));
+  root.append(header(app, info.label, info.title, "Esc Title"));
+  const tabs = el("ch-tabs");
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "Chapters");
+  tabs.innerHTML = CHAPTERS.map((c) => {
+    const st = chapterState(save, app.bundle, c.n);
+    const tag = st === "open" ? "" : st === "locked" ? "LOCKED" : "COMING SOON";
+    return `<button class="hd-btn ch-tab ${st}" role="tab" data-act="tab" data-n="${c.n}" data-key="tab-${c.n}" data-arrows="own"
+      aria-selected="${c.n === chapter}" tabindex="${c.n === chapter ? 0 : -1}"
+      aria-label="${c.label}: ${esc(c.title)}${st === "locked" ? ", locked" : st === "soon" ? ", coming soon" : ""}">${c.label}${tag ? `<span class="ch-st">${tag}</span>` : ""}</button>`;
+  }).join("");
+  root.append(tabs);
   const body = el("map-body");
-  body.innerHTML = `<div class="road-wrap"><svg class="road-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${segs}</svg>${nodes}</div>
-    <div class="map-detail hd-panel flat" id="detail" aria-live="polite"></div>
+  const notice =
+    cstate === "soon"
+      ? `<div class="ch-soon hd-panel" id="ch-notice" role="status"><div class="hd-eyebrow">${info.label}</div>
+          <h2 class="hd-h" style="margin:4px 0">Coming soon</h2><p class="hd-sub">${esc(info.title)} is still being written.</p></div>`
+      : cstate === "locked"
+        ? `<div class="ch-banner hd-panel" id="ch-notice" role="status"><div class="hd-eyebrow">${info.label} &middot; Locked</div>
+          <h2 class="hd-h">${esc(info.title)}</h2><p>${esc(info.lockHint)}</p></div>`
+        : "";
+  if (cstate !== "open") root.classList.add("ch-dim");
+  body.innerHTML = `${notice}${
+    cstate === "soon"
+      ? ""
+      : `<div class="road-wrap"><svg class="road-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${segs}</svg>${nodes}</div>
+    ${cstate === "open" ? `<div class="map-detail hd-panel flat" id="detail" aria-live="polite"></div>` : ""}`
+  }
     <div class="map-menu" id="menu">
       <button class="hd-btn" data-act="loadout">Loadout</button>
       <button class="hd-btn" data-act="inventory">Gear</button>
@@ -99,18 +134,19 @@ export function mapScreen(app: App, arg: ScreenArg): Screen {
     </div>`;
   root.append(body);
 
-  const detail = body.querySelector<HTMLElement>("#detail") as HTMLElement;
+  const detail = body.querySelector<HTMLElement>("#detail");
+  const tabEls = [...tabs.querySelectorAll<HTMLElement>(".ch-tab")];
   const nodeEls = [...body.querySelectorAll<HTMLElement>(".node")];
 
   const showDetail = (id: string): void => {
     const l = levels.find((x) => x.id === id);
-    if (!l) return;
+    if (!l || !detail) return;
     const st = stateOf(l);
     const rec = save.progress.levels[l.id];
     const gold = levelGold(l.chapter, l.index);
     const status =
       st === "locked"
-        ? `<span class="hd-chip hd-dim">Locked</span> Clear level ${l.index - 1} first`
+        ? `<span class="hd-chip hd-dim">Locked</span> ${esc(lockedMsg(l))}`
         : st === "cleared"
           ? `<span class="hd-chip hd-good">Replay</span> Reduced gold, no first-clear bonus`
           : `<span class="hd-chip hd-gold">First clear</span> Full gold, better chests, unlocks`;
@@ -135,7 +171,7 @@ export function mapScreen(app: App, arg: ScreenArg): Screen {
     const l = levels.find((x) => x.id === id) as LevelDef;
     if (stateOf(l) === "locked") {
       app.sfx("typo");
-      app.toast(`Clear level ${l.index - 1} first`);
+      app.toast(lockedMsg(l));
       return;
     }
     app.sfx("uiConfirm");
@@ -144,6 +180,12 @@ export function mapScreen(app: App, arg: ScreenArg): Screen {
 
   actions(root, {
     play,
+    tab: (t) => {
+      const n = Number(t.dataset.n);
+      if (n === chapter) return;
+      app.sfx("uiClick");
+      app.go("map", { chapter: n, focus: "tab" });
+    },
     loadout: () => app.go("loadout"),
     inventory: () => app.go("inventory"),
     shop: () => app.go("shop"),
@@ -162,8 +204,29 @@ export function mapScreen(app: App, arg: ScreenArg): Screen {
   });
   // Left/Right walk the road; Down goes to the menu; Up from the menu returns to the current node.
   let lastNode = 0;
+  const toTabs = (): void =>
+    tabEls.find((x) => x.getAttribute("aria-selected") === "true")?.focus();
   root.addEventListener("keydown", (e) => {
     const t = e.target as HTMLElement;
+    const tab = t.closest<HTMLElement>(".ch-tab");
+    if (tab) {
+      const i = tabEls.indexOf(tab);
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        e.stopPropagation();
+        tabEls[
+          Math.max(0, Math.min(tabEls.length - 1, i + (e.key === "ArrowRight" ? 1 : -1)))
+        ]?.focus();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        (nodeEls[lastNode] ?? (root.querySelector("#menu .hd-btn") as HTMLElement | null))?.focus();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
     const n = t.closest<HTMLElement>(".node");
     if (n) {
       const i = Number(n.dataset.i);
@@ -180,11 +243,14 @@ export function mapScreen(app: App, arg: ScreenArg): Screen {
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         e.stopPropagation();
+        toTabs();
       }
     } else if (e.key === "ArrowUp" && t.closest("#menu")) {
       e.preventDefault();
       e.stopPropagation();
-      nodeEls[lastNode]?.focus();
+      (
+        nodeEls[lastNode] ?? tabEls.find((x) => x.getAttribute("aria-selected") === "true")
+      )?.focus();
     }
   });
 
@@ -195,6 +261,7 @@ export function mapScreen(app: App, arg: ScreenArg): Screen {
   return {
     root,
     focus: () => {
+      if (arg.focus === "tab" || nodeEls.length === 0) return toTabs();
       const want = arg.focus ? levels.findIndex((l) => l.id === arg.focus) : firstOpen();
       const i = want >= 0 ? want : firstOpen();
       lastNode = i;

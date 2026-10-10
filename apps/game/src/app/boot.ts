@@ -3,6 +3,7 @@
  * Query flags (all optional, mainly for tests): `api=off|<url>`, `wpm-bot=75[&bot-acc=..&bot-seed=..]`, `tier=0|1|2`,
  * `audio=0`, `fonts=0`, `onboard=0` (no first-run flow), `dev=1` (exposes `__grant`), `screen=<name>` (start on a screen).
  */
+import { contentBundle } from "@hd2d/content";
 import { AudioEngine } from "../audio";
 import { loadHudFonts } from "../hud/fonts";
 import type { Save } from "../meta/ops";
@@ -13,6 +14,7 @@ import { App, type ScreenName } from "./app";
 import { cacheScreen } from "./screens/cache";
 import { calibrateScreen } from "./screens/calibrate";
 import { completeScreen } from "./screens/complete";
+import { introScreen } from "./screens/intro";
 import { inventoryScreen } from "./screens/inventory";
 import { journalScreen } from "./screens/journal";
 import { loadoutScreen } from "./screens/loadout";
@@ -70,7 +72,8 @@ export async function start(
   if (fonts) await loadHudFonts();
   const api = apiBase(q);
   const net = makeNet(api);
-  const store = await SaveStore.open(net, { syncWaitMs: api === null ? 0 : 2500 });
+  const bundle = contentBundle;
+  const store = await SaveStore.open(net, { syncWaitMs: api === null ? 0 : 2500, bundle });
   const audio = q.get("audio") === "0" ? null : new AudioEngine();
   const tierParam = num(q.get("tier"));
   const tier: QualityTier = isQualityTier(tierParam) ? tierParam : readQuality();
@@ -84,6 +87,7 @@ export async function start(
     audio,
     fonts,
     tier,
+    bundle,
     onboarding: q.get("onboard") !== "0",
     bot:
       botWpm === undefined
@@ -101,6 +105,7 @@ export async function start(
       complete: completeScreen,
       story: storyScreen,
       calibrate: calibrateScreen,
+      intro: introScreen,
     },
   });
   app.consoleErrors = consoleErrors;

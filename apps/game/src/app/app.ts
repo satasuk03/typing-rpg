@@ -7,7 +7,7 @@
  * Screens are plain DOM (`#app-ui`) above the canvases, themed like the HUD (hud/uiTheme.ts) and driven by the
  * keyboard (`nav.ts`). The menu backdrop is a real level diorama (`backdrop.ts`). The save is owned by `SaveStore`.
  */
-import { contentBundle } from "@hd2d/content";
+import { type ContentBundle, contentBundle } from "@hd2d/content";
 import type { LevelResult } from "@hd2d/sim";
 import type { AudioEngine, Sfx } from "../audio";
 import { HOW_TO_PLAY_CSS } from "../hud/howToPlay";
@@ -15,11 +15,12 @@ import { injectUiTheme } from "../hud/uiTheme";
 import type { RunConfig } from "../level/runner";
 import type { ResultExtras } from "../level/screens";
 import { PlaySession } from "../level/session";
-import { isFirstRun, type LevelCommit } from "../meta/ops";
+import { introSeen, isFirstRun, type LevelCommit } from "../meta/ops";
 import type { SaveStore } from "../meta/save";
 import type { Net } from "../net";
 import type { QualityTier } from "../render";
 import { Backdrop } from "./backdrop";
+import { introChapterOf } from "./chapters";
 import { KeyNav, type NavScope } from "./nav";
 import { APP_CSS } from "./style";
 
@@ -43,7 +44,8 @@ export type ScreenName =
   | "settings"
   | "complete"
   | "story"
-  | "calibrate";
+  | "calibrate"
+  | "intro";
 
 export interface ScreenArg {
   focus?: string;
@@ -68,6 +70,8 @@ export interface AppDeps {
   bot?: BotParams;
   fonts?: boolean;
   tier: QualityTier;
+  /** Content bundle (default: the shipped one). It must match the SaveStore's. */
+  bundle?: ContentBundle;
   /** First-run flow (story, calibration, tutorial level) for a fresh profile. Default true; `?onboard=0` turns it off. */
   onboarding?: boolean;
 }
@@ -93,6 +97,7 @@ const PARENT: Record<ScreenName, ScreenName | null> = {
   complete: "map",
   story: null,
   calibrate: null,
+  intro: "map",
 };
 
 declare global {
@@ -121,7 +126,7 @@ export class App {
   readonly store: SaveStore;
   readonly net: Net;
   readonly audio: AudioEngine | null;
-  readonly bundle = contentBundle;
+  readonly bundle: ContentBundle;
   route: ScreenName | "play" = "title";
   lastRun: LastRun | null = null;
   session: PlaySession | null = null;
@@ -138,6 +143,7 @@ export class App {
 
   constructor(deps: AppDeps) {
     this.deps = deps;
+    this.bundle = deps.bundle ?? contentBundle;
     this.store = deps.store;
     this.net = deps.net;
     this.audio = deps.audio;
@@ -336,8 +342,19 @@ export class App {
 
   // ---------------------------------------------------------------------------------------- play
 
-  async play(levelId: string): Promise<void> {
+  async play(levelId: string, opt: { skipIntro?: boolean } = {}): Promise<void> {
     if (this.session) return;
+    // the first level of a chapter above 1 opens with its typed intro card (T3.4)
+    const introCh = opt.skipIntro ? null : introChapterOf(this.bundle, levelId);
+    if (introCh !== null) {
+      this.go("intro", {
+        chapter: introCh,
+        levelId,
+        focus: levelId,
+        seen: introSeen(this.store.save, introCh),
+      });
+      return;
+    }
     this.closeAllModals();
     this.nav.setBase(null);
     for (const d of this.disposers.splice(0)) d();
@@ -432,9 +449,9 @@ export class App {
       to === "next" &&
       last?.levelId === levelId &&
       last.result.outcome === "cleared" &&
-      i === levels.length - 1
+      levels[i + 1]?.chapter !== levels[i]?.chapter
     ) {
-      this.go("complete", {});
+      this.go("complete", { chapter: levels[i]?.chapter ?? 1 });
       return;
     }
     const focus = to === "next" ? (levels[i + 1]?.id ?? levelId) : levelId;
