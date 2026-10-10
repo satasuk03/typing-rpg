@@ -18,6 +18,7 @@ import {
   expireBreaks,
   expireStaggers,
   externalRevive,
+  guardLeakBp,
   resolveHeroImpacts,
   resolveImpact,
   secondWindFailed,
@@ -34,7 +35,7 @@ import { enemyDef, holdAttacks, initAttack, stepEnemyAttacks } from "./guard.ts"
 import { deepClone } from "./hash.ts";
 import type { SimInput } from "./input.ts";
 import { openChest, rollEncounterChest } from "./meta/chests.ts";
-import { computeHeroStats } from "./meta/loadout.ts";
+import { computeHeroStats, guardRatingBp } from "./meta/loadout.ts";
 import { emitPassive, hasPassive, tutorialCue } from "./passives.ts";
 import { below, deriveRng } from "./rng.ts";
 import { chargeSkills, checkSkillCasts, resolveSkillImpacts, tickDots } from "./skills.ts";
@@ -456,6 +457,11 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
       hpM: maxHpM,
       maxHpM,
       hitM,
+      attackPowerBp: isBossEnemy
+        ? b.attackPowerBp
+        : bossSeg
+          ? (b.phase1.addsAttackPowerBp ?? BP)
+          : (seg as { attackPowerBp: number }).attackPowerBp,
       shield: def.shield,
       shieldMax: def.shield,
       revealed: [],
@@ -637,6 +643,8 @@ export function getView(state: Readonly<LevelState>): LevelView {
       guardTicksLeft: isGuard && e.nextImpact !== null ? Math.max(0, e.nextImpact - t) : 0,
       guardTotalTicks: isGuard && plate !== null ? (plate.totalTicks ?? 0) : 0,
       guardResult: e.guardResult,
+      attackPowerBp: mulBp(state.run.def.parArmorBp, e.attackPowerBp),
+      leakBp: guardLeakBp(state, e),
       shield: e.shield,
       shieldMax: e.shieldMax,
       weaknesses: (def?.weaknesses ?? []).map((type) => ({
@@ -687,6 +695,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
       archetype: arch,
       weaponDamageType: WEAPON_DAMAGE_TYPE[arch],
       barrierCharges: run.barrier,
+      guardRatingBp: guardRatingBp(run.loadout),
       statuses: run.barrier > 0 ? [{ id: "barrier", ticksLeft: null, stacks: run.barrier }] : [],
       secondWindAvailable: !run.secondWindUsed,
       pose: heroPose,

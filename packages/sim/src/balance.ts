@@ -52,6 +52,7 @@ export const BALANCE = {
   WALK_HEAL: 0.25,
   PHASE_HEAL: 0.1,
   BLOCK_MULT: 0.2,
+  GUARD_LEAK_CAP: 0.5, // v1.9 guard leak: a typed guard lets clamp(1 - G/P, 0, cap) of the hit through (docs/qa/block-chance-analysis.md)
   ENEMY_BASE_INTERVAL: 9.0,
   BOSS_BASE_INTERVAL: 10.0,
   PACE_REF: 35.0,
@@ -480,6 +481,7 @@ function deriveConstants(B: typeof BALANCE) {
     BREAK_DMG_MULT_BP: bp(B.BREAK_DMG_MULT),
     BREAK_T: ticks(B.BREAK_S),
     BLOCK_MULT_BP: bp(B.BLOCK_MULT),
+    GUARD_LEAK_CAP_BP: bp(B.GUARD_LEAK_CAP),
     IRON_WILL_BLOCK_MULT_BP: bp(B.IRON_WILL_BLOCK_MULT),
     PARRY_COUNTER_BP: bp(B.PARRY_COUNTER),
     RIPOSTE_COUNTER_BP: bp(B.RIPOSTE_COUNTER),

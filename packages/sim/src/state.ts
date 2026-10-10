@@ -59,6 +59,7 @@ export interface EnemyState {
   alive: boolean;
   hpM: number;
   maxHpM: number;
+  attackPowerBp: number; // v1.9: Attack Power P as a multiple (bp) of the chapter par armor score
   hitM: number; // damage of one unhindered attack (gruntHit x hitWeight, or the boss hit)
   shield: number; // shield points left (0 while Broken or for shieldless enemies)
   shieldMax: number;

@@ -319,3 +319,22 @@ multiplier**.
 - `skills.test.ts` and `combat.test.ts` (Aegis 1 barrier, chargeFrac 0.125, Iron Will 0.75 of 5) and `resolve.test.ts`
   (boss hit 10.37, adds hit 6.86) are updated.
 - `bossBot.test.ts` asserts that a 20 WPM typist guarding 60% of attacks now fails some boss runs.
+
+## 9. Guard leak (v1.9, PO "an attack should not always be blocked")
+
+Design: `docs/qa/block-chance-analysis.md`, option G. A typed guard always works, but `leak = clamp(1 - G/P, 0, 0.5)` of the
+hit gets through (Parry keeps its counter and ATB; a Block takes `leak + (1 - leak) x BLOCK_MULT`; a barrier absorbs the
+leaked damage). G is the equipped armor's item score; P is the enemy's Attack Power, a multiple of the chapter par armor
+score. Integers only, no RNG.
+
+| Knob | Where | From → to | Why |
+|---|---|---|---|
+| `attackPower` (new) | `EncounterDef`, `BossDef`, `BossDef.phase1.addsAttackPower` (content) | default 1 → **1.25** on the Ruin Golem and its phase-1 adds | 20% leak at par armor, ~3% at +3, 0 at +5. L1-L9 and L10's pre-boss waves stay at 1: no leak, byte-identical balance. |
+| `BALANCE.GUARD_LEAK_CAP` (new) | `balance.ts` | **0.5** | A guard always stops at least half the hit. |
+| `BOSS_LEVEL_HIT_MULT` | `levels.ts` | 1.3 → **1.15** | The design doc proposed 1.235, measured on a scratch patch. On the real sim, after the L10 hollow vocab merge moved the unleaked baseline to 86.0% (1000 seeds), the leak with 1.235 gave 77.7%, and 82.6% with the leak on the Golem only. 1.15 puts the Beginner at **86.0%** (1000 seeds) and 83.5% (200 seeds). |
+
+Results (`pnpm balance`, 200 seeds): **31/31 PASS**. Beginner boss clear 83.5% (86.0% over 1000 seeds), Average and Fast
+100%, boss times 8.69 / 4.48 / 2.96 min (all within ±15%).
+
+Boss leak by armor (unit test `guardLeak.test.ts`, P = 1.25 x par): par +0 = 20%, +3 = 3.2%, +5 = 0. The balance tool
+does not model gear upgrades, so this is checked as a formula, not as a persona run.

@@ -50,6 +50,10 @@ export interface EnemyView {
   guardTicksLeft: number;
   guardTotalTicks: number;
   guardResult: "block" | "parry" | null; // typed, waiting for impact
+  /** v1.9: Attack Power P in score bp (par armor score x the enemy's attackPower). Compare with hero.guardRatingBp. */
+  attackPowerBp?: number;
+  /** v1.9: guard leak preview in bp (0..GUARD_LEAK_CAP_BP 5000): the share of this enemy's hit a typed guard lets through. 0 = no cracked-shield badge. */
+  leakBp?: number;
   shield: number;
   shieldMax: number;
   weaknesses: { type: DamageType; revealed: boolean }[];
@@ -67,6 +71,8 @@ export interface HeroView {
   archetype: WeaponArchetype;
   weaponDamageType: DamageType;
   barrierCharges: number;
+  /** v1.9: Guard Rating G in score bp = the equipped armor item score (10000 = 1.0). */
+  guardRatingBp?: number;
   statuses: StatusView[];
   secondWindAvailable: boolean;
   pose: HeroPose;

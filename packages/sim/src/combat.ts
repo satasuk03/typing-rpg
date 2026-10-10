@@ -14,9 +14,10 @@ import {
 import type { Emit } from "./bus.ts";
 import { assignWordPlate, enemyById, killEnemy, revertGuardPlate } from "./encounter.ts";
 import type { EntityId, HitKind, HitOrigin } from "./events.ts";
-import { type Milli, mulBp, toDisplay } from "./fixed.ts";
+import { BP, clampInt, type Milli, mulBp, mulDiv, toDisplay } from "./fixed.ts";
 import { failLevel, setPhase } from "./flow.ts";
 import { enemyDef, restartAttackCycle, scheduleAttack } from "./guard.ts";
+import { guardRatingBp } from "./meta/loadout.ts";
 import { emitPassive, hasPassive } from "./passives.ts";
 import { below } from "./rng.ts";
 import type { EncounterState, EnemyState, RunState } from "./state.ts";
@@ -348,6 +349,24 @@ export function damageHero(
 // ---------------------------------------------------------------- enemy impact
 
 /**
+ * v1.9 guard leak (docs/qa/block-chance-analysis.md option G), pure integers: leak = clamp(1 - G/P, 0, GUARD_LEAK_CAP) in bp,
+ * G = the hero's Guard Rating (equipped armor item score), P = the enemy's Attack Power = par armor score x its
+ * attackPowerBp. No RNG. G >= P gives 0.
+ */
+export function guardLeakBpFor(
+  guardRatingBp: number,
+  parArmorBp: number,
+  attackPowerBp: number,
+): number {
+  const pBp = mulBp(parArmorBp, attackPowerBp); // P in score bp
+  if (pBp <= 0) return 0;
+  const ratioBp = mulDiv(guardRatingBp, BP, pBp);
+  return clampInt(BP - ratioBp, 0, K.GUARD_LEAK_CAP_BP);
+}
+export const guardLeakBp = (state: LevelState, enemy: EnemyState): number =>
+  guardLeakBpFor(guardRatingBp(state.run.loadout), state.run.def.parArmorBp, enemy.attackPowerBp);
+
+/**
  * An enemy attack lands (step 3). Outcome is decided by the guard word: Parry = 0 damage + a counter Hit (50% ATK, 150%
  * with Riposte) + PARRY_ATB; Block = BLOCK_MULT; ignored = full damage. A barrier absorbs an otherwise unparried hit.
  * Event order: EnemyAttack, [GuardParried, counter Hit | GuardBlocked], HeroDamaged. Then the next cycle is scheduled.
@@ -361,16 +380,29 @@ export function resolveImpact(state: LevelState, enemy: EnemyState, emit: Emit):
   const absorbed = !parried && run.barrier > 0;
   let dmgM = enemy.hitM;
   let outcome: "hit" | "blocked" | "parried" | "barrier" = "hit";
+  // v1.9 guard leak: a typed guard always succeeds, but leakBp of the would-be hit gets through (0 when G >= P).
+  const leakBp = parried || blocked ? guardLeakBp(state, enemy) : 0;
+  let leakM = 0;
   if (parried) {
     outcome = "parried";
-    dmgM = 0;
+    leakM = mulBp(dmgM, leakBp);
+    dmgM = leakM;
+    // the barrier absorbs the leaked damage like a normal hit; a leak-free parry never touches it
+    if (leakM > 0 && run.barrier > 0) {
+      dmgM = 0;
+      consumeBarrier(state, emit);
+    }
+    leakM = dmgM;
   } else if (absorbed) {
     outcome = "barrier";
     dmgM = 0;
     consumeBarrier(state, emit);
   } else if (blocked) {
     outcome = "blocked";
-    dmgM = mulBp(dmgM, blockMultBp(run));
+    // Block on top of the leak: hit x leak + hit x (1 - leak) x blockMult
+    const leaked = mulBp(dmgM, leakBp);
+    dmgM = leaked + mulBp(dmgM - leaked, blockMultBp(run));
+    leakM = leaked;
   }
   emit({ type: "EnemyAttack", tick: t, enemyId: enemy.id, outcome, damage: toDisplay(dmgM) });
   if (outcome === "parried") {
@@ -392,13 +424,22 @@ export function resolveImpact(state: LevelState, enemy: EnemyState, emit: Emit):
       tick: t,
       enemyId: enemy.id,
       counterDamage: toDisplay(resolveDamage(state, enemy, counter).dmgM),
+      leakBp,
+      leakDamage: toDisplay(leakM),
     });
     dealDamage(state, enemy, counter, emit);
     addAtb(state, K.PARRY_ATB_M, emit);
   } else if (outcome === "blocked") {
     run.stats.blocks++;
     if (hasPassive(run, "ironWill")) emitPassive(state, "ironWill", enemy.id, emit);
-    emit({ type: "GuardBlocked", tick: t, enemyId: enemy.id, damage: toDisplay(dmgM) });
+    emit({
+      type: "GuardBlocked",
+      tick: t,
+      enemyId: enemy.id,
+      damage: toDisplay(dmgM),
+      leakBp,
+      leakDamage: toDisplay(leakM),
+    });
   }
   // ruling (T1.5, ★★★ "untouched"): a hit counts when it dealt HP damage to the hero (a block that still hurt counts; a
   // parry or a fully absorbed barrier hit does not). Doom failures and minigame misses count the same way (boss.ts).

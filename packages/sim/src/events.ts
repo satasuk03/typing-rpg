@@ -146,8 +146,11 @@ export type SimEvent =
       "GuardWordTyped",
       { enemyId: EntityId; plateId: PlateId; perfect: boolean; result: "block" | "parry" }
     >
-  | Ev<"GuardBlocked", { enemyId: EntityId; damage: number }>
-  | Ev<"GuardParried", { enemyId: EntityId; counterDamage: number }> // the counter itself is Hit{kind:"counter"}
+  | Ev<"GuardBlocked", { enemyId: EntityId; damage: number; leakBp?: number; leakDamage?: number }>
+  | Ev<
+      "GuardParried",
+      { enemyId: EntityId; counterDamage: number; leakBp?: number; leakDamage?: number }
+    > // the counter itself is Hit{kind:"counter"}
   // ---- ATB & hero offense ----
   | Ev<"AtbFilled", { overflowM: number }>
   | Ev<
