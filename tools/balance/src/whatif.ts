@@ -64,6 +64,8 @@ export function applyWhatIf(def: ResolvedLevel, w: WhatIf, pace: number): Resolv
     const pfDoom = w.bossPace === 2 ? Math.max(1, pf) : pf;
     if (w.doomEveryS !== undefined) b.phase2.doomEveryTicks = r(w.doomEveryS * 60);
     if (w.minDoom !== undefined) b.phase2.minDoomSpells = w.minDoom;
+    if (b.phase3.minigame.kind !== "fallingRubble")
+      throw new Error("riddle minigame: not implemented (T1.3)");
     if (w.spawnEveryS !== undefined) b.phase3.minigame.spawnEveryTicks = r(w.spawnEveryS * 60);
     if (w.fallS !== undefined) b.phase3.minigame.fallTicks = r(w.fallS * 60);
     if (w.missHit !== undefined) b.phase3.minigame.missHitM = r(w.missHit * 1000);

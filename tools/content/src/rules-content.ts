@@ -92,7 +92,11 @@ export function ruleIdsAndRefs(b: ContentBundle): Issue[] {
     if (x.phase2.minDoomSpells < 2) {
       out.push(issue("boss", "error", `boss ${x.id}: minDoomSpells must be >= 2 (D16)`));
     }
-    if (usePool(b.words, "minigame").length < x.phase3.minigame.lanes * 2) {
+    // Falling Rubble only: a riddle minigame has its own pool rule (T4.x validator, not written yet).
+    if (
+      x.phase3.minigame.kind === "fallingRubble" &&
+      usePool(b.words, "minigame").length < x.phase3.minigame.lanes * 2
+    ) {
       out.push(issue("boss", "error", `boss ${x.id}: minigame pool too small for its lanes`));
     }
   }

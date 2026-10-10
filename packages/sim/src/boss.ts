@@ -26,6 +26,7 @@ import {
   doomEveryTicks,
   rubbleFallTicks,
   rubbleFirstSpawnTicks,
+  rubbleOf,
   rubbleSpawnTicks,
 } from "./bossPlates.ts";
 import type { Emit } from "./bus.ts";
@@ -195,12 +196,13 @@ export function endBreather(state: LevelState, emit: Emit): void {
   } else if (bs.phase === 3) {
     bs.minigameActive = true;
     bs.nextSpawnTick = t + rubbleFirstSpawnTicks(state);
+    const mg = rubbleOf(def.phase3.minigame);
     emit({
       type: "MinigameStarted",
       tick: t,
       enemyId: bs.enemyId,
-      kind: def.phase3.minigame.kind,
-      lanes: def.phase3.minigame.lanes,
+      kind: mg.kind,
+      lanes: mg.lanes,
     });
   }
 }
@@ -361,7 +363,7 @@ function spawnRubble(
   def: ResolvedBoss,
   emit: Emit,
 ): void {
-  const mg = def.phase3.minigame;
+  const mg = rubbleOf(def.phase3.minigame);
   const taken = bs.rubble.map((w) => w.lane);
   const free: number[] = [];
   for (let l = 0; l < mg.lanes; l++) if (!taken.includes(l)) free.push(l);

@@ -8,7 +8,7 @@ export const TypableText = z
   .string()
   .regex(new RegExp(`^[${escapeForCharClass(TYPABLE_CHARS)}]+$`));
 
-export const Biome = z.enum(["forest", "ruins", "cave", "hollow"]);
+export const Biome = z.enum(["forest", "ruins", "cave", "hollow", "hushwood", "fen", "grove"]); // v2.0: + Ch2 (grove = the boss arena, like hollow)
 export type Biome = z.infer<typeof Biome>;
 export const WordTier = z.number().int().min(1).max(10);
 export const DamageType = z.enum(["slash", "pierce", "blunt", "arcane", "fire", "ice", "light"]);
@@ -29,16 +29,43 @@ export const WordEntry = z.object({
   cefr: z.enum(["A1", "A2", "B1", "B2", "C1", "C2"]).optional(),
   biomes: z.array(Biome).default([]),
   uses: z
-    .array(z.enum(["plate", "guard", "doom", "finisher", "secondWind", "minigame", "trial"]))
+    .array(
+      z.enum([
+        "plate",
+        "guard",
+        "doom",
+        "finisher",
+        "secondWind",
+        "minigame",
+        "trial",
+        "riddle",
+        "intro",
+      ]),
+    ) // v2.0: + riddle, intro
     .min(1),
   definition: z.string().min(1).max(140), // simple English
   example: z.string().min(1).max(160),
   translations: z.record(z.string(), z.string()).default({}), // BCP-47 tag -> text (optional, Journal only)
+  /**
+   * v2.0 "introduced in chapter N" (absent = 1). Sentence pools (doom, finisher, secondWind, minigame, intro) take
+   * entries with (chapter ?? 1) === level.chapter; every other pool (current, review, biome, weak, guard, riddle) takes
+   * (chapter ?? 1) <= level.chapter. So nothing authored for Ch2 can reach a Ch1 level.
+   */
+  chapter: z.number().int().min(1).max(30).optional(),
+  /** v2.0 riddle text (simple English, must not contain the answer). Absent = `definition` is the clue. */
+  clue: z.string().min(1).max(90).optional(),
 });
 export type WordEntry = z.infer<typeof WordEntry>;
 
 export const Gimmick = z.enum(["fading", "scrambled"]);
 export type Gimmick = z.infer<typeof Gimmick>;
+/** v2.0 healer (§3.5). Numbers at pace 35 / standard preset; the sim pace-scales the cadence. */
+export const HealDef = z.object({
+  everyS: z.number().positive(), // Moth Mender: 10
+  frac: z.number().positive().max(1), // of each target's max HP; Moth Mender: 0.15
+  maxTargets: z.number().int().min(1).max(4).default(4),
+  maxHeals: z.number().int().min(0).default(0), // per encounter; 0 = unlimited
+});
 export const EnemyDef = z.object({
   id: z.string(),
   name: z.string(),
@@ -53,10 +80,21 @@ export const EnemyDef = z.object({
   shield: z.number().int().min(1).max(9),
   hpWeight: z.number().positive().default(1), // share of the wave's HP pool
   hitWeight: z.number().positive().default(1), // x encounter gruntHit
+  heal: HealDef.optional(), // v2.0: healer capability (archetype stays grunt/brute/...)
 });
 export type EnemyDef = z.infer<typeof EnemyDef>;
 
-export const EnemyRef = z.object({ enemy: z.string(), gimmick: Gimmick.optional() });
+export const EnemyRef = z
+  .object({
+    enemy: z.string(),
+    gimmick: Gimmick.optional(),
+    attackPower: z.number().positive().optional(), // v2.0: per-ref P (x chapter par armor); overrides the encounter / adds P
+    elite: z.boolean().optional(), // v2.0: elite tag (presentation); requires attackPower
+  })
+  .refine(
+    (r) => r.elite !== true || r.attackPower !== undefined,
+    "an elite ref must set attackPower",
+  );
 export type EnemyRef = z.infer<typeof EnemyRef>;
 export const EncounterDef = z
   .object({
@@ -73,7 +111,7 @@ export const EncounterDef = z
   );
 export type EncounterDef = z.infer<typeof EncounterDef>;
 
-export const MinigameDef = z.object({
+export const FallingRubbleDef = z.object({
   kind: z.literal("fallingRubble"),
   lanes: z.number().int().min(2).max(4),
   spawnEveryS: z.number().positive(),
@@ -81,6 +119,20 @@ export const MinigameDef = z.object({
   clearAtkMult: z.number().positive(),
   missHit: z.number().positive(),
 });
+/** v2.0 Riddle of Leaves (§3.6). Timer at pace 35 = readS + answerS, x the boss-script pace factor. */
+export const RiddleDef = z.object({
+  kind: z.literal("riddle"),
+  count: z.number().int().min(1).max(9).default(5),
+  leaves: z.literal(3).default(3),
+  readS: z.number().positive(),
+  answerS: z.number().positive(),
+  gapS: z.number().positive().default(1.5),
+  clearAtkMult: z.number().positive(),
+  missHit: z.number().positive(),
+  lengthRange: z.tuple([z.number().int().min(2), z.number().int().max(14)]).default([3, 8]),
+});
+/** v2.0: a discriminated union (was the falling-rubble object; Ch1 data parses unchanged). */
+export const MinigameDef = z.discriminatedUnion("kind", [FallingRubbleDef, RiddleDef]);
 export type MinigameDef = z.infer<typeof MinigameDef>;
 export const BossDef = z.object({
   id: z.string(),
@@ -141,6 +193,11 @@ export const LevelDef = z.object({
   star3: StarChallenge,
   parRefS: z.number().positive(), // active time of the 35-WPM reference typist
   tutorial: z.boolean().default(false),
+  /**
+   * v2.0: when present, the `review` pool = plate words (kind "word") whose biomes intersect this list, any tier
+   * (Ch2: ["forest", "ruins", "cave"] = the Ch1 biome words). Absent = the v1 rule (tier < wordTier, no biome).
+   */
+  reviewBiomes: z.array(Biome).min(1).optional(),
 });
 export type LevelDef = z.infer<typeof LevelDef>;
 

@@ -104,11 +104,20 @@ export const JournalNotes = z
     z.string().min(1).max(JOURNAL_NOTE_MAX_CHARS),
   )
   .refine((r) => Object.keys(r).length <= JOURNAL_NOTES_MAX, "too many journal notes");
+/** doc v2.0 (no version bump): + caseAssist ("Ignore capitals"); the default fills it for every existing blob. */
+export const SettingsV2 = SaveBlobV1.shape.settings.extend({
+  caseAssist: z.boolean().default(false),
+});
 /** v2: adds `journal.notes` (player translations, wordKey -> text) and `resetEpoch` (New Game generation). */
-export const SaveBlobV2 = SaveBlobV1.omit({ schemaVersion: true, journal: true }).extend({
+export const SaveBlobV2 = SaveBlobV1.omit({
+  schemaVersion: true,
+  journal: true,
+  settings: true,
+}).extend({
   schemaVersion: z.literal(2),
   resetEpoch: z.number().int().min(0).max(1_000_000),
   journal: z.object({ firstSeen: z.record(z.string(), z.number().int()), notes: JournalNotes }),
+  settings: SettingsV2, // doc v2.0
 });
 export const SaveBlob = SaveBlobV2; // alias to the latest version
 export type SaveBlob = z.infer<typeof SaveBlob>;

@@ -3,7 +3,7 @@
 import { describe, expect, test } from "vitest";
 import { K } from "../src/balance.ts";
 import { doomTicks } from "../src/boss.ts";
-import { doomEveryTicks, rubbleFallTicks, rubbleSpawnTicks } from "../src/bossPlates.ts";
+import { doomEveryTicks, rubbleFallTicks, rubbleOf, rubbleSpawnTicks } from "../src/bossPlates.ts";
 import { mulBp } from "../src/fixed.ts";
 import type {
   EventOf,
@@ -394,7 +394,7 @@ describe("phase 2: the Doom Spell", () => {
 });
 
 describe("phase 3: Falling Rubble and the Finisher", () => {
-  const MG = BOSS.phase3.minigame;
+  const MG = rubbleOf(BOSS.phase3.minigame);
 
   test("P2 -> P3 at 33%: MinigameStarted, first word after the first-spawn delay, lanes and fall time", () => {
     const d = start({ phase2: { endAtHpBp: 3300, doomEveryTicks: 900, minDoomSpells: 0 } });
@@ -679,7 +679,7 @@ describe("determinism and plates", () => {
 });
 
 describe("T6.1 BALANCE.BOSS_SCRIPT_PACE_SCALE: the boss script's timers follow the pace factor", () => {
-  const MG = BOSS.phase3.minigame;
+  const MG = rubbleOf(BOSS.phase3.minigame);
   const pf = (pace: number): number => PACE_FACTOR_BP[pace - K.PACE_MIN] as number;
 
   test("the knob is on, and pace 35 (factor 1) keeps the authored ticks", () => {

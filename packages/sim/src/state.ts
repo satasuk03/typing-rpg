@@ -78,6 +78,10 @@ export interface EnemyState {
   wordsDone: number;
   dots: DotState[]; // burn / bleed (at most one of each), ticked every DOT_TICK_T (T1.4)
   frozenUntil: Tick | null; // Frost Lock: the attack timer (and a shown guard word) is held until this tick (T1.4)
+  // ---- v2.0 (§3.5, §13.1): absent on non-healers / non-elites, so Ch1 state hashes do not change ----
+  elite?: true; // elite tag (presentation; the ref's attackPower is the danger)
+  nextHealTick?: Tick; // healer: the next heal's due tick
+  healsDone?: number; // healer: effective heals so far this encounter (vs maxHeals)
 }
 
 /** A damage-over-time status. Origin is inherited from the applier: bleed -> weapon, burn -> skill (skill-share metric). */

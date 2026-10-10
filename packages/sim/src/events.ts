@@ -56,6 +56,8 @@ export type SimEvent =
         maxHp: number;
         isBoss: boolean;
         shieldMax: number;
+        elite?: boolean; // v2.0 elite/healer: set (true) only when true
+        healer?: boolean;
       }
     >
   | Ev<"EncounterCleared", { encounterIndex: number; durationTicks: number }>
@@ -98,6 +100,7 @@ export type SimEvent =
         keyStreak: number;
         keyStreakTier: KeyStreakTier;
         atbGainM: number;
+        shifted?: boolean; // v2.0: an uppercase letter typed exactly on an exact-case plate; set only when true
       }
     >
   | Ev<
@@ -227,6 +230,17 @@ export type SimEvent =
         maxHp: number;
       }
     >
+  | Ev<
+      "EnemyHealed",
+      {
+        sourceId: EntityId;
+        targetId: EntityId;
+        amount: number;
+        amountM: number;
+        hpAfter: number;
+        maxHp: number;
+      }
+    > // v2.0 healer (§3.5), one per target
   | Ev<"EnemyDeath", { enemyId: EntityId; defId: string; isBoss: boolean; byKind: HitKind }>
   | Ev<"HeroDowned", { secondWindAvailable: boolean }>
   | Ev<"SecondWindStarted", { plateId: PlateId; text: string; deadlineTick: Tick }>
@@ -259,11 +273,40 @@ export type SimEvent =
     >
   | Ev<"DoomSpellCompleted", { enemyId: EntityId; plateId: PlateId; staggerUntilTick: Tick }>
   | Ev<"DoomSpellFailed", { enemyId: EntityId; plateId: PlateId; damage: number }>
-  | Ev<"MinigameStarted", { enemyId: EntityId; kind: "fallingRubble"; lanes: number }>
+  | Ev<
+      "MinigameStarted",
+      { enemyId: EntityId; kind: "fallingRubble" | "riddle"; lanes: number } // v2.0: + riddle (lanes 3)
+    >
   | Ev<"MinigameWordSpawned", { plateId: PlateId; text: string; lane: number; landTick: Tick }>
   | Ev<"MinigameWordCleared", { plateId: PlateId; lane: number }>
   | Ev<"MinigameWordMissed", { plateId: PlateId; lane: number; damage: number }>
-  | Ev<"MinigameEnded", { cleared: number; missed: number }>
+  | Ev<"MinigameEnded", { cleared: number; missed: number }> // riddle: cleared = right, missed = wrong + timeout
+  // ---- v2.0 Riddle of Leaves (§3.6). The answer is revealed only at resolution. ----
+  | Ev<
+      "RiddleStarted",
+      {
+        enemyId: EntityId;
+        riddleIndex: number;
+        riddleCount: number;
+        clue: string;
+        leafPlateIds: [PlateId, PlateId, PlateId]; // lane order 0..2
+        deadlineTick: Tick;
+        totalTicks: number;
+      }
+    >
+  | Ev<"RiddleLeafPicked", { riddleIndex: number; plateId: PlateId; lane: number }> // right after TargetAcquired on a leaf
+  | Ev<
+      "RiddleResolved",
+      {
+        enemyId: EntityId;
+        riddleIndex: number;
+        outcome: "right" | "wrong" | "timeout";
+        pickedPlateId: PlateId | null;
+        answerPlateId: PlateId;
+        answerText: string;
+        answerLane: number;
+      }
+    >
   | Ev<"FinisherShown", { enemyId: EntityId; plateId: PlateId; text: string }>
   | Ev<"FinisherCompleted", { enemyId: EntityId; plateId: PlateId }>
   // ---- rewards ----
@@ -313,6 +356,7 @@ export const ALL_EVENT_TYPES = [
   "EnemyAttack",
   "HeroDamaged",
   "HeroHealed",
+  "EnemyHealed",
   "EnemyDeath",
   "HeroDowned",
   "SecondWindStarted",
@@ -335,6 +379,9 @@ export const ALL_EVENT_TYPES = [
   "MinigameWordCleared",
   "MinigameWordMissed",
   "MinigameEnded",
+  "RiddleStarted",
+  "RiddleLeafPicked",
+  "RiddleResolved",
   "FinisherShown",
   "FinisherCompleted",
   "GoldGained",

@@ -45,6 +45,7 @@ const resolveEnemy = (d: EnemyDef): ResolvedEnemy => ({
 
 function resolveBoss(b: BossDef, levelGruntHitM: number | null): ResolvedBoss {
   const mg = b.phase3.minigame;
+  if (mg.kind !== "fallingRubble") throw new Error("riddle minigame: not implemented (T1.3)");
   const hpM = milli(b.hp);
   const hitM = milli(b.hit);
   return {
