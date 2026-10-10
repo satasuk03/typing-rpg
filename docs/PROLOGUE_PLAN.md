@@ -498,3 +498,8 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
   - **bossMinS:** P3.5 reported that it counts across encounters. The orchestrator checked: `combatTicks` resets at each `EncounterStarted` (`level.ts`), so the boss gets its own 20 s. **P4.1** measures the boss-segment duration in the browser at 40 and 75 WPM to confirm.
   - **R1/P4.2 notes from the stills:** every grunt shows a "50%" guard-leak badge (attackPower 16). That is a lot of noise in a new player's first minute; consider hiding the leak badge in the prologue. The GOLD counter shows 0; consider hiding gold in prologue mode (P3.3).
   - **P3.6 wiring:** swap `PROLOGUE_TIMELINES` in `app/prologueTimelines.ts`; replace the placeholder `drain()` in `session.ts` with the real `UNWRITTEN` blend; route the hud, vfx and music cues (only sfx is routed now). Mount P3.3's HUD skip ring and nudge in place of `app/prologueOverlay.ts`.
+- **P3.3 merged.** The API is in its report (`hud.attachPrologue()`). Notes for R1 and P4.2:
+  - The Part C Grimoire (above the dialogue lane, 1.35×) covers the hero's legs in close-ups.
+  - The passives are 2-letter chips, not pixel icons.
+  - The 4×4 ember core is tiny.
+  - The sweep ran on a mock driver; P4.1 re-probes on the real session.
