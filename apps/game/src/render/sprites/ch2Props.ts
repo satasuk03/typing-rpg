@@ -731,6 +731,80 @@ export function makeWeepingWillow(seed = 12) {
   return L.finish({ ax: w / 2, ay: h, bulge: 0.8 });
 }
 
+
+// ------------------------------------------------------------------ variety pass 2 (L3 Hollow Oaks, L4 Owl's Rest)
+/** Colossal hollow oak trunk (no crown: it runs out of frame) with glowing violet knotholes. 150 x 200 px, ground-standing. */
+export function makeHollowTrunk(seed = 8) {
+  const r = RNG(seed), w = 150, h = 200, L = Layer(w, h), P = PAL.NBARK, V = PAL.CAPV;
+  const base = h - 2, cx = w / 2, ph = r() * 6;
+  for (let i = 0; i < 6; i++) { // buttress roots
+    const dir = i % 2 ? 1 : -1, sx = cx + dir * (24 + r() * 8), len = 20 + r() * 22, pts = [];
+    for (let k = 0; k <= 6; k++) { const t = k / 6; pts.push([sx + dir * t * len, base - 16 * (1 - t) * (1 - t) - 2 + t * 2]); }
+    limb(L, pts, 14 - i, 3, P, { groove: true, base: 2.1 });
+  }
+  for (let y = 0; y <= base; y++) {
+    const t = (base - y) / base, flare = Math.pow(Math.max(0, 0.16 - t) / 0.16, 1.6) * 14;
+    const hw = 30 - t * 4 + flare, sx = cx + Math.sin(t * 3 + ph) * 3;
+    for (let xx = -hw; xx <= hw; xx += 0.5) {
+      const q = xx / hw, X = Math.round(sx + xx);
+      const gro = Math.sin(xx * 0.4 + y * 0.12 + ph * 3) > 0.7 ? -1.3 : 0;
+      let l = 2.5 - q * 1.5 + gro + (hash(X >> 1, y >> 2) - 0.5) * 1.2 + bayer(X, y) * 0.7;
+      if (Math.abs(q) > 0.88) l -= 0.9;
+      L.sn(X, y, pick(P, l), q * 0.95, 0.05, Math.sqrt(Math.max(0.05, 1 - q * q)));
+    }
+  }
+  // glowing hollows: a dark mouth ringed with bark, a violet ember core
+  for (const [hx, hy, rx, ry] of [[cx - 4, base - 46, 10, 18], [cx + 12, base - 118, 5, 8], [cx - 14, base - 150, 4, 6]]) {
+    for (let y = hy - ry - 3; y <= hy + ry + 3; y++) for (let x = hx - rx - 3; x <= hx + rx + 3; x++) {
+      const d = Math.hypot((x - hx) / rx, (y - hy) / ry);
+      if (d < 1) {
+        const k = 1 - d; // 0 at the lip, 1 at the centre
+        if (k > 0.42) L.e(x, y, pick(V, 1 + (k - 0.42) * 5.5 - (y > hy ? 0.6 : 0)));
+        else L.ed(x, y, V[0], 0.8);
+        L.n(x, y, 0, 0, 1);
+      } else if (d < 1.3) L.sn(x, y, (x - hx) + (y - hy) * 0.5 > 0 ? P[4] : P[1], (x - hx) / rx, -(y - hy) / ry, 0.6);
+    }
+  }
+  for (let x = 0; x < w; x++) for (let y = base - 34; y <= base; y++) if (L.a(x, y) && !L.a(x, y - 2) && hash(x, y + seed) < 0.7) L.sn(x, y, pick(PAL.NMOSS, 1 + hash(x, y) * 3), 0, 1, 0.4);
+  return L.finish({ ax: cx, ay: h, bulge: 1.3 });
+}
+
+/** Owl roost: a broken snag with a crooked perch branch and a big owl with glowing gold eyes. 76 x 78 px. */
+export function makeOwlPerch(seed = 14) {
+  const w = 76, h = 78, L = Layer(w, h), P = PAL.NBARK, G = PAL.GOLDEYE, S = PAL.SHADE;
+  const base = h - 2, cx = 16, top = 30;
+  for (let y = top; y <= base; y++) {
+    const t = (base - y) / (base - top), hw = lerp(8, 5, t) + Math.pow(Math.max(0, 0.14 - t) / 0.14, 1.5) * 5, sx = cx + Math.sin(t * 2 + seed) * 1.2;
+    for (let xx = -hw; xx <= hw; xx += 0.5) {
+      const q = xx / hw, X = Math.round(sx + xx);
+      let l = 3.1 - q * 1.5 + (hash(X >> 1, y >> 2) - 0.5) * 1.0 + bayer(X, y) * 0.6;
+      if (Math.abs(q) > 0.86) l -= 0.9;
+      L.sn(X, y, pick(P, l), q * 0.95, 0.05, Math.sqrt(Math.max(0.05, 1 - q * q)));
+    }
+  }
+  for (let x = cx - 7; x <= cx + 7; x++) for (let y = top - 3; y < top + 3; y++) if (L.a(x, y + 1) && !L.a(x, y) && hash(x, y) < 0.8) L.sn(x, y, P[4], 0, 1, 0.5); // splintered top
+  const pts = []; for (let k = 0; k <= 8; k++) { const t = k / 8; pts.push([cx + 2 + t * 44, 44 - t * 5 + Math.sin(t * 6) * 1.4]); }
+  limb(L, pts, 6, 2.4, P, { groove: true, base: 2.8 });
+  // the owl: a big rounded silhouette on the branch, two gold eyes, ear tufts, talons
+  const ox = cx + 32, oy = 38;
+  for (let y = -20; y <= 6; y++) {
+    const hw = y < -14 ? 6 + (y + 20) * 0.9 : 11 - Math.max(0, y - 2) * 0.6;
+    for (let xx = -hw; xx <= hw; xx += 0.5) {
+      const q = xx / Math.max(hw, 1);
+      L.sn(ox + xx, oy + y, pick(S, 3.0 - q * 1.5 + (hash(Math.round(ox + xx), oy + y) - 0.5) * 0.9 + bayer(Math.round(ox + xx), oy + y) * 0.6), q * 0.9, -y / 20, 0.6);
+    }
+  }
+  for (const ex of [-5, 5]) { // eyes: ringed discs with a gold core
+    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) { const d = Math.hypot(dx, dy); if (d < 3.3) { if (d < 1.6) L.e(ox + ex + dx, oy - 9 + dy, G[3]); else if (d < 2.6) L.e(ox + ex + dx, oy - 9 + dy, G[2]); else L.sn(ox + ex + dx, oy - 9 + dy, S[0], 0, 0, 1); } }
+  }
+  for (let k = 0; k < 6; k++) for (const sd of [-1, 1]) L.sn(ox + sd * (7 - k * 0.3), oy - 20 - k, S[3 + (k > 3 ? 1 : 0)], sd, 1, 0.3); // ear tufts
+  for (let k = 0; k < 4; k++) for (let i = 0; i < 4; i++) L.sn(ox - 8 + i * 5, oy + 6 + k * 0.5, pick(P, 1 + k * 0.6), 0, 0.2, 0.9); // talons
+  // moonlit silver rim on every exposed upper-left edge of the snag, branch and owl
+  for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) if (L.a(x, y) && (!L.a(x - 1, y) || !L.a(x, y - 1)) && hash(x, y + 5) < 0.7) L.sn(x, y, PAL.NSTONE[5], -0.7, 0.7, 0.6);
+  for (let x = 0; x < w; x++) for (let y = top; y <= base; y++) if (L.a(x, y) && !L.a(x, y - 2) && x < cx + 10 && hash(x, y + seed) < 0.6) L.sn(x, y, pick(PAL.NMOSS, 1 + hash(x, y) * 3), 0, 1, 0.4);
+  return L.finish({ ax: cx, ay: h, bulge: 0.8 });
+}
+
 // ------------------------------------------------------------------ flip twin (normal.x negated)
 /** A mirrored copy of a frame: image + glow flipped, authored normal flipped AND x-negated (Ch1's mesh flip does not). */
 export function flipFrame(f: SpriteFrame): SpriteFrame {
@@ -781,6 +855,9 @@ export function registerCh2Props(table: Map<string, () => Anims>): void {
   add("bridge", () => makeFootbridge(6));
   [5, 9].forEach((s, i) => add(`lily.${i}`, () => makeLilies(s, 2 + i)));
   [12, 20].forEach((s, i) => add(`weeper.${i}`, () => makeWeepingWillow(s)));
+  // variety pass 2: colossal hollow trunks (L3), owl roost (L4)
+  [8, 15].forEach((sd, i) => add(`hollowTrunk.${i}`, () => makeHollowTrunk(sd)));
+  add("owlPerch", () => makeOwlPerch(14));
   for (const t of ["silver", "hush", "gold", "bloom"]) for (let i = 0; i < 4; i++) add(`fronds.${t}.${i}`, () => makeWillowFronds(i * 7 + 1, t, 60 + i * 6, 120 + i * 14));
 }
 
