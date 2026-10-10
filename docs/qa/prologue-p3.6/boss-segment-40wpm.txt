@@ -1,0 +1,3 @@
+wpm-bot 40, accuracy 0.97, seed 7, Metal 1280x720
+BossIntro end -> PrologueClimax: 21.07 s sim (1264 ticks), 21.15 s wall
+boss intro 4.03 s; Part B total (first poll -> climax) 52.50 s

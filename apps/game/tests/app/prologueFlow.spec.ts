@@ -80,7 +80,7 @@ test("fresh Start: prologue A, B (wpm-bot), C, then story, calibration and L1", 
   expect(await snap(page)).toBe(before); // nothing was written by Parts A and B
   expect(await prologueFlag(page)).toBe(false); // the flag is written at the end of Part C, never at the start
   // Part C ends by itself (its line holds 2.2 s unless Space/Enter), then the story card
-  await waitRoute(page, "story", 90_000);
+  await waitRoute(page, "story", 180_000);
   expect(await prologueFlag(page)).toBe(true);
   expect(withoutFlag(await snap(page))).toEqual(withoutFlag(before)); // the flag is the only difference
   await page.waitForTimeout(400);
@@ -137,13 +137,13 @@ test("the skip ring shows while Esc is held; releasing early is not a skip", asy
   await waitProPhase(page, "A");
   await page.keyboard.down("Escape");
   await page.waitForTimeout(700);
-  expect(await page.locator("#pro-ring[data-held='1']").count()).toBe(1);
+  expect((await proState(page))?.ringHeld).toBe(true); // the P3.3 HUD ring shows the hold progress
   expect(await route(page)).toBe("prologue");
   await still(page, "skip-ring");
   await page.keyboard.up("Escape");
   expect(await route(page)).toBe("prologue");
   await page.waitForTimeout(400);
-  expect(await page.locator("#pro-ring[data-held='1']").count()).toBe(0); // (Part A's own 3 s hint may still show it)
+  expect((await proState(page))?.ringHeld).toBe(false); // (Part A's own 3 s hint may still show the idle ring)
   expect(await prologueFlag(page)).toBe(false);
   // Part B: an Esc keydown is a tap (the pause menu); it does not need to be held
   await waitProPhase(page, "B");
@@ -225,7 +225,7 @@ test("title Prologue button replays it and returns to the title, writing nothing
   await waitProPhase(page, "A");
   await waitProPhase(page, "B");
   await waitProPhase(page, "C"); // idle auto-advance (the title replay is never forced through a fight)
-  await waitRoute(page, "title", 90_000);
+  await waitRoute(page, "title", 180_000);
   expect(await snap(page)).toBe(before); // not a single field of the save changed
   expect(await prologueFlag(page)).toBe(false); // replay never writes the flag
   expect(run.errors).toEqual([]);
@@ -289,7 +289,7 @@ test("idle in Part B: nudge, ring hint, then auto-advance to Part C", async ({ p
   await waitProPhase(page, "C", 40_000);
   expect((await proState(page))?.cReason).toBe("idle");
   expect(await page.evaluate(() => window.__play?.resultsShown())).toBe(false);
-  await waitRoute(page, "story", 90_000);
+  await waitRoute(page, "story", 180_000);
   expect(await prologueFlag(page)).toBe(true);
   expect(run.errors).toEqual([]);
   expect(await appErrors(page)).toEqual([]);

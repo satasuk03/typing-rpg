@@ -60,7 +60,8 @@ export function attachPrologueFx(o: SessionPrologueFxOptions): SessionPrologueFx
         stage.heroPos(out);
         out.y = 0;
       },
-      boss: (out) => feet(nulId, out),
+      // Nul's feet as drawn NOW: includes the Part C lift while he rises, so the vortex and the streams follow him (P3.6)
+      boss: (out) => nulId >= 0 && stage.enemyFeet(nulId, out),
       gate: (out) => {
         out.x = gate.x;
         out.y = 0;

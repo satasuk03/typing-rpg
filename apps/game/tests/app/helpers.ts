@@ -113,6 +113,9 @@ export interface ProState {
   idleMs: number;
   nudge: boolean;
   ringHint: boolean;
+  ringHeld: boolean;
+  fade: number;
+  t: number;
   cReason: string | null;
   simStarted: boolean;
 }

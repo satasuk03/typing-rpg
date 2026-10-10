@@ -912,11 +912,15 @@ const letterVortex: CueRenderer = (c, i) => {
     if (tau < 0 || tau >= V.lifeS) continue;
     const u = tau / V.lifeS;
     const th = rnd(i.seed, n, 91) * TAU + TAU * 2 * tau;
-    const r = lerp(2.8, 0.9, u);
+    // P3.6: the spiral never closes in on the cloak (a glyph on his body read as a sticker): 2.8 -> 1.9 m, and a letter whose
+    // column is over the cloak (in front of it OR behind it: the glyph pass draws over the sprite) is dimmed, so Nul stays
+    // readable while he rises and the letters read as a ring around him
+    const r = lerp(2.8, 1.9, u);
     const y = Math.max(1.5, 1.5 + bossY + u * 5 + (rnd(i.seed, n, 92) - 0.5) * 1.2);
     const x = bx + Math.cos(th) * r;
     const z = bz + Math.sin(th) * r * 0.7;
-    const a = smoothstep(0, 0.1, u) * (1 - smoothstep(0.7, 1, u));
+    const onCloak = Math.abs(x - bx) < 1.35 ? 0.12 : 1;
+    const a = smoothstep(0, 0.1, u) * (1 - smoothstep(0.7, 1, u)) * onCloak;
     const ch = VORTEX_TEXT[
       (n * 7 + Math.floor(rnd(i.seed, n, 93) * 5)) % VORTEX_TEXT.length
     ] as string;

@@ -37,10 +37,12 @@ export type PrologueHudCue =
   | { id: "caption"; text: string }
   | { id: "ink"; text: string; charMs: Ms }
   | { id: "colourSwirl"; on: boolean }
-  | { id: "shardsReturn" };
+  | { id: "shardsReturn" }
+  /** P3.6: a black fade of the whole screen: ramps linearly (over the cue's `dur`) to `to` (0 clear, 1 black). */
+  | { id: "fade"; to: number };
 
 export type HeroCutsceneAnim = HeroAnim | HeroCutsceneAnimKey;
-export type NulAnim = "idle" | "cast" | "write" | "catch" | "hurt" | "rise";
+export type NulAnim = "idle" | "cast" | "write" | "catch" | "reach" | "hurt" | "rise";
 export type Speaker = "nul" | "knight";
 
 export const HERO_CUTSCENE_ANIMS: readonly HeroCutsceneAnim[] = [
@@ -56,7 +58,15 @@ export const HERO_CUTSCENE_ANIMS: readonly HeroCutsceneAnim[] = [
   "reach",
   "swordOut",
 ];
-export const NUL_ANIMS: readonly NulAnim[] = ["idle", "cast", "write", "catch", "hurt", "rise"];
+export const NUL_ANIMS: readonly NulAnim[] = [
+  "idle",
+  "cast",
+  "write",
+  "catch",
+  "reach",
+  "hurt",
+  "rise",
+];
 
 /**
  * Optional fields: `shakeMs` (camera cues) is how long the shake lasts (default 300). `dur` is the ease time into
@@ -86,8 +96,20 @@ export type Cue = { at: Ms; dur?: Ms } & (
       to?: ActorRef;
       params?: Readonly<Record<string, number | string>>;
     }
-  | { kind: "sfx"; id: Sfx }
-  | { kind: "music"; state?: MusicState; motif?: "spark"; silence?: number }
+  /** `count` / `boss` are the voice params (`SfxParams`): theft slot, letter / glyph index, the speaker. */
+  | { kind: "sfx"; id: Sfx; count?: number; boss?: boolean }
+  /**
+   * `drone`: a MIDI note holds one low note and cuts the layers, `null` releases it. `swell`: the reverse swell.
+   * `silence` ramps over the cue's `dur`. (`drone` and `swell` are client-only: orchestrator ruling P3.4 -> P3.6.)
+   */
+  | {
+      kind: "music";
+      state?: MusicState;
+      motif?: "spark" | "sparkEnd";
+      silence?: number;
+      drone?: number | null;
+      swell?: true;
+    }
   | { kind: "mood"; to: "base" | "unwritten" | number }
   | { kind: "hud"; cue: PrologueHudCue }
   | { kind: "line"; speaker: Speaker; text: string }
@@ -148,6 +170,8 @@ export interface HudState {
   colourSwirl: boolean;
   /** ms since `shardsReturn` started, or null. */
   shardsReturnAgeMs: Ms | null;
+  /** Black fade of the whole screen, 0 (clear) .. 1 (black). */
+  fade: number;
 }
 
 export interface CutsceneState {

@@ -9,23 +9,27 @@
  */
 import { contentBundle } from "@hd2d/content";
 import {
+  type EnemyView,
   getView,
   type LevelResult,
   type LevelView,
   prologueRunConfig,
   type SimEvent,
 } from "@hd2d/sim";
-import { PrologueOverlay } from "../app/prologueOverlay";
+import type { Mesh } from "three";
 import { type AudioApi, AudioEngine, type BiomeName } from "../audio";
+import type { Sfx, SfxParams } from "../audio/types";
 import { CutscenePlayer } from "../cutscene/player";
-import type { Cue, Timeline } from "../cutscene/types";
+import type { ActorRef, Cue, CutsceneState, Timeline } from "../cutscene/types";
 import { Hud } from "../hud";
 import { loadHudFonts } from "../hud/fonts";
+import type { PrologueHud } from "../hud/prologue";
 import type { HudSettings } from "../hud/settings";
 import { KeyboardCapture, pressKey } from "../input/keyboard";
 import { isQualityTier, type QualityTier, RenderWorld } from "../render";
-import { type BiomeMood, blendMood } from "../render/biomes";
+import { type BiomeMood, blendMood, UNWRITTEN } from "../render/biomes";
 import type { CameraPose } from "../render/camera";
+import { attachPrologueFx, type SessionPrologueFx } from "../render/vfx/prologue";
 import { buildWorld, levelIds, loadLevel, toRenderBiome } from "../render/world";
 import { WpmBot } from "./bot";
 import { attachCombatFx, type SessionCombatFx } from "./combatFx";
@@ -90,12 +94,23 @@ export const PROLOGUE_NUDGE_S = 9;
 export const PROLOGUE_RING_HINT_S = 20;
 export const PROLOGUE_AUTO_ADVANCE_S = 75;
 const PROLOGUE_FADE_MS = 400;
+const NUDGE_TEXT = "Type any word to fight!";
+/** The last Fireball's catch freezes the world for this long (art direction §3 `catchFireball`). */
+const CATCH_HIT_STOP_MS = 160;
+/** The combat library's Fireball (cast just before the climax) is swept for this long after Part C starts. */
+const CLIMAX_SWEEP_MS = 1500;
+/** The id of the Nul the stage raises when Part C starts without the boss on stage (the idle auto-advance). */
+const NUL_STAND_IN_ID = 9001;
+const SWORD_KEY = "prop.prologue.sword";
+/** The sword prop is authored at the world scale of the gate; stuck in the ground beside the kneeling knight it reads about his height. */
+const SWORD_SCALE = 0.45;
 
 interface ProState {
   readonly o: PrologueModeOptions;
   phase: "A" | "B" | "C" | "done";
   player: CutscenePlayer | null;
-  overlay: PrologueOverlay;
+  /** The P3.3 cinematic HUD (Grimoire, dialogue, ink line, skip ring, nudge): mounted by `Hud.attachPrologue()`. */
+  hudPro: PrologueHud;
   idleMs: number;
   escDownAt: number | null;
   escTimer: number;
@@ -104,6 +119,24 @@ interface ProState {
   /** Why Part C started: the sim's climax, or the idle auto-advance. */
   cReason: "climax" | "idle" | null;
   offs: (() => void)[];
+  /** The standing hints / ring state (mirrors what the HUD shows; the flow tests read it). */
+  nudgeOn: boolean;
+  ringHint: boolean;
+  ringHeld: boolean;
+  /** performance.now() when the skip fade started, or null. */
+  skipFadeAt: number | null;
+  /** Hit-stop: the cutscene clock waits this long (ms). */
+  holdMs: number;
+  /** Part C: ms since it began (the climax sweep of the combat Fireball). */
+  cAgeMs: number;
+  /** The knight's sword prop (Part C, `prop:prop.prologue.sword`), created when first shown. */
+  swordMesh: Mesh | null;
+  /** The last evaluated cutscene state of the playing part (stills / debug). */
+  cState: CutsceneState | null;
+  /** Test hook (`proSeek`): the cutscene clock is parked on the sought frame. */
+  frozen: boolean;
+  /** Part C began before the boss appeared (idle auto-advance): the stage stands Nul up for the cutscene. */
+  nulStandIn: boolean;
 }
 
 /** The layout the prologue plays on: `assets/levels/prologue.json` once it exists, else a Ch1 boss level (fallback). */
@@ -112,15 +145,12 @@ export function prologueLayoutId(): string {
   return levelIds().includes(want) ? want : "ch1-l10";
 }
 
-/** Placeholder UNWRITTEN grade for the cutscene's mood blend (the real constant is P2.x's); P3.6 swaps this. */
-function drain(base: BiomeMood): BiomeMood {
-  return {
-    ...base,
-    sat: base.sat * 0.18,
-    exposure: base.exposure * 0.92,
-    fogCol: [0.2, 0.21, 0.24],
-    vig: base.vig * 1.2,
-  };
+/** The starter kit (actives and passives with no `unlockLevel`: Fireball + Clean Cut): the shards that fall back in Part C. */
+function starterKitIds(): string[] {
+  return [
+    ...contentBundle.actives.filter((a) => a.unlockLevel === undefined).map((a) => a.id),
+    ...contentBundle.passives.filter((p) => p.unlockLevel === undefined).map((p) => p.id),
+  ];
 }
 
 export interface PerfStats {
@@ -159,12 +189,19 @@ export interface PlayDebug {
   perf(phase: string): PerfStats;
   resultsShown(): boolean;
   stage(): ReturnType<LevelStage["debug"]>;
+  /** Prologue mode only: park Part A / C on timeline time `t` ms (stills). */
+  proSeek?(t: number, lineClockMs?: number, jumped?: boolean): boolean;
   /** Prologue mode only: the flow state (test hook). */
   prologue?(): {
     phase: string;
     idleMs: number;
     nudge: boolean;
     ringHint: boolean;
+    /** Esc is held and the ring shows its progress. */
+    ringHeld: boolean;
+    /** The timeline's black fade (0 clear .. 1 black) and the playing part's clock (ms). */
+    fade: number;
+    t: number;
     cReason: string | null;
     simStarted: boolean;
   };
@@ -186,6 +223,8 @@ export class PlaySession {
   typingFx: SessionTypingFx | null = null;
   /** T2.3 combat VFX (null when disabled). */
   combat: SessionCombatFx | null = null;
+  /** P3.6 prologue world VFX (null for every story level). */
+  proFx: SessionPrologueFx | null = null;
 
   private readonly keyboard: KeyboardCapture;
   private lastView: LevelView;
@@ -257,6 +296,21 @@ export class PlaySession {
         typing: this.typingFx,
         seed: cfg.seed,
       });
+    // ---- P3.6 prologue world VFX (PrologueFx): built ONLY in prologue mode, so story levels never see it
+    if (opts.prologue) {
+      stage.setPrologue(true);
+      this.proFx = attachPrologueFx({
+        stage,
+        world,
+        hud: this.hud,
+        router: this.router,
+        typing: this.typingFx,
+        extraKeepOut: (out, off) => this.cutsceneKeepOuts(out, off),
+      });
+      this.router.register(["EnemySpawned", "BossIntroStarted", "EnemyAttack"], (e) =>
+        this.prologueSfx(e),
+      );
+    }
     this.runner = new LevelRunner(cfg, (evs) => this.onEvents(evs));
     this.lastView = getView(this.runner.state);
     this.keyboard = new KeyboardCapture({
@@ -325,6 +379,7 @@ export class PlaySession {
     cancelAnimationFrame(this.raf);
     this.keyboard.detach();
     this.detachPrologue();
+    this.proFx?.dispose();
     this.combat?.dispose();
     this.typingFx?.dispose();
     this.screens.dispose();
@@ -454,7 +509,8 @@ export class PlaySession {
 
   private setBiomeFromWorld(force = false): void {
     const b = this.stage.handle.biomeAt(this.world.camera.pose.x);
-    const name: BiomeName = b === "hollow" ? "boss" : (b as BiomeName);
+    // the prologue has its own ambience + music rows ("prologue": heroic D major -> the theft drone -> silence)
+    const name: BiomeName = this.pro ? "prologue" : b === "hollow" ? "boss" : (b as BiomeName);
     if (force || name !== this.biome) {
       this.biome = name;
       this.audio?.setBiome(name);
@@ -481,11 +537,10 @@ export class PlaySession {
       this.screens.showPause(r.pauseReason ?? "menu", pro !== null);
     }
     if (pro) this.proFrame(now, Math.min(1, Math.max(0, rawDt)), paused);
-    // Part C: the HUD shows no plates (the cinematic HUD is P3.3's); the sim is not stepped any more.
+    // Part C: the sim is not stepped any more (the last view is held): no plates, no ward, not "cleared" (that would
+    // make the hero hop in his win pose), and the HUD is the cinematic one.
     const view: LevelView =
-      this.pro?.phase === "C"
-        ? { ...this.lastView, plates: [], targetPlateId: null }
-        : this.lastView;
+      this.pro?.phase === "C" ? this.cutsceneView(this.lastView) : this.lastView;
     const alpha = paused ? 0 : this.lastAlpha;
     const animDt = paused ? 0 : dt;
 
@@ -493,9 +548,14 @@ export class PlaySession {
     this.stage.setFxSettings(this.hud.getSettings());
     this.stage.update(view, alpha, worldDt);
     this.combat?.update(view);
+    if (pro) this.proWorld(view);
     this.setBiomeFromWorld();
+    this.applyFade();
     this.world.render();
-    this.hud.render(view, alpha, animDt);
+    // Part A has no view yet (the sim has not started): only the cinematic overlay (caption, dialogue, skip ring)
+    if (pro?.phase === "A") this.hud.renderOverlay(animDt);
+    else this.hud.render(view, alpha, animDt);
+    this.drawSkipFade(now);
     this.screens.updateView(view);
     this.audio?.update();
 
@@ -534,12 +594,12 @@ export class PlaySession {
   // ------------------------------------------------------------------------------------------- prologue (P3.5)
 
   private attachPrologue(o: PrologueModeOptions): void {
-    const overlay = new PrologueOverlay();
+    const hudPro = this.hud.attachPrologue();
     const pro: ProState = {
       o,
       phase: "A",
       player: null,
-      overlay,
+      hudPro,
       idleMs: 0,
       escDownAt: null,
       escTimer: 0,
@@ -547,10 +607,31 @@ export class PlaySession {
       finishing: false,
       cReason: null,
       offs: [],
+      nudgeOn: false,
+      ringHint: false,
+      ringHeld: false,
+      skipFadeAt: null,
+      holdMs: 0,
+      cAgeMs: 0,
+      swordMesh: null,
+      cState: null,
+      frozen: false,
+      nulStandIn: false,
     };
     this.pro = pro;
     const holdMs = o.holdMs ?? SKIP_HOLD_MS;
-    this.hud.setPanelAlpha(0); // Part A is a cutscene: no panels until the sim starts
+    // the cinematic HUD takes its anchors from the stage's real projection (CSS px) and the bundle's starter kit
+    const tear = this.stage.handle.getAnchor("tear");
+    hudPro.setStarterKit(starterKitIds());
+    hudPro.setAnchors({
+      hand: () => {
+        const hp = { x: 0, z: 0 };
+        this.stage.heroPos(hp);
+        return this.stage.project(hp.x + 0.5, 0.75, hp.z);
+      },
+      tear: () => this.stage.project(tear.x, tear.y ?? 7, tear.z),
+    });
+    this.hud.setPanelAlpha(1);
     const listen = <K extends keyof WindowEventMap>(
       type: K,
       fn: (e: WindowEventMap[K]) => void,
@@ -584,7 +665,7 @@ export class PlaySession {
         const downAt = pro.escDownAt;
         window.setTimeout(() => {
           if (pro.escDownAt === downAt && !pro.finishing)
-            overlay.setProgress(RING_SHOW_MS / holdMs);
+            this.setRingProgress(RING_SHOW_MS / holdMs);
         }, RING_SHOW_MS);
       },
       true,
@@ -596,7 +677,7 @@ export class PlaySession {
         const at = pro.escDownAt;
         pro.escDownAt = null;
         window.clearTimeout(pro.escTimer);
-        overlay.setProgress(null);
+        this.setRingProgress(null);
         if (at !== null && !pro.finishing && e.timeStamp - at >= holdMs) this.skipPrologue();
       },
       true,
@@ -604,7 +685,7 @@ export class PlaySession {
     listen("blur", () => {
       pro.escDownAt = null;
       window.clearTimeout(pro.escTimer);
-      overlay.setProgress(null);
+      this.setRingProgress(null);
     });
     listen("focus", () => pro.player?.resume());
     const vis = (): void => {
@@ -613,9 +694,9 @@ export class PlaySession {
     document.addEventListener("visibilitychange", vis);
     pro.offs.push(() => document.removeEventListener("visibilitychange", vis));
     // Part A opens with the "Hold Esc to skip" hint for 3 s
-    overlay.setRingHint(true);
+    this.setRingHint(true);
     const hintTimer = window.setTimeout(() => {
-      if (pro.phase === "A") overlay.setRingHint(false);
+      if (pro.phase === "A") this.setRingHint(false);
     }, 3000);
     pro.offs.push(() => window.clearTimeout(hintTimer));
     pro.player = this.makePlayer(o.timelines.open);
@@ -629,7 +710,15 @@ export class PlaySession {
     window.clearTimeout(pro.escTimer);
     pro.player?.release();
     pro.player = null;
-    pro.overlay.dispose();
+    this.stage.setBossCutscene(null);
+    this.stage.setFogDensity(null);
+    if (pro.swordMesh) this.world.remove(pro.swordMesh);
+    pro.swordMesh = null;
+    pro.hudPro.setCutscene(null);
+    pro.hudPro.showGrimoire(false);
+    pro.hudPro.showSkipRing(null);
+    pro.hudPro.hideNudge();
+    this.hud.detachPrologue();
   }
 
   private makePlayer(tl: Timeline): CutscenePlayer {
@@ -657,9 +746,10 @@ export class PlaySession {
         effectsIntensity: hs.effectsIntensity,
       },
       director: this.stage.director(),
+      // the theft ramp blends the level's storm-gold mood toward UNWRITTEN (`mood` cues carry THEFT_RAMP)
       moodAt: (k) => {
         const base: BiomeMood = h.moodAt(this.world.camera.pose.x);
-        return blendMood(base, drain(base), k);
+        return blendMood(base, UNWRITTEN, k);
       },
       sink: { onCue: (c) => this.onCue(c) },
     });
@@ -668,20 +758,176 @@ export class PlaySession {
   private onCue(c: Cue): void {
     const pro = this.pro;
     if (!pro || pro.finishing) return;
-    if (c.kind === "startPlay") {
-      if (pro.phase !== "A") return;
-      pro.phase = "B";
-      pro.idleMs = 0;
-      pro.overlay.setRingHint(false);
-      this.hud.setPanelAlpha(1);
-      this.runner.start(performance.now());
-    } else if (c.kind === "sfx") {
-      try {
-        this.audio?.play(c.id);
-      } catch {
-        /* audio is best-effort */
-      }
+    switch (c.kind) {
+      case "startPlay":
+        if (pro.phase !== "A") return;
+        pro.phase = "B";
+        pro.idleMs = 0;
+        this.setRingHint(false);
+        pro.hudPro.setCutscene(null); // Part B: the plates, bars and the Grimoire bar are the sim's
+        // the stage places the hero at the encounter stop on the first sim frame; do it now so the cutscene's walk offset
+        // (released this same frame) cannot show the hero back at the start for a frame
+        this.stage.encounterStarted(0);
+        this.runner.start(performance.now());
+        break;
+      case "sfx":
+        this.play(c.id, { count: c.count, boss: c.boss });
+        break;
+      case "line":
+        this.play("lineBlip", { boss: c.speaker === "nul" });
+        break;
+      case "music":
+        this.musicCue(c);
+        break;
+      case "vfx":
+        if (c.id === "catchFireball") {
+          // the catch is a 160 ms hit-stop: the world and the cutscene clock wait together
+          pro.holdMs = CATCH_HIT_STOP_MS;
+          this.stage.hitStop(CATCH_HIT_STOP_MS / 1000);
+        }
+        break;
+      default:
+        break;
     }
+  }
+
+  private play(id: Sfx, p: SfxParams = {}): void {
+    try {
+      this.audio?.play(id, p);
+    } catch {
+      /* audio is best-effort */
+    }
+  }
+
+  /** A cutscene `music` cue: state / spark motif / silence ramp (`applyMusicCue`) plus the drone and swell (P3.4). */
+  private musicCue(c: Extract<Cue, { kind: "music" }>): void {
+    const a = this.audio;
+    if (!a) return;
+    try {
+      if (c.drone !== undefined) a.musicDrone(c.drone);
+      if (c.swell) a.musicSwell();
+      if (c.motif === "sparkEnd") a.musicMotif("sparkEnd");
+      const rest: { state?: typeof c.state; motif?: "spark"; silence?: number } = {};
+      if (c.state) rest.state = c.state;
+      if (c.motif === "spark") rest.motif = "spark";
+      if (c.silence !== undefined) rest.silence = c.silence;
+      a.applyMusicCue(rest, c.dur !== undefined && c.dur > 0 ? c.dur / 1000 : undefined);
+    } catch {
+      /* audio is best-effort */
+    }
+  }
+
+  /** Part B world sounds the sim events imply (the audio bindings do not know the prologue cues): ink pool, sky tear, ink lance. */
+  private prologueSfx(e: SimEvent): void {
+    const phase = this.pro?.phase;
+    if (phase !== "B") return;
+    if (e.type === "EnemySpawned") {
+      if (!e.isBoss) this.play("inkPool");
+    } else if (e.type === "BossIntroStarted") this.play("skyTear");
+    else if (e.type === "EnemyAttack") {
+      const nul = this.lastView.enemies.find((x) => x.id === e.enemyId)?.defId === "nul";
+      if (nul) this.play("hushBolt");
+    }
+  }
+
+  /** The skip ring on the P3.3 HUD: `p` = hold progress, null = released (a standing hint stays as the idle ring). */
+  private setRingProgress(p: number | null): void {
+    const pro = this.pro;
+    if (!pro) return;
+    pro.ringHeld = p !== null;
+    pro.hudPro.showSkipRing(p !== null ? p : pro.ringHint ? 0 : null);
+  }
+
+  private setRingHint(on: boolean): void {
+    const pro = this.pro;
+    if (!pro) return;
+    pro.ringHint = on;
+    if (!pro.ringHeld) pro.hudPro.showSkipRing(on ? 0 : null);
+  }
+
+  private setNudge(on: boolean): void {
+    const pro = this.pro;
+    if (!pro) return;
+    pro.nudgeOn = on;
+    pro.hudPro.showNudge(on ? NUDGE_TEXT : null);
+  }
+
+  /** World effects keep clear of the dialogue box (inflated 24 design px) and the ink line in the cutscene parts (P2). */
+  private cutsceneKeepOuts(out: Float32Array, off: number): number {
+    const pro = this.pro;
+    if (!pro || pro.phase === "B") return 0;
+    const s = this.hud.getScale();
+    let n = 0;
+    for (const r of pro.hudPro.worldKeepOuts()) {
+      const i = off + n * 4;
+      if (i + 4 > out.length) break;
+      out[i] = r.x * s;
+      out[i + 1] = r.y * s;
+      out[i + 2] = r.w * s;
+      out[i + 3] = r.h * s;
+      n++;
+    }
+    return n;
+  }
+
+  /**
+   * Part C after the idle auto-advance: the sim never reached the boss, so Nul is not on stage. The stage raises him at his
+   * slot (encounter 2 has the same hero stop) so the cutscene is about someone.
+   */
+  private standUpNul(): void {
+    const pro = this.pro;
+    if (!pro || this.lastView.enemies.some((e) => e.isBoss && e.alive)) return;
+    pro.nulStandIn = true;
+    this.stage.encounterStarted(1);
+    this.stage.spawnEnemy(NUL_STAND_IN_ID, "nul", 0, true);
+  }
+
+  /** The view the stage and HUD see in Part C: the sim is over, so no plates / ward and not "cleared". */
+  private cutsceneView(v: LevelView): LevelView {
+    const out: LevelView = { ...v, phase: "combat", plates: [], targetPlateId: null };
+    if (v.prologue) out.prologue = { ...v.prologue, bossClamped: false };
+    // the Aegis barrier (the dome around the knight) goes when Aegis is stolen (kit slot 1); statuses end with the fight
+    if (this.pro?.nulStandIn) {
+      const nul: EnemyView = {
+        id: NUL_STAND_IN_ID,
+        defId: "nul",
+        slot: 0,
+        isBoss: true,
+        alive: true,
+        hp: 1,
+        maxHp: 1,
+        hpFrac: 0.35,
+        atbFrac: 0,
+        plateId: null,
+        isGuard: false,
+        guardTicksLeft: 0,
+        guardTotalTicks: 0,
+        guardResult: null,
+        shield: 0,
+        shieldMax: 0,
+        weaknesses: [],
+        brokenTicksLeft: 0,
+        statuses: [],
+        isFocus: false,
+        pose: "idle",
+        poseSinceTick: v.tick,
+      };
+      out.enemies = [...v.enemies, nul];
+      out.boss = {
+        enemyId: NUL_STAND_IN_ID,
+        name: "Nul",
+        title: "The Silent King",
+        phase: 1,
+        gateHpFrac: null,
+      };
+    }
+    const aegisGone = this.pro?.cState?.hud.kitShattered.includes(1) === true;
+    out.hero = {
+      ...v.hero,
+      barrierCharges: aegisGone ? 0 : v.hero.barrierCharges,
+      statuses: [],
+    };
+    return out;
   }
 
   /** Any real input in Part B: the idle clock restarts and the nudge / ring hint go away. */
@@ -689,8 +935,8 @@ export class PlaySession {
     const pro = this.pro;
     if (!pro) return;
     pro.idleMs = 0;
-    pro.overlay.setNudge(false);
-    pro.overlay.setRingHint(false);
+    this.setNudge(false);
+    this.setRingHint(false);
   }
 
   /** A quick tap of Esc (released before the ring shows). Only Part B uses it: pause menu / resume / drop the target. */
@@ -715,11 +961,17 @@ export class PlaySession {
     if (!pro || pro.phase === "C" || pro.finishing) return;
     pro.phase = "C";
     pro.cReason = reason;
-    pro.overlay.setNudge(false);
-    pro.overlay.setRingHint(false);
-    this.hud.setPanelAlpha(0);
+    pro.cAgeMs = 0;
+    this.setNudge(false);
+    this.setRingHint(false);
     this.hud.banners.clear();
     this.screens.closePanel();
+    // the combat library's Fireball (the cast that ended Part B) and every servant still standing go: the catch is the
+    // cutscene's own (`catchFireball` draws a frozen Fireball in Nul's palm); the plates / bars fade out over 300 ms
+    this.combat?.fx.clear();
+    this.stage.dissolveAdds();
+    this.standUpNul();
+    pro.hudPro.showGrimoire(true);
     pro.player?.release();
     pro.player = this.makePlayer(pro.o.timelines.unwriting);
     pro.player.start();
@@ -733,14 +985,17 @@ export class PlaySession {
     if (pro.escDownAt !== null) {
       const held = now - pro.escDownAt;
       const holdMs = pro.o.holdMs ?? SKIP_HOLD_MS;
-      pro.overlay.setProgress(held >= RING_SHOW_MS ? held / holdMs : null);
+      this.setRingProgress(held >= RING_SHOW_MS ? held / holdMs : null);
       if (held >= holdMs) {
         this.skipPrologue();
         return;
       }
     }
     if (pro.player) {
-      pro.player.tick(dtSec * 1000);
+      // the catch's hit-stop holds the cutscene clock too (the world is frozen by the stage's own clock)
+      if (pro.holdMs > 0) pro.holdMs = Math.max(0, pro.holdMs - dtSec * 1000);
+      else if (!pro.frozen) pro.player.tick(dtSec * 1000);
+      if (pro.phase === "C") pro.cAgeMs += dtSec * 1000;
       if (pro.player.isFinished) {
         if (pro.phase === "C") {
           this.finish("end");
@@ -748,8 +1003,13 @@ export class PlaySession {
         }
         pro.player.release(); // Part A is over: the stage takes its camera back
         pro.player = null;
+        pro.cState = null;
+      } else {
+        pro.cState = pro.player.state;
+        pro.hudPro.setCutscene(pro.cState);
       }
     }
+    if (pro.phase === "C" && pro.cAgeMs < CLIMAX_SWEEP_MS) this.combat?.fx.clear();
     if (pro.phase !== "B") return;
     if (pro.climaxed) {
       this.beginPartC("climax");
@@ -759,9 +1019,74 @@ export class PlaySession {
     if (paused || this.runner.terminal || this.lastView.phase !== "combat") return;
     pro.idleMs += dtSec * 1000;
     const k = (pro.o.idleScale ?? 1) * 1000;
-    if (pro.idleMs >= PROLOGUE_NUDGE_S * k) pro.overlay.setNudge(true);
-    if (pro.idleMs >= PROLOGUE_RING_HINT_S * k) pro.overlay.setRingHint(true);
+    if (pro.idleMs >= PROLOGUE_NUDGE_S * k) this.setNudge(true);
+    if (pro.idleMs >= PROLOGUE_RING_HINT_S * k) this.setRingHint(true);
     if (pro.idleMs >= PROLOGUE_AUTO_ADVANCE_S * k) this.beginPartC("idle");
+  }
+
+  /** Per frame, after the stage: the prologue world VFX (live Part B cues + the cutscene's), Nul's pose, the sword, the fog. */
+  private proWorld(view: LevelView): void {
+    const pro = this.pro;
+    const fx = this.proFx;
+    if (!pro || !fx) return;
+    const cs = pro.phase === "B" || pro.phase === "done" ? null : pro.cState;
+    fx.update(this.stage.dt, view, cs?.vfx, cs?.moodBlend);
+    // Part C: Nul is posed by the timeline's `boss` actor (anim by the cue's age, the rise into the tear, hidden after)
+    const b = pro.phase === "C" ? cs?.actors.boss : undefined;
+    this.stage.setBossCutscene(
+      b ? { anim: b.anim, ageMs: b.animAgeMs, dx: b.dx, dz: b.dz, visible: b.visible } : null,
+    );
+    this.stage.setFogDensity(cs ? fx.fx.out.fogDensity : null);
+    // the knight's sword, stuck in the ground at the `sword` marker for the fall (a `prop:` actor of the timeline)
+    const sw = cs?.actors[`prop:${SWORD_KEY}` as ActorRef];
+    if (sw?.visible && !pro.swordMesh) {
+      const a = this.stage.handle.getAnchor("sword");
+      pro.swordMesh = this.world.addProp(SWORD_KEY, a.x, 0, a.z, { rim: 1.2, scale: SWORD_SCALE });
+    }
+    if (pro.swordMesh) pro.swordMesh.visible = sw?.visible === true;
+  }
+
+  /**
+   * TEST HOOK (stills): park the playing cutscene part on timeline time `tMs` (a pure seek: no edge cues fire, so no
+   * sound) and keep it there; `lineClockMs >= 0` shows the line that starts exactly at `tMs`. The world settles over the
+   * next frames. Returns false when no cutscene part is playing.
+   */
+  proSeek(tMs: number, lineClockMs = -1, jumped = true): boolean {
+    const pro = this.pro;
+    if (!pro?.player || (pro.phase !== "A" && pro.phase !== "C")) return false;
+    if (tMs < 0) {
+      pro.frozen = false; // let the part play on from where it was parked
+      return true;
+    }
+    pro.frozen = true;
+    pro.holdMs = 0;
+    pro.cState = pro.player.seek(tMs, lineClockMs);
+    pro.hudPro.setCutscene(pro.cState, jumped);
+    pro.hudPro.settle();
+    return true;
+  }
+
+  /** The timeline's black fade (Part A opens on black, Part C ends on it): a full-screen black flash in the grade. */
+  private applyFade(): void {
+    const pro = this.pro;
+    const f = pro?.phase === "A" || pro?.phase === "C" ? (pro.cState?.hud.fade ?? 0) : 0;
+    if (f <= 0) return;
+    const e = this.world.postFx.effects;
+    e.flash = Math.max(e.flash, f);
+    e.flashColor.set(0, 0, 0);
+  }
+
+  /** The skip's 400 ms fade to black over everything (the HUD canvas is the top layer). */
+  private drawSkipFade(now: number): void {
+    const pro = this.pro;
+    if (!pro || pro.skipFadeAt === null) return;
+    const a = Math.min(1, Math.max(0, (now - pro.skipFadeAt) / PROLOGUE_FADE_MS));
+    const c = this.opts.hudCanvas.getContext("2d");
+    if (!c || a <= 0) return;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalAlpha = 1;
+    c.fillStyle = `rgba(0,0,0,${a})`;
+    c.fillRect(0, 0, this.opts.hudCanvas.width, this.opts.hudCanvas.height);
   }
 
   /** Skip the whole prologue (hold Esc, or the pause menu): 400 ms fade, then `onDone("skip")`. */
@@ -774,14 +1099,16 @@ export class PlaySession {
     if (!pro || pro.finishing) return;
     pro.finishing = true;
     pro.escDownAt = null;
-    pro.overlay.setProgress(null);
-    pro.overlay.setNudge(false);
-    pro.overlay.setRingHint(false);
+    pro.ringHeld = false;
+    pro.ringHint = false;
+    pro.hudPro.showSkipRing(null);
+    this.setNudge(false);
     this.screens.closePanel();
-    void pro.overlay.fadeOut(PROLOGUE_FADE_MS).then(() => {
+    pro.skipFadeAt = performance.now();
+    window.setTimeout(() => {
       pro.phase = "done";
       if (!this.disposed) pro.o.onDone(how);
-    });
+    }, PROLOGUE_FADE_MS);
   }
 
   perf(phase: string): PerfStats {
@@ -814,13 +1141,17 @@ export class PlaySession {
       perf: (p) => this.perf(p),
       resultsShown: () => this.resultsShown,
       stage: () => this.stage.debug(),
+      proSeek: (t, lc, j) => this.proSeek(t, lc, j),
       prologue: () => {
         const p = this.pro;
         return {
           phase: p?.phase ?? "none",
           idleMs: p?.idleMs ?? 0,
-          nudge: p?.overlay.nudgeOn ?? false,
-          ringHint: p?.overlay.ringHintOn ?? false,
+          nudge: p?.nudgeOn ?? false,
+          ringHint: p?.ringHint ?? false,
+          ringHeld: p?.ringHeld ?? false,
+          fade: p?.cState?.hud.fade ?? 0,
+          t: p?.player?.time ?? 0,
           cReason: p?.cReason ?? null,
           simStarted: this.runner.gameMs(performance.now()) > 0,
         };
