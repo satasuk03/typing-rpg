@@ -73,6 +73,8 @@ function boot(): void {
     return;
   }
 
+  if (scene === "nul-sheet") return void import("./dev/nulSheet").then((m) => m.start(glCanvas)); // P2.1 dev sheets
+
   // The real game: title -> map -> levels (src/app/).
   void import("./app/boot").then((m) => m.start(glCanvas, hudCanvas));
 }
