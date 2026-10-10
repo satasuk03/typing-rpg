@@ -21,6 +21,7 @@ import { enemyDef, restartAttackCycle, scheduleAttack } from "./guard.ts";
 import { shiftHealTimer } from "./heal.ts";
 import { guardRatingBp } from "./meta/loadout.ts";
 import { emitPassive, hasPassive } from "./passives.ts";
+import { surgeBp } from "./prologue.ts";
 import { below } from "./rng.ts";
 import type { EncounterState, EnemyState, RunState } from "./state.ts";
 import { applyDot, consumeBarrier } from "./statuses.ts";
@@ -94,6 +95,7 @@ export function resolveDamage(
   if (broken) d = mulBp(d, K.BREAK_DMG_MULT_BP);
   if (enemy.staggerUntil !== null) d = mulBp(d, K.DOOM_STAGGER_DMG_MULT_BP);
   for (const m of passiveDamageModsBp(run)) d = mulBp(d, m);
+  if (run.def.prologue !== undefined) d = mulBp(d, surgeBp(state)); // v2.2 §3.7.5: skipped on story levels
   d = Math.max(d, 1);
   d = Math.max(0, Math.min(d, enemy.hpM - gateFloorM(enemy)));
   return { dmgM: d, weak, broken };
@@ -332,7 +334,15 @@ export function damageHero(
   nonLethal = false,
 ): boolean {
   const run = state.run;
-  const dealt = Math.max(0, Math.min(dmgM, nonLethal ? run.heroHpM - 1 : run.heroHpM));
+  const pro = run.def.prologue;
+  // v2.2 §3.7.4: on the prologue the hero never drops below the HP floor (so never dies), for every cause
+  const dealt =
+    pro !== undefined
+      ? Math.max(
+          0,
+          Math.min(dmgM, run.heroHpM - Math.max(1, mulBp(run.heroMaxHpM, pro.heroHpFloorBp))),
+        )
+      : Math.max(0, Math.min(dmgM, nonLethal ? run.heroHpM - 1 : run.heroHpM));
   if (dealt <= 0) return false;
   run.heroHpM -= dealt;
   emit({

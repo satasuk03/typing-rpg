@@ -40,6 +40,7 @@ import type { SimInput } from "./input.ts";
 import { openChest, rollEncounterChest } from "./meta/chests.ts";
 import { computeHeroStats, guardRatingBp } from "./meta/loadout.ts";
 import { emitPassive, hasPassive, tutorialCue } from "./passives.ts";
+import { surgeBp } from "./prologue.ts";
 import { below, deriveRng } from "./rng.ts";
 import { chargeSkills, checkSkillCasts, resolveSkillImpacts, tickDots } from "./skills.ts";
 import type { EncounterState, EnemyState, RiddleState, RunState } from "./state.ts";
@@ -92,6 +93,7 @@ export function createLevel(
   if (!Number.isSafeInteger(seed)) throw new SimError("createLevel: seed must be an integer");
   const pace = Math.min(K.PACE_MAX, Math.max(K.PACE_MIN, Math.round(options.pace)));
   const hero = computeHeroStats(loadout);
+  const pro = def.prologue;
   const run: RunState = {
     def: deepClone(def),
     loadout: deepClone(loadout),
@@ -135,8 +137,12 @@ export function createLevel(
     heroMaxHpM: hero.maxHp,
     heroHpM: hero.maxHp,
     barrier: 0,
-    skillChargeM: [0, 0],
-    skillReady: [false, false],
+    // story levels: exactly length 2 whatever the loadout (§14.1); the prologue sizes both from its kit (§3.7.2)
+    skillChargeM: pro === undefined ? [0, 0] : [...pro.kitStartChargeM],
+    skillReady:
+      pro === undefined
+        ? [false, false]
+        : pro.kitActives.map((id, i) => (pro.kitStartChargeM[i] ?? 0) >= K.SKILL_CHARGE_M[id]),
     weaponAttacks: 0,
     lastWordPerfect: false,
     comebackLost: 0,
@@ -149,6 +155,16 @@ export function createLevel(
     encountersStarted: 0,
     endTick: null,
     failReason: null,
+    ...(pro !== undefined
+      ? {
+          prologue: {
+            combatTicks: 0,
+            waitTicks: pro.kitActives.map(() => 0),
+            lastCastTick: null,
+            lastCastSlot: null,
+          },
+        }
+      : {}),
   };
   return {
     kind: "level",
@@ -205,7 +221,10 @@ function stepOne(state: LevelState, emit: Emit): void {
     });
     enterSegment(state, 0, emit);
   } else {
-    if (state.phase === "combat") run.activeTicks++;
+    if (state.phase === "combat") {
+      run.activeTicks++;
+      if (run.prologue !== undefined) run.prologue.combatTicks++; // v2.2 §3.7.2
+    }
     if (state.phase === "combat" && state.enc !== null) {
       expireBreaks(state, emit); // step 1: timers and statuses (break, stagger, freeze)
       expireStaggers(state, emit);
@@ -226,7 +245,9 @@ function stepOne(state: LevelState, emit: Emit): void {
     // step 7: deaths, wave/encounter/segment transitions
     transitions(state, emit);
   }
-  if (!isTerminal(state) && t + 1 >= K.LEVEL_TIMEOUT_T) failLevel(state, "timeout", emit);
+  // v2.2 §3.7.7: the prologue has no timeout (its only fail is the abandon command)
+  if (run.def.prologue === undefined && !isTerminal(state) && t + 1 >= K.LEVEL_TIMEOUT_T)
+    failLevel(state, "timeout", emit);
   state.tick = t + 1;
 }
 
@@ -275,7 +296,7 @@ function transitions(state: LevelState, emit: Emit): void {
         encounterIndex: enc.index,
         durationTicks: t - enc.startTick,
       });
-      payEncounter(state, enc, emit);
+      if (state.run.def.prologue === undefined) payEncounter(state, enc, emit); // v2.2 §3.7.7: no loot on the prologue
       setPhase(state, "rewards", t + K.REWARD_T);
       return;
     }
@@ -376,6 +397,7 @@ function startEncounter(state: LevelState, emit: Emit): void {
     steadyLeft: K.STEADY_FORGIVEN,
   };
   state.enc = enc;
+  if (run.prologue !== undefined) run.prologue.combatTicks = 0; // v2.2 §3.7.2
   setPhase(state, isBoss ? "bossIntro" : "encounterIntro", typingFrom);
   emit({
     type: "EncounterStarted",
@@ -587,6 +609,20 @@ const enemyStatuses = (e: Readonly<EnemyState>, t: number): StatusView[] => {
 const skillViews = (state: Readonly<LevelState>): SkillView[] => {
   const run = state.run;
   const out: SkillView[] = [];
+  const pro = run.def.prologue;
+  if (pro !== undefined) {
+    // v2.2 §3.7.8: one view per kit slot, in slot order; the mode flips to "asap" once the wait threshold is reached
+    pro.kitActives.forEach((id, slot) => {
+      out.push({
+        slot,
+        id,
+        chargeFrac: Math.min(1, (run.skillChargeM[slot] ?? 0) / K.SKILL_CHARGE_M[id]),
+        ready: run.skillReady[slot] === true,
+        mode: (run.prologue?.waitTicks[slot] ?? 0) >= pro.forceAfterTicks ? "asap" : "smart",
+      });
+    });
+    return out;
+  }
   for (const slot of [0, 1] as const) {
     const id = run.loadout.actives[slot];
     if (id === null) continue;
@@ -707,6 +743,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
   const span = state.phaseUntil === null ? 0 : state.phaseUntil - run.phaseStart;
   const bossEnemy = enc?.isBoss ? enc.enemies[0] : undefined;
   const bossDef = run.def.boss;
+  const pro = run.def.prologue;
   const swPlate = (enc?.plates ?? []).find((p) => p.kind === "secondWind");
   return {
     tick: t,
@@ -731,7 +768,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
       barrierCharges: run.barrier,
       guardRatingBp: guardRatingBp(run.loadout),
       statuses: run.barrier > 0 ? [{ id: "barrier", ticksLeft: null, stacks: run.barrier }] : [],
-      secondWindAvailable: !run.secondWindUsed,
+      secondWindAvailable: pro === undefined && !run.secondWindUsed,
       pose: heroPose,
       poseSinceTick: run.phaseStart,
     },
@@ -746,7 +783,10 @@ export function getView(state: Readonly<LevelState>): LevelView {
     keyStreak: run.keyStreak,
     keyStreakTier: run.keyStreakTier,
     skills: skillViews(state),
-    passives: run.loadout.passives.filter((p): p is NonNullable<typeof p> => p !== null),
+    passives:
+      pro !== undefined
+        ? [...pro.kitPassives]
+        : run.loadout.passives.filter((p): p is NonNullable<typeof p> => p !== null),
     boss:
       bossEnemy !== undefined && bossDef !== null
         ? {
@@ -760,7 +800,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
                 : bossEnemy.gateHpM / bossEnemy.maxHpM,
             // T1.5 (additive): for the phase pips and the "why is my damage 0" hint
             gates: [bossDef.phase1.endAtHpBp / BP, bossDef.phase2.endAtHpBp / BP],
-            holding: bossHold(enc as EncounterState, bossDef),
+            holding: pro !== undefined ? null : bossHold(enc as EncounterState, bossDef), // adds never hold the prologue gate
             doomsResolved: enc?.boss?.doomsResolved ?? 0,
             minDoomSpells: bossDef.phase2.minDoomSpells,
           }
@@ -805,6 +845,21 @@ export function getView(state: Readonly<LevelState>): LevelView {
       activeTicks: run.activeTicks,
     },
     goldCollected: run.goldCollected,
+    ...(pro !== undefined
+      ? {
+          prologue: {
+            surgeMult: enc === null ? 1 : surgeBp(state) / BP,
+            bossClamped:
+              !isTerminal(state) &&
+              bossEnemy !== undefined &&
+              bossEnemy.alive &&
+              (enc?.boss?.phase ?? 1) === 1 &&
+              bossEnemy.gateHpM !== null &&
+              bossEnemy.hpM <= bossEnemy.gateHpM,
+            armed: run.stats.wordsCompleted >= 1,
+          },
+        }
+      : {}),
   };
 }
 

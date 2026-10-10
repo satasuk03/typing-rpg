@@ -8,11 +8,18 @@ import { type DamageSpec, dealDamage, healHero, resolveDamage } from "./combat.t
 import { enemyById } from "./encounter.ts";
 import { mulBp } from "./fixed.ts";
 import { revealActive, tutorialCue } from "./passives.ts";
-import type { EncounterState, EnemyState, PlateState } from "./state.ts";
+import type { EncounterState, EnemyState, PlateState, RunState } from "./state.ts";
 import { applyDot, freezeEnemy, grantBarrier } from "./statuses.ts";
 import type { ActiveSkillId, CastMode, LevelState } from "./types.ts";
 
 const SLOTS = [0, 1] as const;
+
+/** The skill in `slot`: the kit on the prologue (v2.2 §3.7.3), else loadout.actives[slot] (slots 0 and 1) as before. */
+function slotSkill(run: Readonly<RunState>, slot: number): ActiveSkillId | null {
+  const pro = run.def.prologue;
+  if (pro !== undefined) return pro.kitActives[slot] ?? null;
+  return (run.loadout.actives as readonly (ActiveSkillId | null)[])[slot] ?? null;
+}
 
 const needM = (id: ActiveSkillId): number => K.SKILL_CHARGE_M[id];
 
@@ -30,19 +37,29 @@ export function plateSkillChargeM(state: LevelState, plate: Readonly<PlateState>
 export function chargeSkills(state: LevelState, plate: Readonly<PlateState>, emit: Emit): void {
   if (plate.kind !== "word" && plate.kind !== "guard") return;
   const run = state.run;
-  const gain = plateSkillChargeM(state, plate);
+  const pro = run.def.prologue;
+  const base = plateSkillChargeM(state, plate);
+  if (pro !== undefined) {
+    // v2.2 §3.7.3: every kit slot gains x chargeMult; SkillCharged on the edge into ready, in slot order
+    const gain = mulBp(base, pro.chargeMultBp);
+    pro.kitActives.forEach((id, slot) => {
+      run.skillChargeM[slot] = Math.min((run.skillChargeM[slot] ?? 0) + gain, 2 * needM(id));
+      markReady(state, slot, emit);
+    });
+    return;
+  }
   for (const slot of SLOTS) {
     const id = run.loadout.actives[slot];
     if (id === null) continue;
     tutorialCue(state, "skill", emit);
-    run.skillChargeM[slot] = Math.min((run.skillChargeM[slot] ?? 0) + gain, 2 * needM(id));
+    run.skillChargeM[slot] = Math.min((run.skillChargeM[slot] ?? 0) + base, 2 * needM(id));
     markReady(state, slot, emit);
   }
 }
 
-function markReady(state: LevelState, slot: 0 | 1, emit: Emit): void {
+function markReady(state: LevelState, slot: number, emit: Emit): void {
   const run = state.run;
-  const id = run.loadout.actives[slot];
+  const id = slotSkill(run, slot);
   if (id === null) return;
   const ready = (run.skillChargeM[slot] ?? 0) >= needM(id);
   if (ready && !run.skillReady[slot])
@@ -92,6 +109,10 @@ export function checkSkillCasts(state: LevelState, emit: Emit): void {
   const enc = state.enc as EncounterState;
   if (state.phase !== "combat" || enc.finisherShown) return;
   const run = state.run;
+  if (run.def.prologue !== undefined) {
+    checkPrologueCasts(state, emit);
+    return;
+  }
   for (const slot of SLOTS) {
     const id = run.loadout.actives[slot];
     if (id === null || !run.skillReady[slot]) continue;
@@ -100,7 +121,37 @@ export function checkSkillCasts(state: LevelState, emit: Emit): void {
   }
 }
 
-function castSkill(state: LevelState, slot: 0 | 1, id: ActiveSkillId, emit: Emit): void {
+/**
+ * v2.2 §3.7.3 (step 6 on the prologue): armed after the run's first WordCompleted; ready slots accrue wait ticks; at most one
+ * cast per castGapTicks, scanning round robin from the slot after the last cast; a slot that waited forceAfterTicks uses "asap".
+ */
+function checkPrologueCasts(state: LevelState, emit: Emit): void {
+  const run = state.run;
+  const pro = run.def.prologue;
+  const rs = run.prologue;
+  if (pro === undefined || rs === undefined) return;
+  if (run.stats.wordsCompleted < 1) return;
+  const n = pro.kitActives.length;
+  for (let i = 0; i < n; i++) {
+    if (run.skillReady[i] === true) rs.waitTicks[i] = (rs.waitTicks[i] ?? 0) + 1;
+  }
+  if (rs.lastCastTick !== null && state.tick - rs.lastCastTick < pro.castGapTicks) return;
+  const start = rs.lastCastSlot === null ? 0 : (rs.lastCastSlot + 1) % n;
+  for (let k = 0; k < n; k++) {
+    const s = (start + k) % n;
+    const id = pro.kitActives[s];
+    if (id === undefined || run.skillReady[s] !== true) continue;
+    const mode: CastMode = (rs.waitTicks[s] ?? 0) >= pro.forceAfterTicks ? "asap" : "smart";
+    if (!canCast(state, id, mode)) continue;
+    castSkill(state, s, id, emit);
+    rs.waitTicks[s] = 0;
+    rs.lastCastTick = state.tick;
+    rs.lastCastSlot = s;
+    return;
+  }
+}
+
+function castSkill(state: LevelState, slot: number, id: ActiveSkillId, emit: Emit): void {
   const run = state.run;
   const enc = state.enc as EncounterState;
   run.skillChargeM[slot] = (run.skillChargeM[slot] ?? 0) - needM(id);

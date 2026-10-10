@@ -47,6 +47,7 @@ import { type Milli, mulBp, toDisplay } from "./fixed.ts";
 import { setPhase } from "./flow.ts";
 import { cancelAttack } from "./guard.ts";
 import { isTypable } from "./input.ts";
+import { surgeBp } from "./prologue.ts";
 import { below, deriveRng } from "./rng.ts";
 import type {
   BossState,
@@ -127,6 +128,30 @@ export function stepBoss(state: LevelState, emit: Emit): void {
   for (const w of [...bs.rubble]) {
     if (t < w.landTick) continue;
     if (missRubble(state, bs, boss, w, def, emit)) return; // the hero went down: the encounter froze
+  }
+
+  const pro = state.run.def.prologue;
+  if (pro !== undefined) {
+    // v2.2 §3.7.6: the phase-1 gate is the climax. The boss holds at its gate (adds never hold it) until bossMinTicks of
+    // combat have passed, then PrologueClimax and LevelCleared{gold: 0} on the same tick. No breather, so phases 2/3 never run.
+    if (
+      bs.phase === 1 &&
+      atGate(boss) &&
+      (state.run.prologue?.combatTicks ?? 0) >= pro.bossMinTicks
+    ) {
+      emit({
+        type: "PrologueClimax",
+        tick: t,
+        enemyId: boss.id,
+        bossId: def.id,
+        surgeMultBp: surgeBp(state),
+        addIds: enc.enemies.filter((e) => e.alive && !e.isBoss).map((e) => e.id),
+      });
+      state.run.endTick = t;
+      setPhase(state, "cleared", null);
+      emit({ type: "LevelCleared", tick: t, levelId: "prologue", durationTicks: t, gold: 0 });
+    }
+    return;
   }
 
   if (atGate(boss)) {

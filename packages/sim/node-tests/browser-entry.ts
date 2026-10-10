@@ -1,3 +1,4 @@
+import { type PrologueGolden, prologueGoldens } from "../tests/prologueGolden.ts";
 import { goldenHashes } from "../tests/toy.ts";
 import { type TrialGolden, trialGoldens } from "../tests/trialHarness.ts";
 import {
@@ -16,6 +17,7 @@ import { type WillowGolden, willowGoldens } from "../tests/willowGolden.ts";
       combatGoldens: () => Record<string, CombatGolden>;
       trialGoldens: () => Record<string, TrialGolden>;
       willowGoldens: () => Record<string, WillowGolden>;
+      prologueGoldens: () => Record<string, PrologueGolden>;
     };
   }
 ).__parity = {
@@ -24,4 +26,5 @@ import { type WillowGolden, willowGoldens } from "../tests/willowGolden.ts";
   combatGoldens,
   trialGoldens,
   willowGoldens,
+  prologueGoldens,
 };

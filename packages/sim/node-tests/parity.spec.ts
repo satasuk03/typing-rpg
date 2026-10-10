@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import { build } from "esbuild";
+import { type PrologueGolden, prologueGoldens } from "../tests/prologueGolden.ts";
 import { goldenHashes } from "../tests/toy.ts";
 import { type TrialGolden, trialGoldens } from "../tests/trialHarness.ts";
 import {
@@ -34,7 +35,12 @@ const willowGolden = readJson<{ goldens: Record<string, WillowGolden> }>(
   "../tests/fixtures/golden-willow.json",
 );
 
+const prologueGolden = readJson<{ goldens: Record<string, PrologueGolden> }>(
+  "../tests/fixtures/golden-prologue.json",
+);
+
 type Parity = {
+  prologueGoldens: () => Record<string, PrologueGolden>;
   willowGoldens: () => Record<string, WillowGolden>;
   trialGoldens: () => Record<string, TrialGolden>;
   goldenHashes: () => Record<string, string>;
@@ -123,4 +129,18 @@ test("Whispering Willow replays (reference bot: adds, Hush Spells, Riddle of Lea
   console.log("browser:", JSON.stringify(browser));
   expect(browser).toEqual(node);
   expect(browser).toEqual(willowGolden.goldens);
+});
+
+test("Prologue replays (scripted typist: 6-skill kit, HP floor, surge, climax, no timeout): Chromium equals Node and the golden fixture", async ({
+  page,
+}) => {
+  await loadBundle(page);
+  const browser = await page.evaluate(() =>
+    (globalThis as unknown as { __parity: Parity }).__parity.prologueGoldens(),
+  );
+  const node = prologueGoldens();
+  console.log("node   :", JSON.stringify(node));
+  console.log("browser:", JSON.stringify(browser));
+  expect(browser).toEqual(node);
+  expect(browser).toEqual(prologueGolden.goldens);
 });
