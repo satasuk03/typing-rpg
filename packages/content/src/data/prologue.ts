@@ -4,10 +4,11 @@ import { PrologueDef } from "../schemas.ts";
  * The Prologue "The Unwriting" (docs/PROLOGUE_PLAN.md, interfaces v2.2 §3.7 and §14.2). One object, not a LevelDef:
  * levels drive the map, unlocks and balance cells, none of which the prologue touches.
  * All prologue numbers live here (never in balance.ts). P1.3 tuned them with `pnpm bot --prologue` (tools/bot/src/prologue.ts).
- * Tuned numbers (the plan §2.1 starting values did not hurt the hero at all, so the barrier/parry kit starved Mending Light
- * and the damage passives): encounter hp 900 per wave, Nul hp 3500 (bosses.ts), bossMinS 20 s;
- * pace 120 and castGapS 2.6 so enemy attacks outnumber Aegis/Bulwark barriers and one cast reads at a time; attackPower 16
- * (guard leak at its 50% cap); gruntHit 200, Nul hit 450, Nul interval 1 s and shield 9 (enemies.ts).
+ * Tuned numbers (power fantasy: the hero stays above 50% HP for most of the run): pace 30 (long guard windows), encounter hp
+ * 1250 per wave, gruntHit 90, attackPower 16 (guard leak at its cap), castGapS 2.0, surge 16/18 s doubling every 3 s (bounds
+ * the 20 WPM run), bossMinS 20. Nul (bosses.ts / enemies.ts): hp 4800, hit 380, interval 3 s, shield 9.
+ * Mending Light only casts once the hero has lost HP (sim rule), and barriers plus guard words let 40/75 WPM typists take no
+ * damage at all, so it is gated only on runs where the hero was hurt (tools/bot/src/prologue.ts).
  *
  *  - segments: one "Servants" encounter of two waves (shade, wisp, shade / wisp, shade, wisp), then Nul + 2 adds.
  *    No walks (the cold open and the boss intro cover the pacing), no gimmicks, no elites (brand-new players, no Reveal).
@@ -104,7 +105,7 @@ export const PROLOGUE = PrologueDef.parse({
   id: "prologue",
   layoutId: "prologue",
   biome: "ruins",
-  pace: 120,
+  pace: 30,
   seed: 0x0a11ce,
   words: PROLOGUE_WORDS,
   guardWords: PROLOGUE_GUARD_WORDS,
@@ -113,8 +114,8 @@ export const PROLOGUE = PrologueDef.parse({
       kind: "encounter",
       encounter: {
         name: "Servants",
-        hp: 900,
-        gruntHit: 200,
+        hp: 1250,
+        gruntHit: 90,
         attackPower: 16,
         waves: [
           [{ enemy: "hush-shade" }, { enemy: "lantern-wisp" }, { enemy: "hush-shade" }],
@@ -147,9 +148,9 @@ export const PROLOGUE = PrologueDef.parse({
   },
   gear: { archetype: "sword", tier: 3, rarity: "L", upgrade: 5 },
   chargeMult: 2.5,
-  castGapS: 2.6,
+  castGapS: 2.0,
   forceAfterS: 4,
   heroHpFloorPct: 25,
-  surge: { encounterAfterS: 18, bossAfterS: 20, doubleEveryS: 4, maxMult: 16 },
+  surge: { encounterAfterS: 16, bossAfterS: 18, doubleEveryS: 3, maxMult: 16 },
   bossMinS: 20,
 });

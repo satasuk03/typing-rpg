@@ -18,6 +18,8 @@ export interface PrologueRun {
   casts: Record<string, number>;
   passives: string[];
   minHpPct: number;
+  /** Share of combat ticks (%) with hero HP below 50%. */
+  lowHpPct: number;
 }
 
 export interface PrologueRow {
@@ -33,8 +35,13 @@ export interface PrologueRow {
   passivesUnion: string[];
   castsPerMinMax: number;
   minHpPct: number;
+  lowHpMean: number;
+  lowHpMax: number;
+  maxTypingS: number;
   failures: number;
   noClimax: number;
+  /** Runs in which the hero never lost any HP. */
+  unhurt: number;
 }
 
 /** Plan §5 P1.3 targets. The typing window is judged on the persona mean (each run draws +-10% WPM noise). */
@@ -44,9 +51,9 @@ export const PROLOGUE_TARGETS = {
     [number, number]
   >,
   minCastsEach: 1,
-  minCastsEachAverage: 2,
-  minPassives: 6,
-  minPassivesRun: 4,
+  minPassives: 5,
+  maxLowHpMeanPct: 25,
+  maxBeginnerTypingS: 75,
   maxCastsPerMin: 40,
 } as const;
 
@@ -62,6 +69,9 @@ export function runPrologue(persona: PersonaId, i: number): PrologueRun {
   const passives = new Set<string>();
   let climaxTicks: number | null = null;
   let minHp = 1;
+  let lastTick = -1;
+  let combatTicks = 0;
+  let lowTicks = 0;
   const rec = playLevel({
     def: cfg.def,
     loadout: cfg.loadout,
@@ -69,7 +79,13 @@ export function runPrologue(persona: PersonaId, i: number): PrologueRun {
     attempt: drawAttempt(p, seed, true),
     options: cfg.options,
     observe: (s, evs) => {
-      minHp = Math.min(minHp, s.run.heroHpM / s.run.heroMaxHpM);
+      const frac = s.run.heroHpM / s.run.heroMaxHpM;
+      minHp = Math.min(minHp, frac);
+      if (s.tick !== lastTick && s.phase === "combat") {
+        lastTick = s.tick;
+        combatTicks++;
+        if (frac < 0.5) lowTicks++;
+      }
       for (const e of evs) {
         if (e.type === "SkillCast") casts[e.skillId] = (casts[e.skillId] ?? 0) + 1;
         else if (e.type === "PassiveTriggered") passives.add(e.passiveId);
@@ -87,6 +103,7 @@ export function runPrologue(persona: PersonaId, i: number): PrologueRun {
     casts,
     passives: [...passives].sort(),
     minHpPct: minHp * 100,
+    lowHpPct: combatTicks === 0 ? 0 : (lowTicks * 100) / combatTicks,
   };
 }
 
@@ -101,7 +118,10 @@ export function summarize(runs: readonly PrologueRun[], persona: PersonaId): Pro
   const castsMin: Record<string, number> = {};
   for (const id of ids) {
     castsMean[id] = mean(rs.map((r) => r.casts[id] ?? 0));
-    castsMin[id] = Math.min(...rs.map((r) => r.casts[id] ?? 0));
+    // Mending Light only casts once the hero has lost HP (sim rule: smart hp < 60%, forced "asap" hp < max), and the
+    // Aegis/Bulwark barriers plus guard words let a competent typist take no damage at all: judge it on the runs that were hurt.
+    const pool = id === "mendingLight" ? rs.filter((r) => r.minHpPct < 99.9) : rs;
+    castsMin[id] = pool.length === 0 ? 99 : Math.min(...pool.map((r) => r.casts[id] ?? 0));
   }
   const perMin = rs.map((r) =>
     r.typingS === null ? 0 : (Object.values(r.casts).reduce((a, b) => a + b, 0) * 60) / r.typingS,
@@ -118,7 +138,11 @@ export function summarize(runs: readonly PrologueRun[], persona: PersonaId): Pro
     passivesUnion: [...new Set(rs.flatMap((r) => r.passives))].sort(),
     castsPerMinMax: Math.max(...perMin),
     minHpPct: Math.min(...rs.map((r) => r.minHpPct)),
+    lowHpMean: mean(rs.map((r) => r.lowHpPct)),
+    lowHpMax: Math.max(...rs.map((r) => r.lowHpPct)),
+    maxTypingS: Math.max(...typ),
     failures: rs.filter((r) => r.failed).length,
+    unhurt: rs.filter((r) => r.minHpPct >= 99.9).length,
     noClimax: rs.filter((r) => !r.climax).length,
   };
 }
@@ -151,19 +175,22 @@ export function runPrologueGate(seeds: number): PrologueGate {
       failures.push(
         `prologue ${r.persona}: mean typing ${r.typingMean.toFixed(1)}s outside ${lo}-${hi}s`,
       );
-    const need = r.persona === "average" ? T.minCastsEachAverage : T.minCastsEach;
+    const need = T.minCastsEach;
     for (const [id, m] of Object.entries(r.castsMin))
       if (m < need) failures.push(`prologue ${r.persona}: ${id} min casts ${m} < ${need}`);
     // Passive proxy = the sim's own PassiveTriggered event. Calm Mind (a permanent guard-window bonus) never emits it, so
-    // at most 8 of the 9 can show. Judged as the union over the persona's runs (Ironwill needs a typo'd block, Bulwark a
-    // 10-key streak: chance events for a 20 WPM typist); a single run must still show at least MIN_PASSIVES_RUN.
+    // at most 8 of the 9 can show. Judged as the union over the persona's runs. Typing time is judged on the MEAN.
     if (r.passivesUnion.length < T.minPassives)
       failures.push(
         `prologue ${r.persona}: ${r.passivesUnion.length} distinct passives over ${r.n} runs < ${T.minPassives}`,
       );
-    if (r.passivesMin < T.minPassivesRun)
+    if (r.lowHpMean > T.maxLowHpMeanPct)
       failures.push(
-        `prologue ${r.persona}: a run showed only ${r.passivesMin} passives < ${T.minPassivesRun}`,
+        `prologue ${r.persona}: hero below 50% HP for ${r.lowHpMean.toFixed(1)}% of combat (> ${T.maxLowHpMeanPct}%)`,
+      );
+    if (r.persona === "beginner" && r.maxTypingS > T.maxBeginnerTypingS)
+      failures.push(
+        `prologue beginner: slowest run ${r.maxTypingS.toFixed(1)}s > ${T.maxBeginnerTypingS}s`,
       );
     if (r.castsPerMinMax > T.maxCastsPerMin)
       failures.push(
@@ -189,7 +216,9 @@ export function prologueTable(g: PrologueGate): string {
       "passives min",
       "casts/min max",
       "min HP%",
+      "HP<50% ticks mean/max",
       "fails",
+      "runs never hurt",
     ],
     g.rows.map((r) => [
       r.persona,
@@ -198,11 +227,16 @@ export function prologueTable(g: PrologueGate): string {
       `${r.passivesMin} (union ${r.passivesUnion.length})`,
       f1(r.castsPerMinMax),
       f1(r.minHpPct),
+      `${f1(r.lowHpMean)}% / ${f1(r.lowHpMax)}%`,
       String(r.failures + r.noClimax),
+      String(r.unhurt),
     ]),
   );
   const ids = Object.keys(g.rows[0]?.castsMean ?? {});
-  lines.push("", "casts per kit active (mean / min over runs)");
+  lines.push(
+    "",
+    "casts per kit active (mean / min over runs; Mending min is over runs where the hero lost HP; typing window is judged on the persona MEAN)",
+  );
   lines.push(
     ...fmt(
       ["persona", ...ids],

@@ -184,7 +184,7 @@ export const ENEMIES: EnemyDef[] = [
     archetype: "boss",
     spriteId: "nul",
     scale: 1.0,
-    baseIntervalS: 1,
+    baseIntervalS: 3,
     heavy: true,
     plateLength: [4, 5],
     weaknesses: ["slash", "pierce", "arcane"],
