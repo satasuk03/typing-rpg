@@ -3,13 +3,13 @@
 // Run: pnpm --filter game test:net
 import { defineConfig, devices } from "@playwright/test";
 
-const API_PORT = 8793;
-const GAME_PORT = 5183;
+const API_PORT = Number(process.env.NET_API_PORT ?? 8793);
+const GAME_PORT = Number(process.env.NET_GAME_PORT ?? 5183);
 const WRANGLER = "../../../../workers/api/node_modules/.bin/wrangler";
 
 export default defineConfig({
   testDir: ".",
-  testMatch: ["e2e.spec.ts"],
+  testMatch: ["e2e.spec.ts", "newGame.spec.ts"],
   fullyParallel: true,
   workers: 3,
   timeout: 180_000,
@@ -23,7 +23,7 @@ export default defineConfig({
         "rm -rf .e2e-state",
         "cp -f ../../../../workers/api/.dev.vars.example .dev.vars",
         `${WRANGLER} d1 migrations apply DB --local --config wrangler.e2e.toml --persist-to .e2e-state`,
-        `exec ${WRANGLER} dev --config wrangler.e2e.toml --local --port ${API_PORT} --persist-to .e2e-state`,
+        `exec ${WRANGLER} dev --config wrangler.e2e.toml --local --port ${API_PORT} --var ALLOWED_ORIGINS:http://localhost:${GAME_PORT} --persist-to .e2e-state`,
       ].join(" && "),
       url: `http://localhost:${API_PORT}/health`,
       reuseExistingServer: false,

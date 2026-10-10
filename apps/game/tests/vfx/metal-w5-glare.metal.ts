@@ -148,7 +148,6 @@ for (const r of RUNS) {
       const w = window as any;
       // biome-ignore lint/suspicious/noExplicitAny: test-only private access
       const wa = world as any;
-      const gl = document.getElementById("gl") as HTMLCanvasElement;
       const { __c1: c1, __c2: c2, __keep: keep } = w;
       const res = {
         frames: 0,
@@ -199,6 +198,7 @@ for (const r of RUNS) {
           }
           if (r.clip >= 0.6 && (BIS as boolean)) {
             // ablation: which group's removal takes this frame below 60%
+            // biome-ignore lint/suspicious/noExplicitAny: test-only scene walk
             const groups: Record<string, (o: any) => boolean> = {
               disc: (o) =>
                 o.material?.uniforms?.uKind?.value === 0 ||
@@ -213,7 +213,9 @@ for (const r of RUNS) {
                 (o.geometry?.isInstancedBufferGeometry &&
                   o.material?.uniforms?.uKind === undefined),
             };
+            // biome-ignore lint/suspicious/noExplicitAny: test-only scene walk
             const all: any[] = [];
+            // biome-ignore lint/suspicious/noExplicitAny: test-only scene walk
             world.scene.traverse((o: any) => {
               if ((o.isMesh || o.isPoints) && o.renderOrder >= 6 && o.visible && !keep.has(o))
                 all.push(o);
@@ -305,8 +307,8 @@ for (const r of RUNS) {
     };
     console.log(
       `W5 ${r.level}@${wpm}`,
-      // biome-ignore lint/suspicious/noExplicitAny: test-only global
       JSON.stringify(
+        // biome-ignore lint/suspicious/noExplicitAny: test-only scene walk
         await page.evaluate(() => [(window as any).__fxTot, (window as any).__fxBright]),
       ),
       JSON.stringify(res),

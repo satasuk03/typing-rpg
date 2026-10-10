@@ -85,8 +85,11 @@ describe("sim purity guard", () => {
     expect(run(src).code).toBe(1);
   });
 
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: test title
   test("template literals with ${} are handled", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: source text fed to the purity guard
     expect(run("export const f = (a: number) => `x ${a + 1} // y`; // c").code).toBe(0);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: source text fed to the purity guard
     expect(run("export const f = (a: number) => `x ${Math.sqrt(a)}`;").code).toBe(1);
   });
 

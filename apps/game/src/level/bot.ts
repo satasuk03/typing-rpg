@@ -51,7 +51,7 @@ export class WpmBot {
   pressed = 0;
 
   constructor(
-    private readonly opts: BotOptions,
+    opts: BotOptions,
     private readonly press: (key: string) => void,
   ) {
     this.rng = mulberry32(opts.seed ?? 0xb07);

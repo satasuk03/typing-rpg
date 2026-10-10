@@ -78,7 +78,6 @@ const easeOut = (t: number): number => 1 - (1 - clamp01(t)) ** 3;
 /** Hero faces right; the walk camera leads the hero by this much (POC framing). */
 const WALK_LEAD = 3.2;
 const FLY_Y = 1.7;
-const TICKS_PER_S = 60;
 /** How long a dead enemy waits for its EnemyDeath to be presented before dissolving anyway (s). */
 const DEATH_WAIT = 1.6;
 
@@ -569,7 +568,7 @@ export class LevelStage {
 
     // boss adds (every living non-boss while a boss is on stage) stay hidden through the intro, then dissolve in
     const view = this.lastView;
-    if (ev.alive && !ev.isBoss && view !== null && view.enemies.some((x) => x.isBoss)) {
+    if (ev.alive && !ev.isBoss && view?.enemies.some((x) => x.isBoss)) {
       if (view.phase === "bossIntro") {
         e.introHidden = true;
         e.fadeT = Infinity;

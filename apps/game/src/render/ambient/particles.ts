@@ -116,7 +116,7 @@ export class Particles {
     const base = new PlaneGeometry(1, 1);
     this.base = base;
     g.index = base.index;
-    g.setAttribute("position", base.attributes.position!);
+    g.setAttribute("position", base.getAttribute("position"));
     this.aPos = new InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(
       DynamicDrawUsage,
     );

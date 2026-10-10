@@ -37,7 +37,6 @@ test("parry bisect", async ({ page }) => {
   };
   const base = await measure();
   const n = await page.evaluate(() => {
-    // biome-ignore lint/suspicious/noExplicitAny: test-only scene walk
     const api = window.__typingVfx;
     if (!api) throw new Error("no typing vfx scene");
     // biome-ignore lint/suspicious/noExplicitAny: test-only scene walk

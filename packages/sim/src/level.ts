@@ -665,7 +665,7 @@ export function getView(state: Readonly<LevelState>): LevelView {
         ? "victory"
         : state.phase === "failed" || state.phase === "secondWind" || state.phase === "downed"
           ? "downed"
-          : enc !== null && enc.pending.some((p) => p.kind === "skill")
+          : enc?.pending.some((p) => p.kind === "skill")
             ? "cast"
             : enc !== null && enc.pending.length > 0
               ? "attack"

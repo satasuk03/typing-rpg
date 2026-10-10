@@ -248,7 +248,7 @@ describe("event bindings table", () => {
     const calls: [string, unknown][] = [];
     const api: AudioApi = {
       play: (id, p) => void calls.push([id, p]),
-      setMusicState: (s) => void calls.push(["state:" + s, null]),
+      setMusicState: (s) => void calls.push([`state:${s}`, null]),
     };
     expect(dispatchAudioEvent({ type: "CharCorrect", keyStreak: 12 }, api)).toBe(true);
     expect(dispatchAudioEvent({ type: "WordCompleted", perfect: true, combo: 3 }, api)).toBe(true);
