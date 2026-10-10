@@ -2,12 +2,21 @@
 
 | | |
 |---|---|
-| **Doc version** | **2.0.1** (2026-10-10, Chapter 2 "The Hushwood") |
+| **Doc version** | **2.0.2** (2026-10-10, Chapter 2 "The Hushwood") |
 | **SIM_VERSION** | `1` (v2.0 does not bump it: every new rule is gated by new content, Ch1 and the Trial replay identically, §13.1) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **2.0.2** (2026-10-10): T1.3 change proposals approved by the orchestrator.
+  - (a) `CharCorrect.shifted` is set only on chapter 2+ levels (`def.chapter > SENTENCE_FOLD_CASE_MAX_CHAPTER`). This keeps Ch1 event hashes identical. The view fields `exactCase` and `shiftNext` aren't gated.
+  - (b) `LevelView.minigame.riddle` is `null` while Second Wind has removed the leaves. `RiddleView.last` is visible from the second riddle on.
+  - (c) The §3.6 sim-internal state is now concrete:
+    - `RiddleLeaf {plateId: PlateId|null; text}`;
+    - `RiddleState {rng; index; asked[]; active: {index, clue, leaves[3], answerSlot, deadline, totalTicks} | null; nextAt; rights; wrongs; timeouts; last}`;
+    - `BossState.riddle?` is absent for rubble bosses.
+  - (d) `RNG_STREAMS` includes `"riddle"`. `rubbleOf` / `riddleOf` throw a `SimError` on the wrong kind, so callers branch on `kind` first.
+  - (e) Event order: right/wrong emit `RiddleResolved` and then the decoy expiries; a timeout emits the 3 expiries and then `RiddleResolved`.
 - **2.0.1** (2026-10-10): T1.2 change proposals approved by the orchestrator. Healer, §3.5: (a) the next heal is due `healTicks` after the tick the heal actually fired, so there's no catch-up burst after a Break or Frost Lock deferral; (b) healers stop once `enc.finisherShown` is set, as attacks do; (c) `EnemyView.healer.ticksLeft` is null while Broken or Frost-Locked or once `maxHeals` is used up, and `healsLeft` is null when `maxHeals` is 0. Only effective heals count toward `maxHeals`.
 - **2.0** (2026-10-10): proposed (plan C0.1, `docs/CH2_PLAN.md` with the PO answers). The Chapter 2 contracts. Every change is **additive and optional**; the full spec is §13, and the blocks in §3–§6 and §8–§9 are updated in place (new lines are marked `v2.0`). The blocks are also re-synced with the code shipped in v1.5–v1.9 (`ResolvedStar`, `parArmorBp`, `foldSentences`, guard-leak fields, boss view fields), so C0.3 can copy them verbatim.
   - **Ch1 stays byte-identical** (§13.1): every new `Resolved*`/state/options key is *absent* (not `null`, not `undefined`) unless content uses the feature. Ch1 events, results, balance cells and bot output do not change; the only state-hash change is `def.contentVersion`, which T1.1 pins in the golden harness.

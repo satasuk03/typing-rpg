@@ -54,9 +54,20 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
   - Cypress and reed sprites are the mock's, with no outline pass; the sunken columns are barely visible.
   - Hero rim in the fen: the dev scene sets `caveRim` 0.9 (caveK is 0.3). The game layer should set it per mood (hero silhouette 0.79).
   - The perf figures are for the bare diorama (no HUD, sim or combat VFX). Re-measure on a real fen level once T2.4 lands (T5.3).
+- **T2.3 sprites** (`docs/qa/ch2-t2.3/`):
+  - **Willow face:** washed out by the grove's violet key light. Lower it or add a face rim. The Willow also needs breath, sway and lash animation on stage.
+  - **Shade mask:** can read as a skull at 1×. PO look needed.
+  - **Toad:** separate the legs and toes more, and add a hop frame.
+  - **Wolf:** shaggier ruff, and a howl muzzle.
+  - **Moth and Wisp:** more detail, plus flicker and hurt/die frames.
+  - **Elite:** add an outline pulse, and bind `ELITE_FX` in `stage.ts`.
+  - **Hurt poses:** every enemy needs one.
+  - **Willow freed state:** the blossoms and canopy curtains aren't drawn yet.
 - **Ch1 flipped-normal fix (proposal).** Mirrored Ch1 props are lit from the wrong side. Negate `nn.x` for mirrored meshes. The effect is subtle in daylight. This changes the Ch1 look, so it needs a before/after (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt
+- The bot doesn't model the extra cost of Shift for capitals. That matters for the Ch2 Hush Spells, so do it in T5.1.
+- The `tools/content` validator has no riddle-boss pool rule yet; it's only a comment. T4.3 should add it.
 - `tools/balance/src/gear.ts` copies the sim's upgrade-step rule and the `guardLeakBp` formula, because the sim exports neither. Export them from `packages/sim` and have the tool import them, so they can't drift.
 
 ## Next big step
