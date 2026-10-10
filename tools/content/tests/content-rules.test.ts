@@ -150,3 +150,35 @@ describe("T4.2 content rules catch breakage", () => {
     expect(ruleIdsAndRefs(b).some((i) => i.message.includes("finisherText"))).toBe(true);
   });
 });
+
+describe("T4.3 riddle-boss pool rule and Ch2 content", () => {
+  it("sees the Ch2 sprites and has no errors on the Ch2 levels", () => {
+    expect(ctx.monsterSprites).toContain("wisp");
+    expect(ctx.monsterSprites).toContain("willow");
+    expect(errors(runContentRules(contentBundle, ctx))).toBe(0);
+  });
+  it("fails a riddle boss whose pool is smaller than count + 2", () => {
+    const b = clone();
+    let kept = 0;
+    b.words = b.words.filter((w) => !w.uses.includes("riddle") || kept++ < 6);
+    expect(
+      ruleIdsAndRefs(b).some(
+        (i) =>
+          i.rule === "boss" &&
+          i.message.includes("riddle pool has") &&
+          i.message.includes("need 7"),
+      ),
+    ).toBe(true);
+  });
+  it("fails a riddle boss whose pool has fewer than 3 first letters", () => {
+    const b = clone();
+    b.words = b.words.map((w) =>
+      w.uses.includes("riddle") && !w.text.startsWith("a") && !w.text.startsWith("b")
+        ? { ...w, uses: w.uses.filter((u) => u !== "riddle") as typeof w.uses }
+        : w,
+    );
+    expect(
+      ruleIdsAndRefs(b).some((i) => i.rule === "boss" && i.message.includes("riddle pool has")),
+    ).toBe(true);
+  });
+});

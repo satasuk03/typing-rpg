@@ -22,6 +22,8 @@ import { clamp01, type Rgb } from "./params";
 const INFO: EnemyInfo = { frame: null, scale: 1, x: 0, y: 0, z: 0, height: 2 };
 const RUNE_COL: Rgb = [0.25, 1.4, 1.5];
 const DOOM_COL: Rgb = [1.5, 0.35, 1.7];
+/** T3.2: the Willow's rune ring is violet-teal, not the Golem's cyan (brief 3.7 / 5.7). */
+const RUNE_WILLOW: Rgb = [0.55, 0.5, 1.7];
 const DUST: Rgb = [0.42, 0.36, 0.3];
 const LIT_AT = 0.35;
 
@@ -102,6 +104,20 @@ export class BossFx {
     this.surge = 1;
     if (kit.scale.k <= 0 || !kit.deps.enemyInfo(e.enemyId, INFO)) return;
     const cy = INFO.y + INFO.height * 0.55;
+    if (INFO.sprite === "willow") {
+      // T3.2: a shudder ring in violet-teal and a burst of leaves (the storm 40 / s for 2 s is the ambient director's)
+      kit.ring(INFO.x, 0.06, INFO.z, 0.5, 12, 0.8, [0.9, 0.8, 2.2], [0.3, 1.0, 1.1], 1.2, true);
+      kit.sparks(INFO.x, 4.5, INFO.z, kit.n(40), [0.5, 1.2, 0.8], 5, {
+        kind: PK_PIXEL,
+        size: 0.07,
+        life: 1.2,
+        grav: 1.5,
+        st: 0,
+      });
+      kit.crack(INFO.x, INFO.z, 8, 1.4, [0.3, 0.2, 0.5]);
+      this.rim(e.enemyId, 0.7, [0.7, 0.6, 1.8], 0.3);
+      return;
+    }
     kit.ring(INFO.x, 0.06, INFO.z, 0.5, 12, 0.7, [2.2, 2.6, 3.2], [0.6, 1, 1.6], 1.4, true);
     kit.ring(INFO.x, cy, INFO.z + 0.6, 0.8, 9, 0.55, [3, 2.4, 1.6], [1, 0.5, 0.2], 1.3);
     kit.star(INFO.x, cy, INFO.z + 1, 3.5, 0.5, 0.35, [1.6, 1.3, 1.0], 1.6, 0.785);
@@ -248,8 +264,9 @@ export class BossFx {
     this.surge = Math.max(0, this.surge - dt * 1.6);
     if (this.runeLevel > 0.02 && kit.deps.enemyInfo(this.bossId, INFO)) {
       const g = sc.k <= 0 ? 0.4 : 0.6 + 0.4 * sc.k;
+      const rc = INFO.sprite === "willow" ? RUNE_WILLOW : RUNE_COL;
       this.rune
-        .color(RUNE_COL[0], RUNE_COL[1], RUNE_COL[2])
+        .color(rc[0], rc[1], rc[2])
         .at(INFO.x, 0.05, INFO.z)
         .size(11 * (1 + 0.05 * this.surge));
       this.rune.mesh.rotation.z = sc.reducedMotion ? 0 : kit.time * 0.08;

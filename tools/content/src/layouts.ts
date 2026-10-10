@@ -94,7 +94,13 @@ export const ART_FILE = new URL(
 );
 export function loadMonsterSprites(file: URL = ART_FILE): string[] | null {
   if (!existsSync(file)) return null;
-  const m = /type MonsterArt = ([^;]+);/.exec(readFileSync(file, "utf8"));
+  const src = readFileSync(file, "utf8");
+  const m = /type MonsterArt = ([^;]+);/.exec(src);
   if (!m?.[1]) return null;
-  return [...m[1].matchAll(/"([A-Za-z0-9]+)"/g)].map((x) => x[1] as string);
+  // v2.0: the Chapter 2 sprites are a second union (Ch2MonsterArt), registered by render/sprites/ch2Monsters.ts.
+  const m2 = /type Ch2MonsterArt = ([^;]+);/.exec(src);
+  return [
+    ...m[1].matchAll(/"([A-Za-z0-9]+)"/g),
+    ...(m2?.[1] ? m2[1].matchAll(/"([A-Za-z0-9]+)"/g) : []),
+  ].map((x) => x[1] as string);
 }

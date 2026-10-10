@@ -26,7 +26,7 @@ const show = (title: string, g: GateResult, secs: number): void => {
 const t0 = Date.now();
 const g = await runGate({ seeds, workers, gimmicks, chapter });
 show(
-  `bot gate${chapter === 1 ? "" : ` ch${chapter} (stub levels)`} [gimmicks=${gimmicks}${quick ? ", quick" : ""}]`,
+  `bot gate${chapter === 1 ? "" : ` ch${chapter}`} [gimmicks=${gimmicks}${quick ? ", quick" : ""}]`,
   g,
   (Date.now() - t0) / 1000,
 );

@@ -15,6 +15,7 @@ import type { EventOf, LevelView, StatusId } from "@hd2d/sim";
 import type { TypingFxSettings } from "../types";
 import { AttackFx } from "./AttackFx";
 import { BossFx } from "./BossFx";
+import { Ch2Fx } from "./Ch2Fx";
 import { EnemyFx } from "./EnemyFx";
 import { type CombatDeps, FxKit } from "./kit";
 import { P_BOLT, Projectiles } from "./Projectiles";
@@ -54,6 +55,12 @@ export interface CombatFxSink {
   doomCompleted(e: EventOf<"DoomSpellCompleted">): void;
   doomFailed(e: EventOf<"DoomSpellFailed">): void;
   minigameMissed(e: EventOf<"MinigameWordMissed">): void;
+  // ---- Chapter II (T3.2)
+  enemyHealed(e: EventOf<"EnemyHealed">): void;
+  riddleStarted(e: EventOf<"RiddleStarted">): void;
+  riddleLeafPicked(e: EventOf<"RiddleLeafPicked">): void;
+  riddleResolved(e: EventOf<"RiddleResolved">): void;
+  finisherCompleted(e: EventOf<"FinisherCompleted">): void;
 }
 
 const MAX_RIMS = 6;
@@ -89,6 +96,7 @@ export class CombatFx implements CombatFxSink {
   private readonly enemyFx: EnemyFx;
   private readonly rewardFx: RewardFx;
   private readonly bossFx: BossFx;
+  private readonly ch2Fx: Ch2Fx;
   private readonly rims: RimSlot[] = [];
   private view: LevelView | null = null;
   private tier = 0;
@@ -111,6 +119,7 @@ export class CombatFx implements CombatFxSink {
     this.enemyFx = new EnemyFx(deps.world, this.kit, rim);
     this.rewardFx = new RewardFx(deps.world, this.kit, () => this.fallback());
     this.bossFx = new BossFx(deps.world, this.kit, this.proj, rim);
+    this.ch2Fx = new Ch2Fx(deps.world, this.kit, rim);
     for (let i = 0; i < MAX_RIMS; i++)
       this.rims.push({ who: -1, amount: 0, t: 0, dur: 0, r: 1, g: 1, b: 1 });
   }
@@ -168,7 +177,8 @@ export class CombatFx implements CombatFxSink {
   dissolve(enemyId: number, _byKind: string): void {
     let boss = false;
     if (this.view) for (const e of this.view.enemies) if (e.id === enemyId) boss = e.isBoss;
-    this.enemyFx.dissolve(enemyId, boss);
+    // the freed Willow does not dissolve (brief 5.6): the finale is Ch2Fx's
+    this.enemyFx.dissolve(enemyId, boss, this.ch2Fx.isWillow(enemyId));
   }
 
   // ------------------------------------------------------------------------------- the sink
@@ -224,7 +234,8 @@ export class CombatFx implements CombatFxSink {
     this.enemyFx.guardParried();
   }
   enemyDeath(e: EventOf<"EnemyDeath">): void {
-    if (!this.viaCallbacks) this.enemyFx.dissolve(e.enemyId, e.isBoss);
+    if (!this.viaCallbacks)
+      this.enemyFx.dissolve(e.enemyId, e.isBoss, this.ch2Fx.isWillow(e.enemyId));
   }
   heroHealed(e: EventOf<"HeroHealed">): void {
     this.skillFx.heal(e);
@@ -270,6 +281,21 @@ export class CombatFx implements CombatFxSink {
   minigameMissed(_e: EventOf<"MinigameWordMissed">): void {
     this.bossFx.rubble();
   }
+  enemyHealed(e: EventOf<"EnemyHealed">): void {
+    this.ch2Fx.healed(e);
+  }
+  riddleStarted(e: EventOf<"RiddleStarted">): void {
+    this.ch2Fx.riddleStarted(e);
+  }
+  riddleLeafPicked(e: EventOf<"RiddleLeafPicked">): void {
+    this.ch2Fx.riddleLeafPicked(e);
+  }
+  riddleResolved(e: EventOf<"RiddleResolved">): void {
+    this.ch2Fx.riddleResolved(e);
+  }
+  finisherCompleted(e: EventOf<"FinisherCompleted">): void {
+    this.ch2Fx.finisherCompleted(e);
+  }
 
   // ------------------------------------------------------------------------------- per frame
 
@@ -304,6 +330,13 @@ export class CombatFx implements CombatFxSink {
         this.deps.rim(who, s.amount * (1 - k), RIM_TMP);
       }
     }
+    this.ch2Fx.update(dt, view, (id) => this.rimBusy(id));
+  }
+
+  /** True while a combat rim flash owns this actor's outline (the elite breathing yields to it). */
+  private rimBusy(id: number): boolean {
+    for (const s of this.rims) if (s.dur > 0 && s.who === id) return true;
+    return false;
   }
 
   /** A copy of the view with the debug overrides applied (allocates; only while a demo override is active). */
@@ -349,6 +382,7 @@ export class CombatFx implements CombatFxSink {
     this.enemyFx.clear();
     this.rewardFx.clear();
     this.bossFx.clear();
+    this.ch2Fx.clear();
     for (const s of this.rims) {
       if (s.dur > 0) this.deps.rim(s.who === HERO ? "hero" : s.who, 0, RIM_RGB);
       s.dur = 0;
@@ -364,6 +398,7 @@ export class CombatFx implements CombatFxSink {
     this.enemyFx.dispose();
     this.rewardFx.dispose();
     this.bossFx.dispose();
+    this.ch2Fx.dispose();
     this.kit.dispose();
   }
 }

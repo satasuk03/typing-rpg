@@ -1,9 +1,9 @@
 // T1.1 WordEntry.chapter pool scoping + LevelDef.reviewBiomes in resolveLevel (docs/interfaces.md §6, §13.4.1).
-import { type ContentBundle, contentBundle, type WordEntry, withCh2Stubs } from "@hd2d/content";
+import { type ContentBundle, contentBundle, type WordEntry } from "@hd2d/content";
 import { describe, expect, test } from "vitest";
 import { resolveLevel } from "../src/index.ts";
 
-const base = withCh2Stubs(contentBundle);
+const base = contentBundle;
 const word = (text: string, extra: Partial<WordEntry> = {}): WordEntry =>
   ({
     key: text.toLowerCase(),
@@ -25,7 +25,7 @@ const sentence = (text: string, use: WordEntry["uses"][number], chapter?: number
     ...(chapter === undefined ? {} : { chapter }),
   }) as unknown as WordEntry;
 
-/** A bundle whose words are exactly `words` (levels, enemies and bosses from the real bundle + Ch2 stubs). */
+/** A bundle whose words are exactly `words` (levels, enemies and bosses from the real bundle). */
 const withWords = (words: WordEntry[]): ContentBundle => ({ ...base, words });
 const r = (b: ContentBundle, id: string, due: string[] = []) =>
   resolveLevel(b, id, { dueWeakWords: due });

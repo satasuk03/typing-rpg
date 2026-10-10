@@ -71,3 +71,7 @@ Page keys: letters = key click (streak rises), `x` = typo, `Enter` = word comple
 - [ ] Mute checkboxes silence only their bus; muting Effects also silences its reverb tail.
 - [ ] "Test effect" and "Test interface" buttons play a sound.
 - [ ] No console errors in DevTools during the whole session.
+
+## Chapter 2 (T3.3)
+
+See `docs/qa/ch2-t3.3/listen-checklist.md` for the Chapter 2 loops, ambiences and the new SFX (keys `5`-`7`, `]` `[` `\`, Shift+letter).

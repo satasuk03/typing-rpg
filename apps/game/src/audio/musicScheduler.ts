@@ -82,6 +82,8 @@ export interface BiomeMusic {
   /** Probability a melody slot sounds. */
   density: number;
   seed: number;
+  /** Ch2 voicing (T3.3). Absent = the Ch1 voicing, byte-identical to before. */
+  style?: "celesta" | "fen" | "willow";
 }
 
 export const STEPS_PER_BAR = 16;
@@ -140,7 +142,58 @@ export const BIOME_MUSIC: Record<BiomeName, BiomeMusic> = {
     density: 0.4,
     seed: 0xb055,
   },
+  // ---- Chapter 2 (T3.3, docs/vfx/ch2-art-direction.md 6.2) ----
+  hushwood: {
+    bpm: 72,
+    root: 62,
+    scale: [0, 2, 3, 5, 7, 9, 10], // D dorian
+    chords: [
+      [0, 3, 7, 14], // Dm9
+      [-7, -3, 0], // G/D
+      [3, 7, 10], // Fmaj7 (shell)
+      [-2, 2, 5], // C
+    ],
+    density: 0.45,
+    seed: 0x4a5d1,
+    style: "celesta",
+  },
+  fen: {
+    bpm: 66,
+    root: 57,
+    scale: [0, 2, 4, 6, 7, 9, 11], // A lydian
+    chords: [
+      [0, 4, 7], // A
+      [2, 6, 9], // B/A
+      [0, 4, 7], // A
+      [7, 11, 14], // E/A
+    ],
+    density: 0.5,
+    seed: 0xfe7d2,
+    style: "fen",
+  },
+  grove: {
+    bpm: 88,
+    root: 50,
+    scale: [0, 2, 3, 5, 7, 8, 11], // D harmonic minor (the Willow's Heart / boss theme)
+    chords: [
+      [0, 3, 7], // Dm
+      [-4, 0, 3], // Bb
+      [-7, -4, 0], // Gm
+      [-5, -1, 2, 5], // A7
+    ],
+    density: 0.4,
+    seed: 0x3177,
+    style: "willow",
+  },
 };
+
+/** The Willow resolved to D major once freed (Dmaj9 on the last bar, then the plain triad). */
+export const FREED_CHORDS: readonly (readonly number[])[] = [
+  [0, 4, 7],
+  [-3, 0, 4],
+  [-7, -3, 0],
+  [0, 4, 7, 14],
+];
 
 export const PATTERN_BARS = 4;
 export const PATTERN_STEPS = PATTERN_BARS * STEPS_PER_BAR;

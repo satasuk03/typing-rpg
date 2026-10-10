@@ -69,6 +69,16 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
   - **Visibility:** the L6 sunken columns barely read, and the pool placement can't be authored because the pool mask is noise-driven in the shader.
   - **Grove:** the roots ground reads glittery cyan.
   - **Riddle layout:** check that the leaf positions and the add slots don't overlap on screen at L10.
+- **T3.2 VFX** (`docs/qa/ch2-t3.2/`):
+  - **For the HUD:**
+    - a green "+N" heal pop and a green HP-bar fill on heal (add `EnemyHealed` to `HUD_HANDLED`);
+    - Fading words: letter alpha, a 0.85 floor on the next letter, and the violet underline;
+    - a gold mix on the capital-letter pop.
+  - **World-side gaps:** Fading-shade world cues; death/slam FX for the wisp, shade and toad; fen water ripples; the Reveal skill puff.
+  - **Willow ambience:** a grove-dawn mood crossfade on the finale; a frond tint per right answer; leaf-storm rates.
+  - **Riddle readability:** the wrong-answer wither barely reads. Make the flakes larger.
+  - **Probe margin:** the freed-finale keep-out probe is at 208 against a 215 limit and could flake.
+  - **Re-tune** against the real Ch2 biomes once T4.3 lands. The stills were taken on the Ch1 forest.
 - **Ch1 flipped-normal fix (proposal).** Mirrored Ch1 props are lit from the wrong side. Negate `nn.x` for mirrored meshes. The effect is subtle in daylight. This changes the Ch1 look, so it needs a before/after (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt

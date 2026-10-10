@@ -1,3 +1,5 @@
+import { CH2_SFX_VOICES } from "./sfxCh2";
+import { impact } from "./sfxShared";
 import type { Synth } from "./synth";
 import { keyVoice, midiToHz as NOTE } from "./tiers";
 import type { BusId, Sfx, SfxParams } from "./types";
@@ -8,12 +10,6 @@ import type { BusId, Sfx, SfxParams } from "./types";
  * NEW = designed for this module.
  */
 export type SfxVoice = (s: Synth, t: number, p: SfxParams) => void;
-
-const impact = (s: Synth, t: number, heavy: number, pan: number): void => {
-  s.osc("sine", 170 + heavy * 20, 42, t, 0.3 + heavy * 0.2, 0.75, { slide: 0.18, wet: 0.2, pan });
-  s.noise(t, 0.12 + heavy * 0.1, 0.55, "lowpass", 2400, 300, { wet: 0.2, pan });
-  s.osc("square", 900, 200, t, 0.03, 0.08, { lp: 3000, wet: 0, pan });
-};
 
 const shieldVoice = (s: Synth, t: number): void => {
   [84, 88, 91, 96].forEach((n, i) => {
@@ -330,6 +326,19 @@ export const SFX_VOICES: Record<Sfx, SfxVoice> = {
   uiConfirm(s, t) {
     s.osc("triangle", NOTE(88), NOTE(88), t, 0.07, 0.08, ui("ui"));
     s.osc("triangle", NOTE(95), NOTE(95), t + 0.07, 0.12, 0.08, ui("ui"));
+  },
+
+  // ---- Chapter 2 (T3.3): see sfxCh2.ts ----
+  ...CH2_SFX_VOICES,
+
+  /**
+   * NEW (Ch2, `CharCorrect.shifted`): the normal `key` voice plus ONE sine an octave below the click
+   * (NOTE(key - 12) = freq / 2, 0.06 s, no reverb send). Hot path budget: +1 osc, +1 gain.
+   */
+  capitalKey(s, t, p) {
+    SFX_VOICES.key(s, t, p);
+    const v = keyVoice(p.streak ?? 0, 0.5, 0.5);
+    s.osc("sine", v.freq / 2, v.freq / 2, t, 0.06, 0.06, { wet: 0 });
   },
 };
 

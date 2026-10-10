@@ -148,9 +148,12 @@ export class Synth {
     wet = 0.4,
     ratios: readonly number[] = [1, 2.76, 5.4, 8.93],
     bus: BusId = "sfx",
+    dest?: AudioNode,
   ): void {
     ratios.forEach((r, i) => {
-      this.osc("sine", f * r, f * r, t, dur / (1 + i * 0.6), gain / (1 + i * 0.9), { wet, bus });
+      const o: VoiceOpts = { wet, bus };
+      if (dest) o.dest = dest; // music layers route here (T3.3); omitted for SFX so Ch1 option objects are unchanged
+      this.osc("sine", f * r, f * r, t, dur / (1 + i * 0.6), gain / (1 + i * 0.9), o);
     });
   }
 
