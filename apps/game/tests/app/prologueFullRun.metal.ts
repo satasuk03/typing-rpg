@@ -24,7 +24,7 @@ import {
 test.setTimeout(20 * 60_000);
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const OUT = path.resolve(dir, "../../../../docs/qa/prologue-p3.6");
+const OUT = process.env.PRO_OUT ?? path.resolve(dir, "../../../../docs/qa/prologue-p3.6");
 
 test("fresh profile: Start -> A -> B (wpm-bot 40) -> C -> story -> calibrate -> L1, 0 console errors", async ({
   page,

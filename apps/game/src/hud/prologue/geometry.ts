@@ -5,12 +5,14 @@ import type { Rect } from "../layout";
 export const ORB = 52; // FRAME_CELLS (26) * 2
 export const ORB_PITCH = 58;
 export const GR_PAD = 8;
-export const CHIP = 20;
-export const CHIP_PITCH = 24;
+export const CHIP = 26;
+export const CHIP_PITCH = 29;
 export const ROW_GAP = 8;
 export const GR_MARGIN = 16;
-/** Part C scale of the bar (plan: 1.5x; 1.35 so it fits above the dialogue lane). */
-export const GR_CUT_SCALE = 1.35;
+/** Part C scale of the bar: it lives in the dialogue lane (P4.2: only from the ink line to the end of the theft, never over the actors). */
+export const GR_CUT_SCALE = 1.25;
+/** Part C: the bar's bottom edge sits this fraction of H above the bottom of the screen (the dialogue lane). */
+export const GR_LANE_BOTTOM = 0.035;
 
 export function grimoireSize(n: number): { w: number; h: number } {
   const orbsW = Math.max(1, n) * ORB_PITCH - (ORB_PITCH - ORB);
@@ -31,8 +33,9 @@ export interface DialogueGeom {
   rect: Rect;
   inner: { x: number; y: number; w: number };
 }
-export function dialogueGeom(W: number, H: number): DialogueGeom {
-  const w = Math.min(DLG_W, W - 80);
+/** `boxW` is the fitted width (P3-5: min 40% of W for short lines); omitted = the widest box (the world keep-out). */
+export function dialogueGeom(W: number, H: number, boxW?: number): DialogueGeom {
+  const w = Math.min(boxW ?? DLG_W, DLG_W, W - 80);
   const h = DLG_PAD_Y * 2 + DLG_LINE_H * 2;
   const x = Math.round((W - w) / 2);
   const y = H - DLG_BOTTOM - h;
@@ -52,12 +55,11 @@ export interface GrimoireGeom {
 /** `slide` 0 = Part B (bottom left, k 1), 1 = Part C (bottom centre above the dialogue lane, k 1.35). */
 export function grimoireGeom(W: number, H: number, n: number, slide: number): GrimoireGeom {
   const { w, h } = grimoireSize(n);
-  const dTop = dialogueGeom(W, H).rect.y;
   const k1 = GR_CUT_SCALE;
   const x0 = 20;
   const y0 = H - GR_MARGIN - h;
   const x1 = (W - w * k1) / 2;
-  const y1 = dTop - 10 - h * k1;
+  const y1 = H * (1 - GR_LANE_BOTTOM) - h * k1;
   const t = Math.min(1, Math.max(0, slide));
   const k = 1 + (k1 - 1) * t;
   return {
@@ -141,4 +143,35 @@ export function wrapLines(measure: (s: string) => number, text: string, maxW: nu
   }
   if (cur) out.push(cur);
   return out;
+}
+
+// ---- the knight's hand (the ember and the landing shards): metres from his foot anchor, per cutscene anim frame
+/** Where the open palm / closed fist is in each hero frame (the sprite is 1 texel = 1/16 m; read off `heroFrameX` in proceduralArt). */
+const HAND_FRAMES: Readonly<Record<string, readonly { dx: number; dy: number }[]>> = {
+  reach: [
+    { dx: 0.53, dy: 1.22 },
+    { dx: 0.655, dy: 1.155 },
+  ],
+  kneel: [
+    { dx: 0.3, dy: 0.62 },
+    { dx: 0.42, dy: 0.42 },
+    { dx: 0.46, dy: 0.36 },
+  ],
+  rise: [
+    { dx: 0.42, dy: 0.36 },
+    { dx: 0.4, dy: 0.52 },
+    { dx: 0.32, dy: 0.78 },
+  ],
+  swordOut: [
+    { dx: 0.62, dy: 1.0 },
+    { dx: 0.78, dy: 0.95 },
+  ],
+  raise: [{ dx: 0.5, dy: 0.9 }],
+  idle: [{ dx: 0.3, dy: 0.85 }],
+};
+/** The hand offset (m) for a cutscene hero anim at `ageMs` (frames at 2.5 fps, like the stage's cutscene frames). */
+export function heroHandOffset(anim: string | null, ageMs: number): { dx: number; dy: number } {
+  const fr = (anim ? HAND_FRAMES[anim] : undefined) ?? HAND_FRAMES.idle ?? [];
+  const i = fr.length > 1 ? Math.floor((Math.max(0, ageMs) / 1000) * 2.5) % fr.length : 0;
+  return fr[i] ?? { dx: 0.3, dy: 0.85 };
 }

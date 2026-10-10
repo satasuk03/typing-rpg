@@ -184,6 +184,19 @@ const PRO_NUL_FADE_FROM = 0.7;
 const PRO_NUL_FADE_SEC = 1.1;
 /** P3.6: the servants left on stage when the cutscene starts dissolve into Nul's cloak over this long. */
 const PRO_ADDS_DISSOLVE_SEC = 0.9;
+/** P2-3: Nul's B2 entrance: the tear is open from 0 to 0.6 s, he steps out of its mouth (a 2.4 m drop, eased) from 0.6 s and lands at 1.6 s. */
+const PRO_NUL_LIFT_FROM = 0.6;
+const PRO_NUL_LIFT_SEC = 1.0;
+const PRO_NUL_LIFT_M = 2.4;
+/** P2-3: the B2 boss intro's letterbox bars (fraction of H per bar), eased in over `PRO_BARS_IN` s and out over `PRO_BARS_OUT` s. */
+const PRO_INTRO_BARS = 0.1;
+const PRO_BARS_IN = 0.35;
+const PRO_BARS_OUT = 0.4;
+/** P4.2: the prologue's warm fill / rim light on the knight (the low-key grade made him a silhouette). It cools and dims as the colour drains. */
+const HERO_FILL_WARM: readonly [number, number, number] = [1.35, 0.92, 0.6];
+const HERO_FILL_COOL: readonly [number, number, number] = [0.55, 0.62, 0.85];
+const HERO_FILL_INTENSITY = 2.4;
+const HERO_FILL_RADIUS = 6.5;
 /** Nul's lift (m) at the end of his rise (`nulLift` in render/vfx/prologue/params.ts, 9 m over 3.6 s, easeInQuad). */
 const NUL_RISE_M = 9;
 const NUL_RISE_MS = 3600;
@@ -270,6 +283,9 @@ export class LevelStage {
   private fogOverride: number | null = null;
   private addsDissolveT: number | null = null;
   private introT = 0;
+  private proBars = 0;
+  private heroFill: DynamicLight | null = null;
+  private fillBlend = 0;
   private readonly nulAnimCache = new Map<string, readonly SpriteFrame[]>();
 
   constructor(
@@ -337,6 +353,8 @@ export class LevelStage {
   }
 
   dispose(): void {
+    if (this.heroFill) this.heroFill.dead = true;
+    this.heroFill = null;
     this.dropFoes();
     this.hero?.dispose();
     this.hero = null;
@@ -658,6 +676,45 @@ export class LevelStage {
   /** Prologue mode: servants rise out of ink pools, Nul fades in under the tear, the B2 camera tilts. Story levels never call it. */
   setPrologue(on: boolean): void {
     this.pro = on;
+    if (!on && this.heroFill) {
+      this.heroFill.dead = true;
+      this.heroFill = null;
+    }
+  }
+
+  /** The cutscene's colour-drain blend (0..1): the knight's fill light cools and dims with it, so the ember stays the one warm light. */
+  setHeroFillBlend(b: number): void {
+    this.fillBlend = clamp01(b);
+  }
+
+  /** P4.2: the warm fill / rim light that keeps the knight's face and cape readable under the low-key grade (prologue only). */
+  private updateHeroFill(dt: number): void {
+    if (!this.pro) return;
+    let L = this.heroFill;
+    if (!L) {
+      L = this.world.lights.hold({
+        x: this.heroX + 1,
+        y: 1.5,
+        z: this.heroZ + 3,
+        radius: HERO_FILL_RADIUS,
+        color: [...HERO_FILL_WARM],
+        intensity: HERO_FILL_INTENSITY,
+        scatter: 0,
+      });
+      this.heroFill = L;
+    }
+    const b = this.fillBlend;
+    L.x = this.heroXNow() + 1;
+    L.y = 1.5;
+    L.z = this.heroZ + 3;
+    const col = L.color as unknown as number[];
+    const k = Math.min(1, dt * 6);
+    for (let i = 0; i < 3; i++) {
+      const warm = HERO_FILL_WARM[i] as number;
+      const t = warm + ((HERO_FILL_COOL[i] as number) - warm) * b;
+      col[i] = (col[i] as number) + (t - (col[i] as number)) * k;
+    }
+    L.intensity += (HERO_FILL_INTENSITY * (1 - 0.4 * b) - L.intensity) * k;
   }
 
   /** Part C: pose Nul from the timeline's `boss` actor state (null = the stage's own idle / attack frames). */
@@ -748,8 +805,19 @@ export class LevelStage {
     for (const ev of view.enemies) this.updateEnemy(ev, dt, tickF);
 
     this.updateHero(view, tickF);
+    this.updateHeroFill(dt);
     this.updateCamera(view);
     this.handle.update(dt, this.world.camera.pose.x);
+    if (this.pro) {
+      // P2-3: the B2 intro gets its letterbox bars (the Storm Gold mood has none of its own)
+      const want = view.phase === "bossIntro" ? PRO_INTRO_BARS : 0;
+      const step = (dt * PRO_INTRO_BARS) / (want > this.proBars ? PRO_BARS_IN : PRO_BARS_OUT);
+      this.proBars =
+        want > this.proBars
+          ? Math.min(want, this.proBars + step)
+          : Math.max(want, this.proBars - step);
+      this.world.postFx.effects.bars = this.proBars > 0.0005 ? this.proBars : -1;
+    }
     // P3.1: a cutscene's blended mood wins over the level's per-x mood (re-applied by `handle.update` every frame)
     if (this.dirMood) {
       const m = this.dirMood;
@@ -899,8 +967,14 @@ export class LevelStage {
     let proY = 0;
     if (this.pro) {
       if (!ev.isBoss && age < 0.9) proY = inkRiseOffsetY(age * 1000);
-      if (ev.isBoss && !this.dirBoss)
+      if (ev.isBoss && !this.dirBoss) {
         e.actor.setDissolve(1 - easeOut((age - PRO_NUL_FADE_FROM) / PRO_NUL_FADE_SEC));
+        // P2-3: he steps out of the tear's mouth: a short eased drop that lands as the card arrives
+        if (age < PRO_NUL_LIFT_FROM + PRO_NUL_LIFT_SEC) {
+          const u = clamp01((age - PRO_NUL_LIFT_FROM) / PRO_NUL_LIFT_SEC);
+          proY += PRO_NUL_LIFT_M * (1 - easeOut(u));
+        }
+      }
       if (!ev.isBoss && this.addsDissolveT !== null) {
         const k = clamp01((this.time - this.addsDissolveT) / PRO_ADDS_DISSOLVE_SEC);
         e.actor.setDissolve(k);

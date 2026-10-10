@@ -8,7 +8,7 @@ const QA = join(here, "..", "..", "..", "..", "docs", "qa", "prologue-p3.1");
 mkdirSync(QA, { recursive: true });
 
 async function open(page: Page, t: number): Promise<void> {
-  await page.goto(`/?scene=prologue&part=cutscene&t=${t}&freeze=1`);
+  await page.goto(`/?scene=prologue&part=cutscene&tl=test&t=${t}&freeze=1`);
   await page.waitForFunction(() => window.__prologueScene?.ready === true, undefined, {
     timeout: 120_000,
   });
@@ -91,7 +91,7 @@ test("stills of the test timeline (JPEG < 200 KB each)", async ({ page }) => {
 test("live: the clock holds on the line, letters do not advance it, Space does after the guard", async ({
   page,
 }) => {
-  await page.goto("/?scene=prologue&part=cutscene&t=4400");
+  await page.goto("/?scene=prologue&part=cutscene&tl=test&t=4400");
   await page.waitForFunction(() => window.__prologueScene?.ready === true, undefined, {
     timeout: 120_000,
   });

@@ -1,20 +1,28 @@
 /**
- * DEV-ONLY prologue scene (P3.1): ?scene=prologue&part=cutscene[&t=<ms>][&lc=<ms>][&freeze=1][&id=ch1-l04][&tier=0]
+ * DEV-ONLY prologue scene (P3.1, P4.2 WP-B): ?scene=prologue&part=cutscene[&tl=open|unwriting|test][&t=<ms>][&lc=<ms>][&freeze=1][&id=<level>][&tier=0]
  *
- * Drives the cutscene engine over a real level (default a ruins level) with the small TEST timeline: the camera
- * moves, the mood blends toward a desaturated one and the hero walks. `t` + `freeze=1` renders the exact frame at `t`
- * ms (standalone setup: the hero at the layout's start anchor, no adds). `lc` shows the line that starts at `t`.
- * Not frozen: the timeline plays on the presentation clock (Space/Enter advance a line, letter keys do not).
+ * Drives the cutscene engine over a real level. P4.2 (P3-7): by default it plays the REAL prologue timelines on the Word Gate
+ * layout (`tl=open` = Part A, then Part C straight after it; `tl=unwriting` = Part C alone), with the actors, camera and mood
+ * the stage seam carries (the HUD, VFX and sim are the real session's: use `?scene=play`'s prologue route for those).
+ * `tl=test` (or any `id=`) plays the small TEST timeline over a ruins level, as before.
+ * `t` + `freeze=1` renders the exact frame at `t` ms of the first timeline. Overlay lines never hold the clock; a gate line does
+ * (Space/Enter advance it, letter keys do not).
  *
  * Test hooks: `window.__prologueScene` (+ `window.__renderTest`, same shape as the level scene).
- * The real prologue timelines are P3.6's.
  */
 import { CutscenePlayer } from "../cutscene/player";
 import { TEST_TIMELINE } from "../cutscene/testTimeline";
-import type { ActorRef, CutsceneState, HeroCutsceneAnim, StageDirector } from "../cutscene/types";
+import { OPEN_TIMELINE, UNWRITING_TIMELINE } from "../cutscene/timelines/prologue";
+import type {
+  ActorRef,
+  CutsceneState,
+  HeroCutsceneAnim,
+  StageDirector,
+  Timeline,
+} from "../cutscene/types";
 import type { QualityTier } from "../render";
 import { isQualityTier, RenderWorld } from "../render";
-import { type BiomeMood, blendMood } from "../render/biomes";
+import { type BiomeMood, blendMood, UNWRITTEN } from "../render/biomes";
 import type { CameraPose } from "../render/camera";
 import { buildWorld, loadLevel, toRenderBiome } from "../render/world";
 
@@ -30,7 +38,7 @@ declare global {
   }
 }
 
-/** A desaturated, slightly darker take on `base` (stand-in for the real UNWRITTEN mood, which is P2.x's). */
+/** A desaturated, slightly darker take on `base` (stand-in for the real UNWRITTEN mood, for the TEST timeline). */
 function desaturate(base: BiomeMood): BiomeMood {
   return {
     ...base,
@@ -55,7 +63,10 @@ export function start(canvas: HTMLCanvasElement): void {
     return;
   }
   if (part !== "cutscene") throw new Error(`prologue scene: unknown part "${part}"`);
-  const id = q.get("id") ?? "ch1-l04";
+  // P3-7: the real timelines on the Word Gate layout by default; the TEST timeline over a ruins level when asked for
+  const which = q.get("tl") ?? (q.get("id") ? "test" : "open");
+  const real = which !== "test";
+  const id = q.get("id") ?? (real ? "prologue" : "ch1-l04");
   const tierParam = Number(q.get("tier") ?? "0");
   const tier: QualityTier = isQualityTier(tierParam) ? tierParam : 0;
   const frozen = q.get("freeze") === "1";
@@ -64,11 +75,17 @@ export function start(canvas: HTMLCanvasElement): void {
   const world = new RenderWorld({ biome: toRenderBiome(layout.biome), quality: tier });
   world.init(canvas);
   const handle = buildWorld(layout, world, world.source);
+  const timelines: Timeline[] = !real
+    ? [TEST_TIMELINE]
+    : which === "unwriting"
+      ? [UNWRITING_TIMELINE]
+      : [OPEN_TIMELINE, UNWRITING_TIMELINE];
 
-  // ---- standalone setup: the hero at the layout's start anchor (the walk path gives z)
-  const home = handle.getAnchor("start");
-  const homeX = home.x;
-  const homeZ = handle.walkPath.zAtX(homeX);
+  // ---- the hero's home: the layout's start anchor (Part A, the test timeline); the encounter stop for Part C (it continues the live stage)
+  const startAnchor = handle.getAnchor("start");
+  const stopAnchor = real && handle.hasAnchor("enc1.hero") ? handle.getAnchor("enc1.hero") : null;
+  let homeX = startAnchor.x;
+  let homeZ = handle.walkPath.zAtX(homeX);
   const hero = world.addActor("hero", "idle", { rim: 1.3, blobW: 1.25 });
   const heroFrames = (anim: string) => {
     try {
@@ -107,18 +124,44 @@ export function start(canvas: HTMLCanvasElement): void {
   };
 
   const baseWalk = handle.cameraPose("walk");
-  const player = new CutscenePlayer(TEST_TIMELINE, {
-    env: {
-      basePose: { ...baseWalk, x: homeX + 3.2 },
-      anchors: { walk: { ...baseWalk, x: homeX + 3.2 } },
-      reducedMotion: q.get("reduced") === "1",
-    },
-    director,
-    moodAt: (k) => {
-      const base = handle.moodAt(homeX + 3.2);
-      return blendMood(base, desaturate(base), k);
-    },
-  });
+  const pose = (n: string): CameraPose | undefined => {
+    try {
+      return handle.cameraPose(n as never);
+    } catch {
+      return undefined;
+    }
+  };
+  const makePlayer = (tl: Timeline): CutscenePlayer => {
+    const cont = tl.setup === "continue";
+    homeX = cont && stopAnchor ? stopAnchor.x : startAnchor.x;
+    homeZ = handle.walkPath.zAtX(homeX);
+    const walk = { ...baseWalk, x: startAnchor.x + 3.2 };
+    return new CutscenePlayer(tl, {
+      env: {
+        basePose: cont ? (pose("battle:1") ?? walk) : walk,
+        anchors: { walk, battle: pose("battle:1"), bossIntro: pose("boss"), boss: pose("boss") },
+        reducedMotion: q.get("reduced") === "1",
+      },
+      director,
+      moodAt: (k) => {
+        const base = handle.moodAt(homeX + 3.2);
+        return blendMood(base, real ? UNWRITTEN : desaturate(base), k);
+      },
+      sink: {
+        onEnd: () => {
+          // Part A hands over to Part C (the dev scene has no sim between them)
+          const next = timelines[timelines.indexOf(tl) + 1];
+          if (!next) return;
+          player.release();
+          hs.anim = "idle";
+          hs.ageMs = 0;
+          player = makePlayer(next);
+          player.start();
+        },
+      },
+    });
+  };
+  let player = makePlayer(timelines[0] as Timeline);
 
   const applyHero = (): void => {
     const frames = heroFrames(hs.anim ?? "idle");
@@ -157,7 +200,14 @@ export function start(canvas: HTMLCanvasElement): void {
     return s;
   };
 
-  window.__prologueScene = { ready: true, player, seek, state: () => player.state };
+  window.__prologueScene = {
+    ready: true,
+    get player() {
+      return player;
+    },
+    seek,
+    state: () => player.state,
+  };
   window.__renderTest = {
     world,
     step,

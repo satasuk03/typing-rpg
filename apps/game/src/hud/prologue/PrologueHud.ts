@@ -17,7 +17,13 @@ import type { Ctx } from "../draw";
 import { clamp } from "../draw";
 import type { Rect } from "../layout";
 import type { HudSettings } from "../settings";
-import { type DialogueLayout, drawDialogue, layoutDialogue, revealedChars } from "./dialogue";
+import {
+  type DialogueLayout,
+  drawDialogue,
+  fitDialogueWidth,
+  layoutDialogue,
+  revealedChars,
+} from "./dialogue";
 import type { DialogueGeom, GrimoireGeom, P2 } from "./geometry";
 import {
   cloakTrapezoid,
@@ -42,7 +48,7 @@ import {
   speakerContrast,
 } from "./palette";
 import { SHATTER_DONE_S } from "./shatter";
-import { drawEmber, drawShardsReturn, drawSwirl } from "./swirl";
+import { drawEmber, drawShardsReturn, drawSwirl, shardKick } from "./swirl";
 
 /** CSS-px anchor getters. P3.6 overrides these with the stage's exact projections; the Hud supplies projector fallbacks. */
 export interface PrologueAnchorSource {
@@ -98,8 +104,9 @@ export interface PrologueDebug {
 
 export const FIGHT_HINT = "Type the words to fight!";
 export const GUARD_HINT = "Red word: type it to block!";
-export const GR_LINGER_S = 2.5;
-export const GR_FADE_S = 1.0;
+/** The Grimoire leaves `GR_LINGER_S + GR_FADE_S` = 1.0 s after `passivesDim` (P4.2: it only shows from the ink line to the theft's end). */
+export const GR_LINGER_S = 0.7;
+export const GR_FADE_S = 0.3;
 export const INK_HOLD_S = 1.2;
 const INK_FADE_S = 0.6;
 const MAX_ORBS = 8;
@@ -147,7 +154,15 @@ export class PrologueHud {
   private inkBirths: number[] = [];
   private inkDoneAt: number | null = null;
   private inkLay: InkLayout | null = null;
-  private dlg: { speaker: SpeakerId; text: string; ageMs: number } | null = null;
+  private dlg: {
+    speaker: SpeakerId;
+    text: string;
+    ageMs: number;
+    mode: "gate" | "overlay";
+  } | null = null;
+  private dlgBoxW = 800;
+  /** Part C: 0..1 visibility of the Grimoire (ink line -> passivesDim + 1 s, never while a line is up). 1 in Part B. */
+  private grA = 1;
   private dlgA = 0;
   private dlgLay: DialogueLayout | null = null;
   private shardsAge: number | null = null;
@@ -198,6 +213,7 @@ export class PrologueHud {
       this.inkDoneAt = null;
       this.inkLay = null;
       this.slide = 0;
+      this.grA = 1;
       this.panelFadeV = 1;
       return;
     }
@@ -231,7 +247,12 @@ export class PrologueHud {
         this.inkDoneAt = jumped ? this.clock - 99 : this.clock;
     }
     if (s.line) {
-      this.dlg = { speaker: s.line.speaker, text: s.line.text, ageMs: s.line.ageMs };
+      this.dlg = {
+        speaker: s.line.speaker,
+        text: s.line.text,
+        ageMs: s.line.ageMs,
+        mode: s.line.mode,
+      };
       if (jumped) this.dlgA = 1;
     }
     this.shardsAge = h.shardsReturnAgeMs;
@@ -281,6 +302,7 @@ export class PrologueHud {
     this.castFlash.fill(0);
     this.chipFlash.clear();
     this.slide = this.cs ? 1 : 0;
+    this.grA = this.grWanted() ? 1 : 0;
     this.panelFadeV = this.cs ? 0 : 1;
     this.dim = this.dimAt !== null ? 1 : 0;
     this.capA = this.capTarget;
@@ -313,6 +335,17 @@ export class PrologueHud {
     this.hintShownFight = false;
     this.hintShownGuard = false;
     if (this.hint && !this.hint.persistent) this.hint = null;
+  }
+
+  /**
+   * Part C: the Grimoire only tells the story from the ink line through the theft (the free dialogue lane), goes away
+   * `GR_LINGER_S + GR_FADE_S` after `passivesDim`, and is hidden while a line is up. Always wanted outside the cutscene.
+   */
+  private grWanted(): boolean {
+    if (!this.cs) return true;
+    if (this.cs.line) return false;
+    if (!this.cs.hud.ink) return false;
+    return this.dimAt === null || this.clock - this.dimAt < GR_LINGER_S;
   }
 
   // ------------------------------------------------------------------ Hud hooks
@@ -373,7 +406,10 @@ export class PrologueHud {
     }
     // fades
     const cs = this.cs !== null;
-    this.slide = clamp(this.slide + (cs ? dt / 0.7 : -dt / 0.7), 0, 1);
+    const grWant = this.grWanted();
+    this.grA = clamp(this.grA + (grWant ? dt / 0.35 : -dt / 0.3), 0, 1);
+    if (!cs) this.slide = clamp(this.slide - dt / 0.7, 0, 1);
+    else if (grWant && this.grA < 0.05) this.slide = 1; // slid out at the catch; it comes back in the lane
     this.panelFadeV = clamp(this.panelFadeV + (cs ? -dt / 0.3 : dt / 0.3), 0, 1);
     this.capA = clamp(this.capA + (this.capTarget > 0 ? dt / 0.8 : -dt / 0.8), 0, 1);
     this.dlgA = clamp(this.dlgA + (this.cs?.line ? dt / 0.15 : -dt / 0.2), 0, 1);
@@ -385,11 +421,7 @@ export class PrologueHud {
     if (this.hint && !this.hint.persistent && this.clock >= this.hint.until && this.hintA <= 0)
       this.hint = null;
     if (this.hint) this.hintLastText = this.hint.text;
-    // grimoire lingers a while after the passives dim, then leaves so the close-ups are clean
-    this.grAlpha =
-      this.dimAt === null
-        ? 1
-        : 1 - clamp((this.clock - this.dimAt - GR_LINGER_S) / GR_FADE_S, 0, 1);
+    this.grAlpha = ease(this.grA);
   }
 
   onEvent(e: SimEvent): void {
@@ -428,9 +460,19 @@ export class PrologueHud {
   /** Compute this frame's rects (needs the context for text measures). Call once per draw, before `reserved`. */
   frame(env: PrologueDrawEnv, active: boolean, bossAlive: boolean): void {
     const { c, W, H } = env;
-    this.dlgGeom = dialogueGeom(W, H);
+    if (this.dlg && this.dlgA > 0.02 && (!this.dlgLay || this.dlgLay.text !== this.dlg.text)) {
+      const maxG = dialogueGeom(W, H);
+      this.dlgLay = layoutDialogue(c, this.dlg.text, maxG);
+      this.dlgBoxW = fitDialogueWidth(c, this.dlgLay, W * 0.4, maxG.box.w);
+    }
+    this.dlgGeom = dialogueGeom(W, H, this.dlg ? this.dlgBoxW : undefined);
     const grVisible = active && this.grAlpha > 0.02;
     this.grGeom = grVisible ? grimoireGeom(W, H, this.nOrbs, ease(this.slide)) : null;
+    // it slides down out of the frame as it fades (and up into the lane as it comes in)
+    if (this.grGeom && this.cs) {
+      const r = this.grGeom.rect;
+      r.y += Math.min((1 - this.grAlpha) * 36, Math.max(0, H - (r.y + r.h) - 1)); // never out of the viewport
+    }
     // the dialogue wins: while the bar is still sliding up (or on a tall/short viewport) it never overlaps the box
     if (
       this.grGeom &&
@@ -454,8 +496,6 @@ export class PrologueHud {
       const feet = this.anchor(env, "nulFeet");
       if (head && feet) this.maskR = maskRect(head, feet);
     }
-    if (this.dlg && this.dlgA > 0.02 && (!this.dlgLay || this.dlgLay.text !== this.dlg.text))
-      this.dlgLay = layoutDialogue(c, this.dlg.text, this.dlgGeom);
   }
 
   /**
@@ -483,7 +523,7 @@ export class PrologueHud {
   /** Extra obstacles for damage pops and tags: the reserved rects plus Nul's mask / face. */
   popObstacles(): Rect[] {
     const out = this.reserved();
-    if (this.maskR) out.push(inflateRect(this.maskR, 6));
+    if (this.maskR) out.push(inflateRect(this.maskR, 12));
     return out;
   }
   /**
@@ -551,21 +591,33 @@ export class PrologueHud {
           this.swirlA * settings.effectsIntensity,
           env.quality,
           rm,
+          this.dlg?.speaker === "nul" ? this.dlgA : 0,
         );
       }
     }
     // ---- shards and ember (below the dialogue in z-order)
     const hand = this.anchor(env, "hand");
     if (this.shardsAge !== null && hand) {
-      const tear = this.anchor(env, "tear") ?? { x: W * 0.5, y: -10 };
-      drawShardsReturn(c, this.starter, this.shardsAge, tear, hand, 1, rm);
+      // they fall from where the tear closed; the projected tear can be far off screen, so the fall starts above the hand's column
+      const tear = this.anchor(env, "tear") ?? { x: hand.x, y: -10 };
+      const from = { x: clamp(tear.x, hand.x - 240, hand.x + 240), y: Math.min(tear.y, -24) };
+      drawShardsReturn(c, this.starter, this.shardsAge, from, hand, 1, rm);
     }
     if (this.ember && hand) {
       this.emberP = hand;
-      drawEmber(c, hand, this.ember.ageMs, this.ember.closeAt, env.time, 1, rm);
+      const kick = this.shardsAge === null ? 0 : shardKick(this.shardsAge, this.starter.length);
+      drawEmber(c, hand, this.ember.ageMs, this.ember.closeAt, env.time, 1, rm, kick);
     }
-    // ---- caption and ink line
-    if (this.capA > 0.01) drawCaption(c, W, H, this.capText, ease(this.capA));
+    // ---- caption and ink line (the opening caption is centred on the black; the end caption rides high, clear of the actors)
+    if (this.capA > 0.01)
+      drawCaption(
+        c,
+        W,
+        H,
+        this.capText,
+        ease(this.capA),
+        (this.cs?.hud.fade ?? 0) >= 0.5 ? 0.46 : 0.17,
+      );
     const ia = this.inkAlpha();
     if (ia > 0.02 && this.inkLay && this.inkR)
       drawInk(
@@ -603,6 +655,7 @@ export class PrologueHud {
         alpha: ease(this.dlgA),
         time: env.time,
         reducedMotion: rm,
+        hint: this.dlg.mode === "gate",
       });
   }
 
@@ -640,7 +693,7 @@ export class PrologueHud {
               speakerContrast: speakerContrast(this.dlg.speaker),
               alpha: this.dlgA,
               shownChars: revealedChars(dl.text.length, this.dlg.ageMs, false),
-              advanceHint: this.dlg.ageMs > 900,
+              advanceHint: this.dlg.mode === "gate" && this.dlg.ageMs > 900,
             }
           : null,
       inkRect: css(this.inkR),

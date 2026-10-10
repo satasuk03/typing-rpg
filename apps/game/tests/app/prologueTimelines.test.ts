@@ -58,13 +58,16 @@ describe("the real prologue timelines (P3.6)", () => {
     expect(caption).toBeLessThan(fadeIn);
     expect(fadeIn).toBe(2500);
     expect(walk).toBe(2500);
-    expect(pool).toBeGreaterThanOrEqual(5500);
-    expect(pool).toBeLessThan(nul);
+    expect(pool).toBeGreaterThanOrEqual(5300);
+    expect(nul).toBeGreaterThanOrEqual(5200); // the line overlays the pools (it never holds the clock)
     expect(nul).toBeLessThan(OPEN_END_MS);
     expect(of(A, "vfx").filter((c) => c.id === "inkRise")).toHaveLength(3);
     // the crane opens on the plan's pose and settles into the battle pose
     const cams = of(A, "camera");
-    expect(cams[0]?.pose).toMatchObject({ y: 2.5, dist: 32, pitch: 26, fov: 30 });
+    // P2-1: it opens high and wide, with the whole arch (and sky above it) in frame
+    const crane = (cams[0]?.pose ?? {}) as { y?: number; dist?: number };
+    expect(crane.y ?? 0).toBeGreaterThanOrEqual(3);
+    expect(crane.dist ?? 0).toBeGreaterThanOrEqual(22);
     expect(cams.at(-1)?.pose).toEqual({ anchor: "battle" });
   });
 
@@ -95,9 +98,28 @@ describe("the real prologue timelines (P3.6)", () => {
       "knight",
       "knight",
     ]);
-    // lines gate the clock one at a time: no two share a time (evaluate() finds a held line by its `at`)
+    // P4.2: every prologue line is an OVERLAY line (the clock never stops), and no two reading windows overlap
+    for (const c of [...of(A, "line"), ...of(C, "line")]) expect(c.mode, c.text).toBe("overlay");
     const ats = of(C, "line").map((c) => c.at);
     expect(new Set(ats).size).toBe(ats.length);
+    // Part C is <= 58 s on the wall now that nothing holds the clock; Part A is 8 s
+    expect(UNWRITING_END_MS).toBeLessThanOrEqual(58000);
+    expect(OPEN_END_MS).toBe(8000);
+  });
+
+  it("no frame is static: every camera gap between moves is at most 1.5 s outside the black and the fade", () => {
+    for (const tl of [UNWRITING_TIMELINE]) {
+      const cams = of(tl.cues, "camera");
+      let end = 0;
+      for (const c of cams) {
+        if (c.at > end)
+          expect(c.at - end, `${tl.id} camera idle ${end}..${c.at}`).toBeLessThanOrEqual(
+            // the catch (0 - 1.5 s) is held by the hit-stop and the Fireball crumble VFX; the end walk is a crane
+            1500,
+          );
+        end = Math.max(end, c.at + (c.dur ?? 0));
+      }
+    }
   });
 
   it("Part C beat order (plan §2 Part C)", () => {
@@ -148,13 +170,13 @@ describe("the real prologue timelines (P3.6)", () => {
     expect(catchAt).toBe(0);
     expect(inkWrite).toBe(ink);
     expect(swell).toBe(ink - 900); // a reverse swell leads into the ink line (art direction §5.2: C 9.6 s)
-    expect(ink).toBe(10500);
-    expect(theft1).toBe(13000);
-    expect(collapse).toBe(20000);
-    expect(gate).toBe(26500);
-    expect(vortex).toBe(31000);
-    expect(caption).toBe(47000);
-    expect(fade).toBe(53000);
+    expect(ink).toBe(13200);
+    expect(theft1).toBe(16000);
+    expect(collapse).toBe(23200);
+    expect(gate).toBe(31000);
+    expect(vortex).toBe(36000);
+    expect(caption).toBe(50300);
+    expect(fade).toBe(55500);
     expect(C.at(-1)).toMatchObject({ kind: "end", at: UNWRITING_END_MS });
   });
 
@@ -163,7 +185,7 @@ describe("the real prologue timelines (P3.6)", () => {
     expect(shatter.map((c) => (c.cue.id === "kitShatter" ? c.cue.index : -1))).toEqual([
       0, 1, 2, 3, 4, 5,
     ]);
-    expect(shatter.map((c) => c.at)).toEqual([0, 1, 2, 3, 4, 5].map((k) => 13000 + 1100 * k));
+    expect(shatter.map((c) => c.at)).toEqual([0, 1, 2, 3, 4, 5].map((k) => 16000 + 1100 * k));
     const streams = of(C, "vfx").filter((c) => c.id === "theftStream");
     expect(streams.map((c) => c.params?.k)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(streams.every((c) => c.from === "hero" && c.to === "boss")).toBe(true);
@@ -176,25 +198,38 @@ describe("the real prologue timelines (P3.6)", () => {
     expect(ramp.every((c) => c.dur === 280)).toBe(true);
     expect(THEFT.kit).toHaveLength(6);
     // the world is fully UNWRITTEN once the last stream arrives (before the collapse)
-    expect(evaluate(UNWRITING_TIMELINE, 20000).moodBlend).toBe(1);
-    expect(evaluate(UNWRITING_TIMELINE, 13000).moodBlend).toBe(0);
+    expect(evaluate(UNWRITING_TIMELINE, 23000).moodBlend).toBe(1);
+    expect(evaluate(UNWRITING_TIMELINE, 16000).moodBlend).toBe(0);
     // the passive chips dim together after beat 6
-    expect(evaluate(UNWRITING_TIMELINE, 19700).hud.passivesDim).toBe(true);
-    expect(evaluate(UNWRITING_TIMELINE, 19000).hud.passivesDim).toBe(false);
+    expect(evaluate(UNWRITING_TIMELINE, 22900).hud.passivesDim).toBe(true);
+    expect(evaluate(UNWRITING_TIMELINE, 22700).hud.passivesDim).toBe(false);
+  });
+
+  it("P1-7 / P1-6: the knight recoils for one frame on every theft departure; the camera pushes in on him before the collapse", () => {
+    const hurt = of(C, "actor").filter((c) => c.who === "hero" && c.anim === "hurt");
+    expect(hurt.map((c) => c.at)).toEqual([0, 1, 2, 3, 4, 5].map((k) => 16000 + 1100 * k));
+    for (const h of hurt) {
+      const back = of(C, "actor").find((c) => c.who === "hero" && c.at === h.at + 150);
+      expect(back?.anim, `braces again after the recoil at ${h.at}`).toBe("raise");
+    }
+    const push = of(C, "camera").find((c) => c.at === 22800);
+    expect(push?.pose).toMatchObject({ dist: 13, fov: 24, pitch: 6 });
+    // the push-in lands before the collapse, and the kneel happens inside the same shot
+    expect((push?.at ?? 0) + (push?.dur ?? 0)).toBeLessThanOrEqual(23200);
   });
 
   it("the music arc: drone at C 0, swell, silence at the collapse, the spark motifs", () => {
     const m = of(C, "music");
     expect(m.find((c) => c.drone === 38)?.at).toBe(0);
-    expect(m.find((c) => c.drone === null)?.at).toBe(20700);
-    expect(m.find((c) => c.silence === 1)).toMatchObject({ at: 20000, dur: 1200 });
-    expect(m.find((c) => c.silence === 0.75)).toMatchObject({ at: 42000, dur: 2000 });
+    expect(m.find((c) => c.drone === null)?.at).toBe(23900);
+    expect(m.find((c) => c.silence === 1)).toMatchObject({ at: 23200, dur: 1200 });
+    expect(m.find((c) => c.silence === 0.75)).toMatchObject({ at: 45800, dur: 2000 });
     expect(m.filter((c) => c.motif).map((c) => c.motif)).toEqual(["spark", "sparkEnd"]);
     expect(of(A, "music").map((c) => c.state)).toEqual(["walk"]);
   });
 
-  it("the collapse and the fog stay active to the end of Part C", () => {
-    const keep = ["auraCollapse", "silenceFog", "ember"] as const;
+  it("the collapse, the carved gate and the fog stay active to the end of Part C", () => {
+    const keep = ["auraCollapse", "gateDarken", "silenceFog", "ember"] as const; // P1-5: the gate stays carved to the end
     for (const id of keep) {
       const c = of(C, "vfx").find((v) => v.id === id);
       expect(c, id).toBeDefined();
@@ -206,20 +241,20 @@ describe("the real prologue timelines (P3.6)", () => {
     }
   });
 
-  it("the black fades: open on black, fade in at 2.5 s; Part C fades out at 53 s", () => {
+  it("the black fades: open on black, fade in at 2.5 s; Part C fades out at 55.5 s", () => {
     expect(evaluate(OPEN_TIMELINE, 0).hud.fade).toBe(1);
     expect(evaluate(OPEN_TIMELINE, 2400).hud.fade).toBe(1);
     expect(evaluate(OPEN_TIMELINE, 3000).hud.fade).toBeCloseTo(0.5, 5);
     expect(evaluate(OPEN_TIMELINE, 4000).hud.fade).toBe(0);
-    expect(evaluate(UNWRITING_TIMELINE, 52000).hud.fade).toBe(0);
+    expect(evaluate(UNWRITING_TIMELINE, 55000).hud.fade).toBe(0);
     expect(evaluate(UNWRITING_TIMELINE, UNWRITING_END_MS).hud.fade).toBe(1);
   });
 
   it("the sword appears for the fall beat and leaves when the knight pulls it out", () => {
     const sw = of(C, "actor").filter((c) => c.who === "prop:prop.prologue.sword");
     expect(sw.map((c) => c.visible)).toEqual([true, false]);
-    expect(sw[0]?.at).toBeGreaterThan(20000);
-    expect(sw[1]?.at).toBeGreaterThan(47000);
+    expect(sw[0]?.at).toBeGreaterThan(23200);
+    expect(sw[1]?.at).toBeGreaterThan(50300);
   });
 
   it("the stage constants match the Word Gate layout", () => {

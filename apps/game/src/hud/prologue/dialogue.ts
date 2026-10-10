@@ -7,7 +7,7 @@ import type { Ctx } from "../draw";
 import { frame, txt } from "../draw";
 import { FONT_UI } from "../theme";
 import type { DialogueGeom } from "./geometry";
-import { DLG_FONT, DLG_LINE_H, DLG_PLATE_OVER, wrapLines } from "./geometry";
+import { DLG_FONT, DLG_LINE_H, DLG_PAD_X, DLG_PLATE_OVER, wrapLines } from "./geometry";
 import { DIALOGUE_PANEL, DIALOGUE_TEXT, SPEAKERS, type SpeakerId } from "./palette";
 
 export const TYPE_CPS = 40;
@@ -41,6 +41,18 @@ export interface DialogueDraw {
   alpha: number;
   time: number;
   reducedMotion: boolean;
+  /** Show the "SPACE" advance hint (a gate line). An overlay line (v2.2.3) never waits, so it has none. */
+  hint?: boolean;
+}
+
+/** Fitted box width for a laid-out line (P3-5): the widest wrapped line plus the padding, at least `minW`. */
+export function fitDialogueWidth(c: Ctx, lay: DialogueLayout, minW: number, maxW: number): number {
+  c.font = `700 ${lay.fontPx}px ${FONT_UI}`;
+  c.letterSpacing = "1px";
+  let w = 0;
+  for (const ln of lay.lines) w = Math.max(w, c.measureText(ln).width);
+  c.letterSpacing = "0px";
+  return Math.min(maxW, Math.max(minW, Math.ceil(w) + DLG_PAD_X * 2 + 8));
 }
 
 /** Characters revealed after `ageMs` (all of them under reduced motion). */
@@ -110,7 +122,7 @@ export function drawDialogue(c: Ctx, g: DialogueGeom, d: DialogueDraw): void {
     );
   }
   // advance hint: "SPACE" and a small triangle, blinking while it waits
-  if (full || d.ageMs > HINT_AFTER_MS) {
+  if (d.hint !== false && (full || d.ageMs > HINT_AFTER_MS)) {
     const blink = d.reducedMotion ? 1 : 0.55 + 0.45 * Math.sin(d.time * 5);
     c.globalAlpha = d.alpha * blink;
     const hx = box.x + box.w - 24;

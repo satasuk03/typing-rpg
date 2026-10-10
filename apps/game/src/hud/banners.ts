@@ -13,19 +13,29 @@ export interface Banner {
   style: BannerStyle;
   text: string;
   sub: string;
+  /** Negative while the banner waits for its `delay` (P2-3: the prologue boss card follows Nul's lift). */
   age: number;
   dur: number;
+  /** Centre row override (fraction of H): the prologue boss card sits under Nul's hem. */
+  cy?: number;
 }
 
 export class BannerSystem {
   readonly banners: Banner[] = [];
   private uid = 1;
-  show(style: BannerStyle, text: string, sub = "", dur = 2.0): Banner {
+  show(
+    style: BannerStyle,
+    text: string,
+    sub = "",
+    dur = 2.0,
+    opts: { delay?: number; cy?: number } = {},
+  ): Banner {
     // a newer banner of the same style replaces the older one (no pile-ups)
     for (let i = this.banners.length - 1; i >= 0; i--) {
       if (this.banners[i]?.style === style) this.banners.splice(i, 1);
     }
-    const b: Banner = { uid: this.uid++, style, text, sub, age: 0, dur };
+    const b: Banner = { uid: this.uid++, style, text, sub, age: opts.delay ? -opts.delay : 0, dur };
+    if (opts.cy !== undefined) b.cy = opts.cy;
     this.banners.push(b);
     return b;
   }
@@ -67,7 +77,8 @@ export function drawBanner(c: Ctx, b: Banner, W: number, H: number, s: HudSettin
   const k = b.age / b.dur;
   const a = bannerAlpha(b.age, b.dur);
   const slide = 0;
-  const cy = Math.round(H * st.cy);
+  if (b.age < 0) return;
+  const cy = Math.round(H * (b.cy ?? st.cy));
   const glow = 20 * s.effectsIntensity;
   c.save();
   c.globalAlpha = a;
@@ -149,7 +160,7 @@ export function drawBanner(c: Ctx, b: Banner, W: number, H: number, s: HudSettin
 /** Rect (design px) of a banner's text; plates and pops treat it as an obstacle. */
 export function bannerRect(c: Ctx, b: Banner, W: number, H: number): Rect {
   const st = STYLE[b.style];
-  const cy = Math.round(H * st.cy);
+  const cy = Math.round(H * (b.cy ?? st.cy));
   setFont(c, st.size, FONT_DISP, 900);
   c.letterSpacing = `${b.style === "boss" ? 12 : 10}px`;
   let w = c.measureText(b.text).width;

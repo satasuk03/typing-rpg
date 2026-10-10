@@ -64,6 +64,9 @@ export function applyEase(ease: Ease, u: number): number {
   }
 }
 
+/** An overlay line never gates the clock (interfaces v2.2.3). */
+export const isOverlay = (c: Extract<Cue, { kind: "line" }>): boolean => c.mode === "overlay";
+
 /** Hold time of a line: `max(2200, 1200 + 60 * chars)` ms. */
 export function lineHoldMs(text: string): Ms {
   return Math.max(2200, 1200 + 60 * text.length);
@@ -343,6 +346,7 @@ export function evaluate(
   tMs: Ms,
   lineClock = -1,
   env: EvalEnv = FALLBACK_ENV,
+  dismissedOverlayAt: Ms | null = null,
 ): CutsceneState {
   const t = Math.min(Math.max(tMs, 0), tl.durationMs);
   const cues = tl.cues;
@@ -351,8 +355,25 @@ export function evaluate(
   let line: CutsceneState["line"] = null;
   if (lineClock >= 0) {
     for (const c of cues) {
-      if (c.kind === "line" && c.at === t) {
-        line = { speaker: c.speaker, text: c.text, ageMs: lineClock, holdMs: lineHoldMs(c.text) };
+      if (c.kind === "line" && !isOverlay(c) && c.at === t) {
+        line = {
+          speaker: c.speaker,
+          text: c.text,
+          ageMs: lineClock,
+          holdMs: lineHoldMs(c.text),
+          mode: "gate",
+        };
+        break;
+      }
+    }
+  }
+  if (!line) {
+    // an overlay line is a pure function of t: on screen from its `at` for its minimum reading time
+    for (const c of cues) {
+      if (c.kind !== "line" || !isOverlay(c) || c.at === dismissedOverlayAt) continue;
+      const hold = lineHoldMs(c.text);
+      if (t >= c.at && t < c.at + hold) {
+        line = { speaker: c.speaker, text: c.text, ageMs: t - c.at, holdMs: hold, mode: "overlay" };
         break;
       }
     }
@@ -441,6 +462,20 @@ export function validate(tl: Timeline, registries: Registries = DEFAULT_REGISTRI
   let prevAt = -Infinity;
   let prevCamEnd = -Infinity;
   let startPlays = 0;
+  // every line, in time order: an overlay line's reading window [at, at + hold] must not run into the next line (or the end),
+  // which guarantees the minimum reading time by construction
+  const lineCues = tl.cues
+    .map((c, i) => ({ c, i }))
+    .filter((x): x is { c: Extract<Cue, { kind: "line" }>; i: number } => x.c.kind === "line");
+  lineCues.forEach(({ c, i }, k) => {
+    if (!isOverlay(c)) return;
+    const end = c.at + lineHoldMs(c.text);
+    const next = lineCues[k + 1];
+    if (next && end > next.c.at) {
+      err(i, `overlay line window ends at ${end}, after the next line starts at ${next.c.at}`);
+    }
+    if (end > tl.durationMs) err(i, `overlay line window ends at ${end}, after durationMs`);
+  });
   tl.cues.forEach((c, i) => {
     if (!Number.isFinite(c.at) || c.at < 0) err(i, `bad at ${c.at}`);
     else if (c.at > tl.durationMs) err(i, `at ${c.at} is after durationMs ${tl.durationMs}`);
