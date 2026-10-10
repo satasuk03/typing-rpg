@@ -95,3 +95,10 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
 - 2026-10-10: Frontend live on GitHub Pages (local-only).
 - 2026-10-10 (interfaces v2.0 review notes): the Willow's riddle phase ends after a fixed 5 riddles, then the finisher. Phase 3 stays a reading test (weapon ATK and skills barely matter; wrong answers or timeouts deal missHit). "Ignore capitals" (caseAssist) costs nothing (no star or reward penalty); future ranked modes force it off.
 - 2026-10-10: Ch2 art direction (`docs/vfx/ch2-art-direction.md`, mocks in `docs/vfx/ch2-mock/`) approved as-is. The dark night mood is intended. M2 art may start.
+- 2026-10-10 (T5.1 balance, PO answers):
+  - (Q1) For the Beginner Willow clear, "no upgrades" means **no Ch2 upgrades**. A player who took the Ch1 armor hint (+3) lands at 64.7%, inside the 55–70% window. At par it's 88%.
+  - (Q2) Reveal is a trap at the Willow (swapping it in costs the Beginner −28 points). Fix it with a **loadout hint before L10** that suggests a defensive skill.
+  - (Q3, orchestrator) No sim change to riddle reading time for now; revisit if Fast boss time drifts.
+  - The default Ch2 balance kit is Fireball + Aegis, Clean Cut + Iron Will (Calm Mind from L6).
+- 2026-10-10: Fading words use the new style **in every chapter**: the next letter is never below 85% opacity, with a violet underline. This replaces Ch1's blank dashes.
+

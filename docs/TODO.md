@@ -34,52 +34,9 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
 - **Fix the Iron Will text.** "Blocking a hit leaves you almost unharmed." oversells it: the real effect is that blocked hits deal 15% instead of 20%. Make the text state the real effect.
 - **Model:** a small Sonnet task. Files: `packages/content/src/data/skills.ts`, the new-profile kit in `apps/game/src/meta/ops.ts`, and any tests or HUD/onboarding that assume the 2-active starter kit.
 
-## Ch2 art backlog (polish later, per PO 2026-10-10; doesn't block milestones)
-- **T2.1 hushwood/grove** (`docs/qa/ch2-t2.1/`):
-  - Moss on oaks and the root arch still uses thin strands; move it to `lock`.
-  - The Willow core is a stand-in (T2.3).
-  - Firefly blink is missing.
-  - Hush motes are only in the dev scene.
-  - Fog cards for mixed-biome levels are needed per segment (T2.2/T2.4).
-  - The hero's fill/rim should be set per mood. The hushwood hero silhouette scores 0.79, a thin margin.
-  - Back-row oaks are very dark.
-  - Cobweb veil and waystone variants are still to do.
-- **T2.2 fen + water** (`docs/qa/ch2-t2.2/`):
-  - Firefly blink is still missing: `PARTICLE_FS` is shared with Ch1 and the typing VFX pools and has no per-particle phase.
-  - Layouts: add `fen` to `LAYOUT_BIOMES` and to the ground-kind enum in `render/world/layout.ts` (T2.4). `WorldBuilder` already calls `addGround(.., "fen")`, which builds the water.
-  - Backdrop kinds `skyDusk|mountainsDusk|treelineDusk` need adding to the layout backdrop enum too (T2.4).
-  - The mock's warm gold dusk haze behind the far cypresses is a little greener here; the dusk backdrop tint wants a pass.
-  - Reflections of far cypresses and reeds are mostly hidden by fog and reeds in the battle framing; tier 0 vs 1 differ only slightly. A second pool visible between the reeds would show them off.
-  - Lily pads are a flat decal: no sway and no flower variants. Boardwalk planks have no per-plank warp or moss.
-  - Cypress and reed sprites are the mock's, with no outline pass; the sunken columns are barely visible.
-  - Hero rim in the fen: the dev scene sets `caveRim` 0.9 (caveK is 0.3). The game layer should set it per mood (hero silhouette 0.79).
-  - The perf figures are for the bare diorama (no HUD, sim or combat VFX). Re-measure on a real fen level once T2.4 lands (T5.3).
-- **T2.3 sprites** (`docs/qa/ch2-t2.3/`):
-  - **Willow face:** washed out by the grove's violet key light. Lower it or add a face rim. The Willow also needs breath, sway and lash animation on stage.
-  - **Shade mask:** can read as a skull at 1×. PO look needed.
-  - **Toad:** separate the legs and toes more, and add a hop frame.
-  - **Wolf:** shaggier ruff, and a howl muzzle.
-  - **Moth and Wisp:** more detail, plus flicker and hurt/die frames.
-  - **Elite:** add an outline pulse, and bind `ELITE_FX` in `stage.ts`.
-  - **Hurt poses:** every enemy needs one.
-  - **Willow freed state:** the blossoms and canopy curtains aren't drawn yet.
-- **T2.4 layouts** (`docs/qa/ch2-t2.4/`):
-  - **Fen variety:** fen L5, L7 and L8 look nearly identical at the battle camera. Vary the framing, props and light per level.
-  - **Hushwood lighting:** the levels are darker than the T2.1 diorama, and lanterns blow nearby oaks out to orange.
-  - **Visibility:** the L6 sunken columns barely read, and the pool placement can't be authored because the pool mask is noise-driven in the shader.
-  - **Grove:** the roots ground reads glittery cyan.
-  - **Riddle layout:** check that the leaf positions and the add slots don't overlap on screen at L10.
-- **T3.2 VFX** (`docs/qa/ch2-t3.2/`):
-  - **For the HUD:**
-    - a green "+N" heal pop and a green HP-bar fill on heal (add `EnemyHealed` to `HUD_HANDLED`);
-    - Fading words: letter alpha, a 0.85 floor on the next letter, and the violet underline;
-    - a gold mix on the capital-letter pop.
-  - **World-side gaps:** Fading-shade world cues; death/slam FX for the wisp, shade and toad; fen water ripples; the Reveal skill puff.
-  - **Willow ambience:** a grove-dawn mood crossfade on the finale; a frond tint per right answer; leaf-storm rates.
-  - **Riddle readability:** the wrong-answer wither barely reads. Make the flakes larger.
-  - **Probe margin:** the freed-finale keep-out probe is at 208 against a 215 limit and could flake.
-  - **Re-tune** against the real Ch2 biomes once T4.3 lands. The stills were taken on the Ch1 forest.
-- **Ch1 flipped-normal fix (proposal).** Mirrored Ch1 props are lit from the wrong side. Negate `nn.x` for mirrored meshes. The effect is subtle in daylight. This changes the Ch1 look, so it needs a before/after (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
+## Ch2 art backlog
+- **The single source is now `docs/qa/ch2-review-1.md`** (R2, 2026-10-10): 3 P1, 12 P2, 23 P3. It supersedes the per-task lists that used to be here.
+- **Ch1 flipped-normal fix:** this proposal is tracked there too (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt
 - **Re-measure on a quiet machine with no agents running.** `apps/game/tests/hud/typingPerf.spec.ts` read 0.65 ms/key against the 0.45 budget during T3.1, but `main` read 0.649 under the same load, so no regression is proven. Get a quiet-machine number before Ch2 sign-off.
