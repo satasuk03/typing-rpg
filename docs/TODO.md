@@ -34,5 +34,17 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
 - **Fix the Iron Will text.** "Blocking a hit leaves you almost unharmed." oversells it: the real effect is that blocked hits deal 15% instead of 20%. Make the text state the real effect.
 - **Model:** a small Sonnet task. Files: `packages/content/src/data/skills.ts`, the new-profile kit in `apps/game/src/meta/ops.ts`, and any tests or HUD/onboarding that assume the 2-active starter kit.
 
+## Ch2 art backlog (polish later, per PO 2026-10-10; doesn't block milestones)
+- **T2.1 hushwood/grove** (`docs/qa/ch2-t2.1/`):
+  - Moss on oaks and the root arch still uses thin strands; move it to `lock`.
+  - The Willow core is a stand-in (T2.3).
+  - Firefly blink is missing.
+  - Hush motes are only in the dev scene.
+  - Fog cards for mixed-biome levels are needed per segment (T2.2/T2.4).
+  - The hero's fill/rim should be set per mood. The hushwood hero silhouette scores 0.79, a thin margin.
+  - Back-row oaks are very dark.
+  - Cobweb veil and waystone variants are still to do.
+- **Ch1 flipped-normal fix (proposal).** Mirrored Ch1 props are lit from the wrong side. Negate `nn.x` for mirrored meshes. The effect is subtle in daylight. This changes the Ch1 look, so it needs a before/after (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
+
 ## Next big step
 - Chapter 2 content and systems, per `docs/IMPLEMENTATION_PLAN.md` and the brainstorm docs.
