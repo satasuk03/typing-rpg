@@ -32,7 +32,10 @@ export type BackdropKind =
   | "treeline"
   | "skyNight"
   | "mountainsNight"
-  | "treelineNight";
+  | "treelineNight"
+  | "skyDusk"
+  | "mountainsDusk"
+  | "treelineDusk";
 
 export interface SpriteSource {
   readonly name: string;

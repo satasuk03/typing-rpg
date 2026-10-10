@@ -30,8 +30,33 @@ const HANGING = [
   ),
 ];
 
+const FEN_PROPS = [
+  "cypress.0",
+  "cypress.1",
+  "cypress.2",
+  "reeds.0",
+  "reeds.1",
+  "reeds.2",
+  "post",
+  "column.0",
+  "column.1",
+];
+
 describe("Ch2 props (T2.1)", () => {
   const src = new ProceduralSpriteSource();
+
+  it("registers the fen props (T2.2) with flip twins", () => {
+    for (const k of FEN_PROPS) {
+      expect(src.has(`prop.ch2.${k}`), k).toBe(true);
+      expect(src.has(`prop.ch2.${k}.flip`), `${k}.flip`).toBe(true);
+    }
+  });
+
+  it("has four fen fog cards, none veiling the actors", () => {
+    expect(FOG_CARDS.fen?.length).toBe(4);
+    for (const d of FOG_CARDS.fen ?? [])
+      if (d.z > -3) expect(d.y + d.h / 2).toBeLessThanOrEqual(1.5);
+  });
 
   it("registers every prop with a flip twin (so flipped props negate normal.x)", () => {
     for (const k of [...GROUND_PROPS, ...HANGING]) {

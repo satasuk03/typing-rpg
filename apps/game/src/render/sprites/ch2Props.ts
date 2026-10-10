@@ -550,6 +550,87 @@ export function makeWillowFronds(seed = 1, tint = 'silver', wd = 60, ht = 140) {
 // ------------------------------------------------------------------ shared helpers (T2.3: ch2Monsters.ts reuses the same art kit)
 export { bayer, clamp, clump, flipC, flipN, hash, hex, Layer, lerp, limb, lock, mk, pal, pick, RNG, strand };
 
+// ------------------------------------------------------------------ FEN props
+/** Dead bald cypress with buttressed base, knees and Spanish-moss drapes. 120 x 250 px. */
+export function makeCypress(seed = 11) {
+  const r = RNG(seed), w = 120, h = 250, L = Layer(w, h), P = PAL.CYP;
+  const base = h - 2, cx = w / 2 + (r() - 0.5) * 8, top = 30 + r() * 20, lean = (r() - 0.5) * 6;
+  const spine = (y) => { const t = (base - y) / (base - top); return cx + lean * t + Math.sin(t * 3 + seed) * 2; };
+  // knees
+  for (let i = 0; i < 4; i++) { const kx = cx + (i - 1.5) * 22 + (r() - 0.5) * 8, kh = 5 + r() * 9; for (let y = 0; y < kh; y++) { const hw = (1 - y / kh) * 3 + 0.5; for (let xx = -hw; xx <= hw; xx += 0.5) L.sn(kx + xx, base - y, pick(P, 3.2 - xx / hw * 1.2 + hash(y, i) * 0.8), xx / hw, 0.2, 0.9); } }
+  for (let y = Math.floor(top); y <= base; y++) {
+    const t = (base - y) / (base - top);
+    const hw = 5 + 2.5 * (1 - t) + 30 * Math.exp(-t * 9) + Math.sin(y * 0.9) * 0.4;
+    const sx = spine(y);
+    for (let xx = -hw; xx <= hw; xx += 0.5) {
+      const q = xx / hw, X = Math.round(sx + xx);
+      // buttress fluting: vertical ridges near the base
+      const flute = t < 0.25 ? Math.sin(xx * 0.9) * (0.25 - t) * 5 : 0;
+      let l = 3.3 - q * 1.6 + flute + (hash(X >> 1, y >> 3) - 0.5) * 1.0 + bayer(X, y) * 0.6;
+      if (Math.abs(q) > 0.9) l -= 0.9;
+      L.sn(X, y, pick(P, l), q * 0.9 + flute * 0.1, 0, Math.sqrt(Math.max(0.05, 1 - q * q)));
+    }
+  }
+  // snapped top
+  for (let k = 0; k < 7; k++) L.clearPx(spine(top) + (k - 3), top + (hash(k, seed) * 6 | 0) - 1);
+  // sparse crooked limbs + moss drapes
+  const ends = [];
+  for (let i = 0; i < 5; i++) {
+    const y0 = top + 20 + i * 24 + r() * 10, dir = i % 2 ? 1 : -1;
+    const len = 18 + r() * 22;
+    const pts = [[spine(y0), y0]]; let a = dir > 0 ? -0.35 : Math.PI + 0.35;
+    let x = spine(y0), y = y0; for (let k = 0; k < 5; k++) { a += (r() - 0.5) * 0.5; x += Math.cos(a) * len / 5; y += Math.sin(a) * len / 5; pts.push([x, y]); }
+    limb(L, pts, 3.2, 1.2, P, { base: 2.8 });
+    ends.push(pts);
+  }
+  for (const pts of ends) for (let k = 1; k < pts.length; k++) if (r() < 0.8) { const [x, y] = pts[k]; const n = 3 + (r() * 4 | 0); for (let j = 0; j < n; j++) strand(L, x + (r() - 0.5) * 6, y + 1, 10 + r() * 34, PAL.SPM, r() * 6, 1, 2.4); }
+  return L.finish({ ax: Math.round(cx), ay: h, bulge: 1.3 });
+}
+
+/** Reed clump with cattails. 48 x 64 px. */
+export function makeReeds(seed = 13, wd = 48, ht = 64) {
+  const r = RNG(seed), L = Layer(wd, ht), C = PAL.REED;
+  const n = 16 + (r() * 8 | 0); const tall = [];
+  for (let i = 0; i < n; i++) {
+    const x0 = wd / 2 + (r() - 0.5) * wd * 0.55, len = ht * (0.35 + r() * 0.62), lean = (r() - 0.5) * 18, wide = r() < 0.4;
+    let tx = x0, ty = ht - 1;
+    for (let s = 0; s < len; s++) {
+      const t = s / len; tx = x0 + lean * t * t; ty = ht - 1 - s;
+      const l = 1.4 + t * 4.4 + (hash(i, s >> 2) - 0.5) * 0.9;
+      L.sn(tx, ty, pick(C, l), lean > 0 ? 0.4 : -0.4, 0.2, 0.9);
+      if (wide && t < 0.8) L.sn(tx + 1, ty, pick(C, l - 1), 0.6, 0.2, 0.8);
+    }
+    if (len > ht * 0.7) tall.push([tx, ty, lean]);
+  }
+  tall.slice(0, 4).forEach(([x, y]) => { for (let k = 0; k < 9; k++) { L.sn(x, y + 3 + k, pick(PAL.CATT, 2.5 - k * 0.2 + (k < 2 ? 0.7 : 0)), -0.3, 0, 1); L.sn(x + 1, y + 3 + k, pick(PAL.CATT, 1.2), 0.6, 0, 0.8); } L.sn(x, y + 1, C[6], 0, 1, 0.5); L.sn(x, y + 2, C[5], 0, 1, 0.5); });
+  return L.finish({ ax: wd / 2, ay: ht, bulge: 0.4 });
+}
+
+/** Boardwalk post with a rope. 10 x 30 px. */
+export function makePost(seed = 2) {
+  const w = 10, h = 30, L = Layer(w, h), P = PAL.WOOD;
+  for (let y = 3; y < h; y++) for (let x = 3; x <= 6; x++) { const q = (x - 4.5) / 1.5; L.sn(x, y, pick(P, 3.2 - q * 1.3 + hash(x, y >> 2) * 0.6 - (y < 5 ? 0 : 0)), q, 0, 0.8); }
+  for (let x = 3; x <= 6; x++) L.sn(x, 3, P[5], 0, 1, 0.3);
+  for (const yy of [8, 10]) for (let x = 2; x <= 7; x++) L.sn(x, yy, hex('#8a7a52'), 0, 0, 1);
+  return L.finish({ ax: 5, ay: h, bulge: 0.6 });
+}
+
+/** Sunken shrine column (cool green stone, broken top). 26 x 70 px. */
+export function makeSunkenColumn(seed = 3, ht = 64) {
+  const r = RNG(seed), w = 20, L = Layer(w + 6, ht + 6), P = pal(['#101612', '#1a221c', '#26302a', '#344038', '#46544a', '#5e6e62']);
+  const cut = []; for (let x = 0; x < w; x++) cut.push(Math.floor(hash(x >> 1, seed) * 9 + (x > w / 2 ? 4 : 0)));
+  for (let y = 0; y < ht; y++) for (let x = 0; x < w; x++) {
+    if (y < cut[x] + 2) continue;
+    const fl = (x % 5 === 0) ? -1 : 0, q = (x - w / 2) / (w / 2);
+    let l = 3.4 - q * 1.6 + fl + (hash(x >> 2, y >> 3) - 0.5) * 0.8 + bayer(x, y) * 0.6;
+    L.sn(x + 3, y + 3, pick(P, l), q, 0, Math.sqrt(Math.max(0.05, 1 - q * q)));
+    if (y < cut[x] + 6 && hash(x, y) < 0.5) L.sn(x + 3, y + 3, pick(PAL.NMOSS, 2 + hash(x, y) * 2), 0, 1, 0.4);
+    if (hash(x, y + 77) < 0.02) L.sn(x + 3, y + 3, hex('#8a9a5a'), 0, 0, 1);
+  }
+  for (let i = 0; i < 4; i++) strand(L, 4 + r() * w, cut[2] + 6, 6 + r() * 16, PAL.SPM, r() * 6);
+  return L.finish({ ax: (w + 6) / 2, ay: ht + 6, bulge: 1.1 });
+}
+
 // ------------------------------------------------------------------ flip twin (normal.x negated)
 /** A mirrored copy of a frame: image + glow flipped, authored normal flipped AND x-negated (Ch1's mesh flip does not). */
 export function flipFrame(f: SpriteFrame): SpriteFrame {
@@ -566,6 +647,7 @@ type Anims = Record<string, SpriteFrame[]>;
 /**
  * Registers every Ch2 prop under `prop.ch2.<name>.<n>` (+ a `.flip` twin each). `table` is the source's key table.
  * Ground-standing: oak 0-4, lpost 0-1, waystone, shroomT / shroomV, rootarch, fern 0-1, willowCore.
+ * Fen (T2.2): cypress 0-2, reeds 0-2, post, column 0-1.
  * Hanging (anchor at top): lantern 0-2, moss 0-1, fronds.<silver|hush|gold|bloom>.0-3.
  */
 export function registerCh2Props(table: Map<string, () => Anims>): void {
@@ -588,17 +670,27 @@ export function registerCh2Props(table: Map<string, () => Anims>): void {
   add("fern.0", () => makeNightFern(2));
   add("fern.1", () => makeNightFern(8, 120, 84));
   add("willowCore", () => makeWillowCore("p1"));
+  // fen (T2.2): bald cypress 0-2, reed clumps 0-2 (cattails), boardwalk post, sunken shrine columns 0-1
+  [11, 19, 31].forEach((s, i) => add(`cypress.${i}`, () => makeCypress(s)));
+  [13, 15, 27].forEach((s, i) => add(`reeds.${i}`, () => makeReeds(s, 48 + i * 6, 60 + i * 8)));
+  add("post", () => makePost(2));
+  add("column.0", () => makeSunkenColumn(3, 64));
+  add("column.1", () => makeSunkenColumn(6, 44));
   for (const t of ["silver", "hush", "gold", "bloom"]) for (let i = 0; i < 4; i++) add(`fronds.${t}.${i}`, () => makeWillowFronds(i * 7 + 1, t, 60 + i * 6, 120 + i * 14));
 }
 
 /** Night backdrop strips shared by hushwood and grove (brief section 1.4 band 1). */
 const _bd = new Map<string, HTMLCanvasElement>();
-export function ch2Backdrop(kind: "skyNight" | "mountainsNight" | "treelineNight"): HTMLCanvasElement {
+export function ch2Backdrop(kind: "skyNight" | "mountainsNight" | "treelineNight" | "skyDusk" | "mountainsDusk" | "treelineDusk"): HTMLCanvasElement {
   let c = _bd.get(kind);
   if (!c) {
     c = kind === "skyNight" ? skyNight()
       : kind === "mountainsNight" ? farForest("#141632", "#1e2244", "#2e3660", 23, 168, 0.65)
-        : farForest("#0c0e1e", "#141830", "#222a48", 37, 176, 0.45);
+        : kind === "treelineNight" ? farForest("#0c0e1e", "#141830", "#222a48", 37, 176, 0.45)
+          // fen (T2.2): a gold dusk sky and two cypress ridges
+          : kind === "skyDusk" ? skyDusk()
+            : kind === "mountainsDusk" ? farForest("#2a3228", "#3c4636", "#58644c", 31, 160, 0, true)
+              : farForest("#1a2018", "#262e22", "#3a4632", 47, 178, 0, true);
     _bd.set(kind, c);
   }
   return c;

@@ -17,6 +17,7 @@ import type { EntityId, HitKind, HitOrigin } from "./events.ts";
 import { BP, clampInt, type Milli, mulBp, mulDiv, toDisplay } from "./fixed.ts";
 import { failLevel, setPhase } from "./flow.ts";
 import { enemyDef, restartAttackCycle, scheduleAttack } from "./guard.ts";
+import { shiftHealTimer } from "./heal.ts";
 import { guardRatingBp } from "./meta/loadout.ts";
 import { emitPassive, hasPassive } from "./passives.ts";
 import { below } from "./rng.ts";
@@ -560,6 +561,7 @@ export function resumeEncounter(state: LevelState, emit: Emit): void {
     if (e.brokenUntil !== null) e.brokenUntil += delta;
     if (e.staggerUntil !== null) e.staggerUntil += delta;
     if (e.frozenUntil !== null) e.frozenUntil += delta;
+    shiftHealTimer(e, delta);
     for (const d of e.dots) {
       d.untilTick += delta;
       d.nextTick += delta;

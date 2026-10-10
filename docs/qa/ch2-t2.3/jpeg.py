@@ -24,7 +24,8 @@ for n, name in [
     ("hushwood-1280", "hushwood-battle-1280.jpg"),
     ("grove-1280", "grove-battle-1280.jpg"),
     ("hushwood-elite-1280", "hushwood-elite-wolf-1280.jpg"),
-    ("hushwood-1920", "hushwood-battle-1920.jpg"),
+    ("fen-1280", "fen-battle-1280.jpg"),
+    ("hushwood-1920","hushwood-battle-1920.jpg"),
     ("grove-1920", "grove-battle-1920.jpg"),
 ]:
     save(Image.open(f"{src}/{n}.png"), name)

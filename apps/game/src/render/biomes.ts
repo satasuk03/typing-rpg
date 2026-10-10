@@ -4,7 +4,7 @@
  */
 import { lerp, type Vec3Tuple } from "./util";
 
-export type BiomeId = "forest" | "ruins" | "cave" | "boss" | "hushwood" | "grove";
+export type BiomeId = "forest" | "ruins" | "cave" | "boss" | "hushwood" | "fen" | "grove";
 
 /** Ambient particle flavours the `AmbientDirector` knows. */
 export type AmbientKind = "pollen" | "embers" | "none" | "wisps" | "fireflies" | "leaves";
@@ -184,6 +184,36 @@ const hushwood: BiomeMood = {
   ambient: "wisps",
 };
 
+/** Fen (the Reedmaze): a last dusk light low behind a fog bank; green-gold mids, teal shadows, black-green still water. */
+const fen: BiomeMood = {
+  amb: [0.19, 0.21, 0.25],
+  gamb: [0.06, 0.065, 0.04],
+  sunCol: [1.1, 0.8, 0.4],
+  sunDir: [0.62, 0.36, -0.5],
+  fogCol: [0.2, 0.23, 0.13],
+  fog: [0.022, 9, 0.5],
+  scatter: 0.9,
+  exposure: 1.12,
+  lift: [0.01, 0.014, 0.014],
+  gamma: [1, 1, 1],
+  gain: [1.04, 1.0, 0.86],
+  sat: 1.16,
+  contrast: 1.13,
+  sh: [0.0, 0.02, 0.035],
+  hi: [0.05, 0.032, 0.0],
+  bloom: 0.55,
+  thr: 0.95,
+  vig: 0.5,
+  rangeFar: 12,
+  tilt: 0.24,
+  clear: [0.2, 0.23, 0.13],
+  bars: 0,
+  caveK: 0.3,
+  rays: 1.0,
+  fill: 0.55,
+  ambient: "fireflies",
+};
+
 /** Grove (the Willow's Heart, boss): the hushwood split-tone one notch darker. Bars only on the intro. */
 const grove: BiomeMood = {
   amb: [0.08, 0.11, 0.2],
@@ -220,6 +250,7 @@ export const BIOMES: Readonly<Record<BiomeId, BiomeMood>> = {
   cave,
   boss,
   hushwood,
+  fen,
   grove,
 };
 export const BIOME_IDS: readonly BiomeId[] = [
@@ -228,6 +259,7 @@ export const BIOME_IDS: readonly BiomeId[] = [
   "cave",
   "boss",
   "hushwood",
+  "fen",
   "grove",
 ];
 

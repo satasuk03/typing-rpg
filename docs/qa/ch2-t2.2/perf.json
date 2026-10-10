@@ -1,0 +1,14 @@
+{
+  "method": "docs/qa/ch2-t2.2/capture.mjs bench (300 frames, uncapped, readPixels sync per frame), 1920x1080, ?scene=render-test&biome=fen, dev diorama (no HUD / sim / combat VFX), real GPU: ANGLE Metal, Apple M4 Pro",
+  "mirroredMeshes": { "registered": 79, "visibleTier0": 60, "visibleTier1": 57, "visibleTier2": 0, "cap": 60 },
+  "unthrottled": {
+    "tier0": { "avgMs": 4.29, "p95Ms": 5.5, "maxMs": 13.2 },
+    "tier1": { "avgMs": 2.97, "p95Ms": 4.0, "maxMs": 6.9 },
+    "tier2": { "avgMs": 1.99, "p95Ms": 2.7, "maxMs": 6.7 }
+  },
+  "cpuThrottle4x": {
+    "tier0": { "avgMs": 5.69, "p95Ms": 6.9, "fpsAvg": 175.9, "fpsP95": 144.9 },
+    "tier2": { "avgMs": 3.23, "p95Ms": 6.2, "fpsAvg": 309.4, "fpsP95": 161.3 }
+  },
+  "gates": { "tier0P95LeMs": 16.8, "tier2FpsAt4xGe": 45 }
+}

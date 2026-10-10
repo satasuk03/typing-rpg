@@ -1,5 +1,5 @@
 // pnpm balance [--chapter N] [--seeds N] [--workers N] [--no-noise] [--persona id,id] [--level ch1-l05,...] [--json path] [--md path]
-//              [--kit starter|bare] [--whatif key=value,...] [--strict]
+//              [--gear par|par-N|armor+N|weapon+N|all+N] [--kit starter|bare] [--whatif key=value,...] [--strict]
 // Runs the economy_sim personas through Chapter 1 on the real sim and prints the plan §9 verdicts, the parity with the
 // Python model, and per-level tables. Exit code 1 when a §9 or parity cell FAILs (PASS(±15%) passes; a documented
 // structural miss, FAIL*, only fails with --strict).
@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gearLabel, parseGear } from "./gear.ts";
 import { PERSONAS, type PersonaId } from "./personas.ts";
 import { buildReport, markdown } from "./report.ts";
 import { chapterLevels, type Job, runJobs } from "./runner.ts";
@@ -27,11 +28,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const jsonPath = resolve(opt("--json") ?? resolve(here, `../out/balance-ch${chapter}.json`));
 const mdPath = opt("--md");
 const whatif = parseWhatIf(opt("--whatif"));
+const gear = gearLabel(parseGear(opt("--gear")));
 const kit = (opt("--kit") ?? "starter") as "starter" | "bare";
 
 const jobs: Job[] = [];
 for (const persona of personas)
-  for (const levelId of levels) jobs.push({ persona, levelId, seeds, noise, whatif, kit });
+  for (const levelId of levels) jobs.push({ persona, levelId, seeds, noise, whatif, kit, gear });
 
 const t0 = process.hrtime.bigint();
 const results = await runJobs(jobs, workers);
@@ -42,6 +44,7 @@ const rep = buildReport(results, {
   workers,
   seconds,
   whatif,
+  ...(gear === "par" ? {} : { gear }),
   ...(chapter === 1 ? {} : { chapter }),
 });
 const md = markdown(rep);

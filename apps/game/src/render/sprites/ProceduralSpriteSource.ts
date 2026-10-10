@@ -177,7 +177,14 @@ export class ProceduralSpriteSource implements SpriteSource {
   }
 
   backdrop(kind: BackdropKind): HTMLCanvasElement {
-    if (kind === "skyNight" || kind === "mountainsNight" || kind === "treelineNight") {
+    if (
+      kind === "skyNight" ||
+      kind === "mountainsNight" ||
+      kind === "treelineNight" ||
+      kind === "skyDusk" ||
+      kind === "mountainsDusk" ||
+      kind === "treelineDusk"
+    ) {
       return ch2Backdrop(kind);
     }
     this.art ??= buildProceduralArt();

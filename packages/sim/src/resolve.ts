@@ -26,9 +26,12 @@ import type {
 
 const ticks = (s: number): number => Math.round(s * TICK_HZ);
 
+// v2.0: attackPowerBp / elite are ABSENT unless the ref sets them (Ch1 hashes must not change, §13.1).
 const resolveRef = (r: EnemyRef): ResolvedEnemyRef => ({
   enemyId: r.enemy,
   gimmick: r.gimmick ?? null,
+  ...(r.attackPower !== undefined ? { attackPowerBp: bp(r.attackPower) } : {}),
+  ...(r.elite === true ? { elite: true as const } : {}),
 });
 
 const resolveEnemy = (d: EnemyDef): ResolvedEnemy => ({
@@ -41,6 +44,16 @@ const resolveEnemy = (d: EnemyDef): ResolvedEnemy => ({
   shield: d.shield,
   hpWeightBp: bp(d.hpWeight),
   hitWeightBp: bp(d.hitWeight),
+  ...(d.heal !== undefined
+    ? {
+        heal: {
+          everyTicks: ticks(d.heal.everyS),
+          fracBp: bp(d.heal.frac),
+          maxTargets: d.heal.maxTargets,
+          maxHeals: d.heal.maxHeals,
+        },
+      }
+    : {}),
 });
 
 function resolveBoss(b: BossDef, levelGruntHitM: number | null): ResolvedBoss {
