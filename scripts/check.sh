@@ -33,7 +33,13 @@ pnpm -s --filter @hd2d/sim test:parity
 
 failed="hud readability"; step "HUD readability sweep (readability + guard-leak + ch2 HUD specs, Chromium, ~15 s)"
 # Catches pop-over-letter / plate-overlap regressions that unit tests miss. Own dev-server port: set PW_PORT to override.
-(cd apps/game && HUD_NO_SHOTS=1 PW_PORT="${PW_PORT:-5199}" ./node_modules/.bin/playwright test tests/hud/readability.spec.ts tests/hud/guardLeakHud.spec.ts tests/hud/ch2Hud.spec.ts)
+hud_port="${PW_PORT:-5199}"
+# Playwright reuses whatever already listens on the port, which once silently tested another project's dev server.
+if lsof -nP -iTCP:"$hud_port" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "port $hud_port is already in use (a stale or foreign dev server?); rerun with PW_PORT=<free port>" >&2
+  false
+fi
+(cd apps/game && HUD_NO_SHOTS=1 PW_PORT="$hud_port" ./node_modules/.bin/playwright test tests/hud/readability.spec.ts tests/hud/guardLeakHud.spec.ts tests/hud/ch2Hud.spec.ts)
 
 failed="bot quick"; step "headless bot gate (Ch1 + Ch2: 20 levels x 3 personas x 5 seeds, ~3 s)"
 pnpm -s bot --quick

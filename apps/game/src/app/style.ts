@@ -6,6 +6,7 @@ export const APP_CSS = `
   background:radial-gradient(ellipse at 50% 45%,rgba(5,6,10,.35) 0%,rgba(5,6,10,.72) 70%,rgba(5,6,10,.9) 100%)}
 #app-ui .app-screen.title::before{background:linear-gradient(180deg,rgba(5,6,10,.55) 0%,rgba(5,6,10,0) 35%,rgba(5,6,10,0) 55%,rgba(5,6,10,.85) 100%)}
 #app-ui .app-screen.map::before{background:linear-gradient(180deg,rgba(5,6,10,.7) 0%,rgba(5,6,10,.15) 40%,rgba(5,6,10,.55) 100%)}
+#app-ui[data-chapter="2"] .app-screen.map::before{background:linear-gradient(180deg,rgba(4,6,12,.74) 0%,rgba(4,6,12,.3) 40%,rgba(4,6,12,.6) 100%)}
 .app-head{display:flex;align-items:flex-end;gap:24px;padding-bottom:10px;margin-bottom:14px;border-bottom:2px solid transparent;
   border-image:linear-gradient(90deg,var(--edge),rgba(184,149,90,0)) 1}
 .app-head>div:first-child{flex:1}
