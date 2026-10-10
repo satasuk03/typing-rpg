@@ -1,5 +1,6 @@
 // pnpm bot [--chapter N] [--quick] [--seeds N] [--workers N] [--gimmicks free|realistic] [--compare-gimmicks]
-// Headless sim gate: every Ch1 level x 3 personas x N seeds. Exit 1 on any failure. --quick = 5 seeds (check.sh).
+// Headless sim gate: every level (Ch1 + Ch2 by default, --chapter 1|2 for one) x 3 personas x N seeds. Exit 1 on any
+// failure. --quick = 5 seeds (check.sh). Each chapter is gated separately (own targets/boss), so Ch1 rows never change.
 import { MAIN_PERSONAS } from "@hd2d/balance";
 import { type GateResult, gimmickDeltas, pct, runGate, table } from "./index.ts";
 
@@ -11,7 +12,8 @@ const opt = (n: string): string | undefined => {
 const quick = args.includes("--quick");
 const seeds = Number(opt("--seeds") ?? (quick ? 5 : 20));
 const workers = opt("--workers") === undefined ? undefined : Number(opt("--workers"));
-const chapter = Number(opt("--chapter") ?? 1);
+const chapterArg = opt("--chapter") ?? "all";
+const chapters = chapterArg === "all" ? [1, 2] : [Number(chapterArg)];
 const gimmicks = (opt("--gimmicks") ?? "free") as "free" | "realistic";
 const compare = args.includes("--compare-gimmicks");
 
@@ -23,18 +25,26 @@ const show = (title: string, g: GateResult, secs: number): void => {
   console.log(table(g.cells, MAIN_PERSONAS));
 };
 
-const t0 = Date.now();
-const g = await runGate({ seeds, workers, gimmicks, chapter });
-show(
-  `bot gate${chapter === 1 ? "" : ` ch${chapter}`} [gimmicks=${gimmicks}${quick ? ", quick" : ""}]`,
-  g,
-  (Date.now() - t0) / 1000,
-);
-let failures = g.failures;
+let failures: string[] = [];
+for (const chapter of chapters) {
+  const t0 = Date.now();
+  const g = await runGate({ seeds, workers, gimmicks, chapter });
+  show(
+    `bot gate${chapter === 1 ? "" : ` ch${chapter}`} [gimmicks=${gimmicks}${quick ? ", quick" : ""}]`,
+    g,
+    (Date.now() - t0) / 1000,
+  );
+  failures = [
+    ...failures,
+    ...g.failures.map((x) => (chapters.length > 1 ? `[ch${chapter}] ${x}` : x)),
+  ];
+}
 
 if (compare) {
   const t1 = Date.now();
   const otherMode = gimmicks === "free" ? "realistic" : "free";
+  const chapter = chapters[0] ?? 1;
+  const g = await runGate({ seeds, workers, gimmicks, chapter });
   const other = await runGate({ seeds, workers, gimmicks: otherMode, chapter });
   const [free, real] = gimmicks === "free" ? [g, other] : [other, g];
   show(`comparison run [gimmicks=${otherMode}]`, other, (Date.now() - t1) / 1000);
