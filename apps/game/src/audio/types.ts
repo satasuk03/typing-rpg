@@ -5,8 +5,16 @@ export type MixerChannel = "master" | BusId;
 export const BUS_IDS: readonly BusId[] = ["sfx", "ui", "ambience", "music"];
 export const MIXER_CHANNELS: readonly MixerChannel[] = ["master", ...BUS_IDS];
 
-export type BiomeName = "forest" | "ruins" | "cave" | "boss";
-export const BIOMES: readonly BiomeName[] = ["forest", "ruins", "cave", "boss"];
+export type BiomeName = "forest" | "ruins" | "cave" | "boss" | "hushwood" | "fen" | "grove";
+export const BIOMES: readonly BiomeName[] = [
+  "forest",
+  "ruins",
+  "cave",
+  "boss",
+  "hushwood",
+  "fen",
+  "grove",
+];
 
 export type MusicState = "walk" | "battle" | "boss" | "victory";
 export const MUSIC_STATES: readonly MusicState[] = ["walk", "battle", "boss", "victory"];
@@ -40,6 +48,26 @@ export const SFX_IDS = [
   "bossIntro",
   "uiClick",
   "uiConfirm",
+  // ---- Chapter 2 (T3.3) ----
+  "wispChime",
+  "shadeHiss",
+  "mothFlutter",
+  "healChime",
+  "toadCroak",
+  "toadSplash",
+  "wolfHowl",
+  "wolfBite",
+  "willowCreak",
+  "whisperLoop",
+  "leafStorm",
+  "leafRustle",
+  "leafPick",
+  "riddleRight",
+  "riddleWrong",
+  "riddleTimeout",
+  "capitalKey",
+  "willowSigh",
+  "chapterSting",
 ] as const;
 export type Sfx = (typeof SFX_IDS)[number];
 
