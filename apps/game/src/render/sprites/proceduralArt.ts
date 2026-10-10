@@ -139,6 +139,83 @@ HERO.hurt = [heroFrame({ arm: 'rest', lean: -1, hurt: 1, lf: -1, lb: 1, cape: 5 
 HERO.win = [heroFrame({ arm: 'up', cape: 3, lf: 1, lb: -1 })];
 ['walk', 'raise', 'slash', 'cast', 'hurt', 'win'].forEach(k => HERO[k].forEach(f => { f.ax = HERO.idle[0].ax; f.ay = HERO.idle[0].ay; }));
 
+// P2.3 cutscene anims (additive: heroFrame and the frames above are untouched; pinned by tests/render/heroAnims.spec.ts).
+// Same canvas, palette, scale, facing and foot line as heroFrame. o: bb body drop, ln lean, cp cape, hdx/hdy head bow, blink,
+// leg: 0 stand | 1 half-kneel | 2 full kneel (front foot stays on the idle front-foot columns, boots end on the shared foot row 31),
+// arm: 'plant' (sword point-down in the ground, both hands on it) | 'low' (sword hanging, point on the ground) | 'reach' (open hand) | 'out' (blade level) | 'draw' (blade rising).
+function heroFrameX(o) {
+  return build(38, 36, (p, e) => {
+    const OX = 5, OY = 3, ln = o.lean || 0, bb = o.bob || 0, cp = o.cape || 0, hx = o.hdx || 0, hy = o.hdy || 0;
+    const L = (x, y, w, h, c) => p(x + OX, y + OY, w, h, c);
+    const G = (x, y, w, h, c) => p(x + OX + ln, y + OY, w, h, c);
+    const U = (x, y, w, h, c) => p(x + OX + ln, y + OY + bb, w, h, c);
+    const UE = (x, y, w, h, c) => e(x + OX + ln, y + OY + bb, w, h, c);
+    const Hd = (x, y, w, h, c) => p(x + OX + ln + hx, y + OY + bb + hy, w, h, c);
+    for (let r = 0; r < 12; r++) { const sx = Math.round(r * cp / 10); U(7 - sx, 13 + r, 4, 1, r > 8 ? HC.capeD : HC.cape); U(7 - sx, 13 + r, 1, 1, HC.capeD); }
+    if (o.leg === 2) {
+      L(3, 30, 8, 1, HC.capeD); // cape pooled on the ground
+      // back leg: knee down, shin laid back along the ground, boot sole up behind
+      L(9, 26, 3, 4, HC.pantD); L(3, 29, 7, 2, HC.pantD); L(2, 28, 2, 3, HC.bootD); L(2, 31, 8, 1, HC.bootD); L(3, 30, 2, 1, HC.boot);
+      // front leg: thigh forward, shin down, flat boot on the idle front-foot columns
+      L(11, 25, 6, 3, HC.pant); L(11, 27, 6, 1, HC.pantD); L(15, 28, 3, 3, HC.pant); L(13, 29, 5, 2, HC.boot); L(13, 31, 5, 1, HC.bootD);
+    } else if (o.leg === 1) {
+      L(10, 22, 3, 5, HC.pantD); L(8, 26, 4, 3, HC.pantD); L(5, 28, 5, 2, HC.pantD); L(4, 28, 2, 3, HC.boot); L(4, 31, 6, 1, HC.bootD);
+      L(12, 22, 4, 3, HC.pant); L(15, 24, 3, 3, HC.pant); L(15, 27, 3, 2, HC.pant); L(13, 29, 5, 2, HC.boot); L(13, 31, 5, 1, HC.bootD);
+    } else {
+      const leg = (x, c, b) => { for (let r = 0; r < 7; r++) L(x, 21 + r, 3, 1, c); L(x, 28, 4, 3, b); L(x, 31, 4, 1, HC.bootD); };
+      leg(10, HC.pantD, HC.bootD); leg(12, HC.pant, HC.boot);
+    }
+    U(9, 14, 2, 5, HC.tunD); U(9, 19, 2, 1, HC.skinD);
+    U(9, 13, 7, 8, HC.tun); U(9, 13, 2, 8, HC.tunD); U(14, 14, 1, 5, HC.tunL);
+    U(8, 20, 9, 2, HC.tun); U(8, 21, 9, 1, HC.tunD);
+    U(9, 19, 7, 1, HC.belt); U(13, 19, 1, 1, HC.gold);
+    U(9, 12, 7, 2, HC.scarf); U(9, 13, 7, 1, HC.scarfD); U(6 - Math.round(cp / 2), 13, 3, 2, HC.scarf); U(5 - Math.round(cp / 2), 14, 2, 1, HC.scarfD);
+    Hd(10, 5, 6, 6, HC.skin); Hd(10, 5, 1, 6, HC.skinD); Hd(11, 11, 4, 1, HC.skinD);
+    Hd(9, 2, 8, 3, HC.hair); Hd(10, 1, 4, 1, HC.hair); Hd(9, 5, 2, 5, HC.hair); Hd(8, 3, 1, 4, HC.hairD); Hd(14, 5, 3, 1, HC.hair); Hd(16, 4, 1, 2, HC.hair); Hd(11, 2, 4, 1, HC.hairL); Hd(12, 1, 1, 1, HC.hairL); Hd(7, 4, 1, 2, HC.hairD);
+    if (o.blink) Hd(14, 8, 2, 1, HC.eye); else { Hd(14, 7, 1, 2, HC.eye); Hd(15, 7, 1, 1, '#ffffff'); }
+    Hd(12, 7, 1, 2, HC.skinD); Hd(16, 8, 1, 1, HC.skin);
+    if (o.arm === 'plant') {
+      // sword planted point-down ahead of the knee, the hand on the pommel, the arm braced
+      U(13, 14, 3, 4, HC.tun); U(13, 14, 1, 4, HC.tunD); U(15, 17, 3, 3, HC.tun); U(16, 19, 2, 2, HC.skin);
+      G(17, 22 + (o.sink || 0), 2, 1, HC.gold); G(17, 21 + (o.sink || 0), 2, 1, HC.hilt); G(16, 23 + (o.sink || 0), 4, 1, HC.gold);
+      for (let y = 24 + (o.sink || 0); y < 32; y++) { G(17, y, 1, 1, HC.steel); G(18, y, 1, 1, HC.steelD); }
+    } else if (o.arm === 'low') {
+      U(14, 14, 2, 4, HC.tun); U(14, 14, 1, 4, HC.tunD); U(15, 18, 2, 2, HC.skin);
+      U(16, 17, 1, 3, HC.hilt); U(15, 16, 1, 1, HC.gold); U(15, 20, 3, 1, HC.gold);
+      for (let i = 0; i < 6; i++) { G(17 + Math.floor(i / 3), 26 + i, 1, 1, HC.steel); G(16 + Math.floor(i / 3), 26 + i, 1, 1, HC.steelD); }
+    } else if (o.arm === 'reach') {
+      const ext = o.ext || 0;
+      U(14, 14, 3, 3, HC.tun); U(14, 14, 3, 1, HC.tunD); U(17, 13, 3 + ext, 2, HC.tun); U(17, 14, 3 + ext, 1, HC.tunD);
+      const hxx = 20 + ext;
+      U(hxx, 12, 3, 4, HC.skin); U(hxx, 15, 3, 1, HC.skinD); // the open palm, facing Nul
+      U(hxx + 3, 12, 2, 1, HC.skin); U(hxx + 3, 14, 2, 1, HC.skin); U(hxx + 2, 16, 2, 1, HC.skinD); U(hxx, 11, 2, 1, HC.skin); // fingers spread, thumb up
+      U(hxx + 3, 13, 1, 1, HC.skinD);
+    } else if (o.arm === 'out' || o.arm === 'draw') {
+      U(14, 13, 4, 2, HC.tun); U(14, 13, 4, 1, HC.tunD); U(18, 13, 2, 2, HC.skin);
+      if (o.arm === 'out') {
+        U(20, 11, 1, 6, HC.gold); U(21, 13, 8, 1, HC.steel); U(21, 14, 7, 1, HC.steelD); U(29, 13, 1, 1, HC.steelD);
+        UE(23, 13, 5, 1, HC.steel); // the edge glints (emissive)
+      } else {
+        U(20, 11, 1, 6, HC.gold);
+        for (let i = 0; i < 8; i++) { const y = 13 - Math.floor(i * 0.5); U(21 + i, y, 1, 1, HC.steel); U(21 + i, y + 1, 1, 1, HC.steelD); }
+      }
+    }
+  });
+}
+HERO.kneel = [
+  heroFrameX({ leg: 1, bob: 3, cape: 4, lean: 1, hdx: 1, hdy: 0, arm: 'low' }),
+  heroFrameX({ leg: 2, bob: 6, cape: 2, lean: 1, hdx: 1, hdy: 1, arm: 'plant' }),
+  heroFrameX({ leg: 2, bob: 6, cape: 1, lean: 1, hdx: 2, hdy: 2, blink: 1, arm: 'plant', sink: 1 }),
+];
+HERO.rise = [
+  heroFrameX({ leg: 2, bob: 6, cape: 1, lean: 1, hdx: 1, hdy: 0, arm: 'plant' }),
+  heroFrameX({ leg: 1, bob: 3, cape: 3, lean: 1, hdx: 0, hdy: 0, arm: 'plant' }),
+  heroFrameX({ leg: 0, bob: 1, cape: 2, hdx: 0, hdy: 0, arm: 'low' }),
+];
+HERO.reach = [heroFrameX({ arm: 'reach', cape: 1 }), heroFrameX({ arm: 'reach', ext: 1, lean: 1, bob: 1, cape: 2 })];
+HERO.swordOut = [heroFrameX({ arm: 'draw', lean: 1, cape: 2 }), heroFrameX({ arm: 'out', lean: 1, cape: 3 })];
+['kneel', 'rise', 'reach', 'swordOut'].forEach(k => HERO[k].forEach(f => { f.ax = HERO.idle[0].ax; f.ay = HERO.idle[0].ay; }));
+
 // ---------------------------------------------------------------- monsters
 const SLIME_ROWS = ['......aaaa......', '....aabbbbaa....', '...abccbbbbba...', '..abccbbbbbbba..', '..abcbbbbbbbba..', '.abbbbbbbbbbbba.', '.abbbbbebbbebba.', '.abbbbbebbbebba.', 'abbbbbbbbbbbbbda', 'abbbbbbbmmbbbdda', 'abbbbbbbbbbbddda', '.adddddddddddda.', '..aaaaaaaaaaaa..'];
 function slimeSet(pal) {

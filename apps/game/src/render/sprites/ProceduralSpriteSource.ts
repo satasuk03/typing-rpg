@@ -48,6 +48,11 @@ export class ProceduralSpriteSource implements SpriteSource {
         cast: H.cast,
         hurt: H.hurt,
         win: H.win,
+        // P2.3 cutscene anims; the stage's cutsceneFrames() picks them up via source.frames("hero", anim)
+        kneel: H.kneel,
+        rise: H.rise,
+        reach: H.reach,
+        swordOut: H.swordOut,
       };
     });
     for (const k of ["slimeG", "slimeP", "bat", "goblin", "goblinR", "golem"] as const) {

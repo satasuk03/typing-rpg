@@ -9,6 +9,7 @@ import {
   NUL_FRAME_COUNT,
   NUL_H,
   NUL_HEIGHT_TX,
+  NUL_PAL,
   NUL_PALETTE_SET,
   NUL_PLATE_Y_M,
   NUL_SCALE,
@@ -273,17 +274,79 @@ describe("Nul sprite (P2.1)", () => {
     }
   });
 
-  it("hem: pale page edge on the strips; glyphs stay beside the cloak and below 12 tx", () => {
+  it("hem: pale page edge on the strips; glyphs stay beside the cloak and at most 10 tx high (F6/F7)", () => {
     const f = idle0({ outline: false, flip: false });
     let pale = 0, glyphs = 0;
     for (let y = 0; y < f.h; y++)
       for (let x = 0; x < f.w; x++) {
         const i = y * f.w + x, id = f.part[i];
         if (id === PART.cloak && f.col[i * 4] === 122 && f.col[i * 4 + 1] === 118) pale++;
-        if (id === PART.glyph) { glyphs++; expect(88 - y).toBeLessThanOrEqual(14); }
+        if (id === PART.glyph) glyphs++;
       }
     expect(pale).toBeGreaterThan(5);
     expect(glyphs).toBeGreaterThan(5);
+    // every frame of the anims that sit on the ground (intro and rise keep their lift): glyph rows <= 10.5 tx above the foot line
+    for (const [k, poses] of Object.entries(NUL_ANIMS)) {
+      if (k === "atk" || k === "intro" || k === "rise") continue;
+      poses.forEach((p: never, n: number) => {
+        const g = renderNulRaw(p, { outline: false, flip: false });
+        for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) if (g.part[y * g.w + x] === PART.glyph) expect(88 - y - 0.5, `${k}[${n}] glyph height (row centre above the foot line)`).toBeLessThanOrEqual(10.5);
+      });
+    }
+  });
+
+  it("hem glyphs never sit over the body: no glyph px has body on both sides within 3 px (F6)", () => {
+    for (const [k, poses] of Object.entries(NUL_ANIMS)) {
+      if (k === "atk") continue;
+      poses.forEach((p: never, n: number) => {
+        const g = renderNulRaw(p, { outline: false, flip: false });
+        const body = (x: number, y: number): boolean => { const id = g.part[y * g.w + x] ?? 0; return x >= 0 && x < g.w && id !== 0 && id !== PART.glyph; };
+        for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+          if (g.part[y * g.w + x] !== PART.glyph) continue;
+          let l = false, r = false;
+          for (let d = 1; d <= 3; d++) { if (body(x - d, y)) l = true; if (body(x + d, y)) r = true; }
+          expect(l && r, `${k}[${n}] glyph at ${x},${y} is over the body`).toBe(false);
+        }
+      });
+    }
+  });
+
+  it("cloak folds read (F2): 12-18% of cloak px at ramp index >= 4 in idle[0]; sprite luma stays >= 10:1; forehead : cloak >= 6.5", () => {
+    const f = idle0({ outline: false, flip: false });
+    const idx = new Map<string, number>(NUL_PAL.INK.map((c: number[], i: number): [string, number] => [`${c[0]},${c[1]},${c[2]}`, i]));
+    let n = 0, hi = 0, ms = 0, mn = 0, cs = 0, cn = 0;
+    for (let i = 0; i < f.w * f.h; i++) {
+      if (f.part[i] === PART.cloak) {
+        const k = idx.get(`${f.col[i * 4]},${f.col[i * 4 + 1]},${f.col[i * 4 + 2]}`);
+        if (k === undefined) continue; // pale hem strip edge
+        n++; if (k >= 4) hi++;
+        cs += pixLum(f, i); cn++;
+      }
+      if (f.part[i] === PART.mask) { ms += pixLum(f, i); mn++; }
+    }
+    expect(hi / n).toBeGreaterThanOrEqual(0.12);
+    expect(hi / n).toBeLessThanOrEqual(0.18);
+    expect((ms / mn + 0.05) / (cs / cn + 0.05)).toBeGreaterThanOrEqual(10);
+  });
+
+  it("intro[3] eye slits stay two separate slits: the 2 gap px on the eye row carry no glow (F4)", () => {
+    const f = renderNulRaw(NUL_ANIMS.intro[3], { outline: false, flip: false });
+    const eyes: number[] = [];
+    let row = -1;
+    for (let i = 0; i < f.w * f.h; i++) if (f.part[i] === PART.eye) { eyes.push(i % f.w); row = Math.floor(i / f.w); }
+    expect(eyes.length).toBe(5);
+    eyes.sort((a, b) => a - b);
+    const gap = [] as number[];
+    for (let x = (eyes[1] as number) + 1; x < (eyes[2] as number); x++) gap.push(x);
+    expect(gap.length).toBe(2);
+    for (const x of gap) for (let c = 0; c < 4; c++) expect(f.glw[(row * f.w + x) * 4 + c]).toBe(0);
+  });
+
+  it("outline ring carries a valid flat normal, not the 0,0,0,0 that decodes to (-1,-1,-1) (F8)", () => {
+    const f = idle0();
+    let ring = 0;
+    for (let i = 0; i < f.w * f.h; i++) if (f.col[i * 4 + 3] && f.part[i] === 0) { ring++; expect([f.nrm[i * 4], f.nrm[i * 4 + 1], f.nrm[i * 4 + 2], f.nrm[i * 4 + 3]]).toEqual([127, 128, 255, 255]); } // flipped by default: 255 - 128
+    expect(ring).toBeGreaterThan(100);
   });
 
   it("ward variant is a rim only: it changes only the 1 px outline ring", () => {
@@ -302,6 +365,6 @@ describe("Nul sprite (P2.1)", () => {
   it("generates all 22 frames quickly (cold)", () => {
     const t0 = performance.now();
     for (const [k, poses] of Object.entries(NUL_ANIMS)) if (k !== "atk") for (const p of poses) renderNulRaw(p);
-    expect(performance.now() - t0).toBeLessThan(500);
+    expect(performance.now() - t0).toBeLessThan(60);
   });
 });
