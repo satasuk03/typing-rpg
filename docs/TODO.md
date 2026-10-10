@@ -46,5 +46,8 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
   - Cobweb veil and waystone variants are still to do.
 - **Ch1 flipped-normal fix (proposal).** Mirrored Ch1 props are lit from the wrong side. Negate `nn.x` for mirrored meshes. The effect is subtle in daylight. This changes the Ch1 look, so it needs a before/after (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
+## Tech debt
+- `tools/balance/src/gear.ts` copies the sim's upgrade-step rule and the `guardLeakBp` formula, because the sim exports neither. Export them from `packages/sim` and have the tool import them, so they can't drift.
+
 ## Next big step
 - Chapter 2 content and systems, per `docs/IMPLEMENTATION_PLAN.md` and the brainstorm docs.
