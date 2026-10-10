@@ -37,7 +37,7 @@ async function until(
       (src) => {
         const p = window.__play;
         // biome-ignore lint/security/noGlobalEval: test-only predicate shipped as source
-        return p ? (0, eval)(`(${src})`)(p) : false;
+        return p ? globalThis.eval(`(${src})`)(p) : false;
       },
       cond.toString(),
       { timeout, polling: "raf" },

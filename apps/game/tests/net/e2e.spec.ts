@@ -2,7 +2,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { blankSave } from "../../../../packages/shared/tests/saveGen.ts";
 
-const API = "http://localhost:8793";
+const API = `http://localhost:${process.env.NET_API_PORT ?? 8793}`;
 const URL = `/?scene=trial&api=${encodeURIComponent(API)}`;
 
 test.describe.configure({ mode: "parallel" });

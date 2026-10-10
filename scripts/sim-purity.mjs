@@ -94,9 +94,13 @@ export function stripComments(src) {
       let inClass = false;
       while (j < n && src[j] !== "\n") {
         if (src[j] === "\\") j += 2;
-        else if (src[j] === "[") (inClass = true), j++;
-        else if (src[j] === "]") (inClass = false), j++;
-        else if (src[j] === "/" && !inClass) break;
+        else if (src[j] === "[") {
+          inClass = true;
+          j++;
+        } else if (src[j] === "]") {
+          inClass = false;
+          j++;
+        } else if (src[j] === "/" && !inClass) break;
         else j++;
       }
       out += src.slice(i, j + 1);

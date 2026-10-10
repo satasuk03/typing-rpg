@@ -224,7 +224,6 @@ test("L10 fight: boss Break / phase frames stay readable", async ({ page }) => {
                     `-${(st.clip - s2.clip).toFixed(2)} kind${o.material?.uniforms?.uKind?.value} ord${o.renderOrder} i${o.material?.uniforms?.uI?.value} ${o.material?.type} y${o.position.y.toFixed(1)} sc${o.scale.x.toFixed(1)}`,
                   );
               }
-              // biome-ignore lint/suspicious/noExplicitAny: test-only global
               console.log(`W4B ${q.ev} ${q.dt} ${JSON.stringify(res)}`);
             }
           }

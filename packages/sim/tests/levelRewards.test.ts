@@ -19,7 +19,7 @@ import {
 } from "../src/index.ts";
 import { starterLoadout } from "./bot/fixtures.ts";
 import { runBot } from "./bot/refBot.ts";
-import { Driver, mkDef, mkLoadout, mkOptions, scriptedSession } from "./typingHarness.ts";
+import { mkDef, mkLoadout, mkOptions, scriptedSession } from "./typingHarness.ts";
 
 const encounterCount = (def: ReturnType<typeof mkDef>): number =>
   def.segments.filter((s) => s.kind !== "walk").length;

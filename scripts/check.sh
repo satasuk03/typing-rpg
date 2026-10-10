@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quality gate: typecheck -> lint -> unit tests -> content validate -> sim determinism -> sim purity grep -> Node/Chromium parity.
+# Quality gate: typecheck -> lint -> unit tests -> content validate -> sim determinism -> sim purity grep -> Node/Chromium parity -> HUD readability -> bot gate.
 # No e2e (run `pnpm test:e2e` separately).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -30,6 +30,10 @@ echo "sim purity ok"
 
 failed="sim parity"; step "sim Node vs Chromium parity"
 pnpm -s --filter @hd2d/sim test:parity
+
+failed="hud readability"; step "HUD readability sweep (readability + guard-leak specs, Chromium, ~15 s)"
+# Catches pop-over-letter / plate-overlap regressions that unit tests miss. Own dev-server port: set PW_PORT to override.
+(cd apps/game && PW_PORT="${PW_PORT:-5199}" ./node_modules/.bin/playwright test tests/hud/readability.spec.ts tests/hud/guardLeakHud.spec.ts)
 
 failed="bot quick"; step "headless bot gate (3 personas x 10 levels x 5 seeds, ~3 s)"
 pnpm -s bot --quick

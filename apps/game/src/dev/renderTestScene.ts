@@ -20,7 +20,7 @@ import {
 import { makeRng } from "../render/util";
 
 const BATTLE_OFF = 5.6;
-const ENCX = [26, 70, 142, 190];
+const ENCX = [26, 70, 142, 190] as const;
 
 export interface RenderStats {
   tier: QualityTier;
@@ -184,7 +184,7 @@ function buildWorld(world: RenderWorld): void {
       flicker: false,
     });
   }
-  world.addRuneCircle(ENCX[3]! + 8.3, -1.0, 6.4, 1.0);
+  world.addRuneCircle(ENCX[3] + 8.3, -1.0, 6.4, 1.0);
 
   // foreground framing (separately blurred layer)
   const centers = ENCX.map((x) => x + BATTLE_OFF);
@@ -281,7 +281,9 @@ function setupComposition(world: RenderWorld, biome: BiomeId): Comp {
   };
   const hero = (x: number, anim: string, idx: number): void => {
     const a = world.addActor("hero", anim, heroOpts);
-    a.setFrame(world.source.frames("hero", anim)[idx] ?? world.source.frames("hero", anim)[0]!);
+    const frames = world.source.frames("hero", anim);
+    const frame = frames[idx] ?? frames[0];
+    if (frame) a.setFrame(frame);
     a.place(x, 0, 0.25);
     world.shadowFor(a, x, 0.25);
   };
@@ -294,7 +296,7 @@ function setupComposition(world: RenderWorld, biome: BiomeId): Comp {
     return { biome, pose: { ...WALK_POSE, x: 130 + 3.2 } };
   }
   if (biome === "ruins") {
-    const hx = ENCX[1]!;
+    const hx = ENCX[1];
     hero(hx, "idle", 0);
     const bx = hx + BATTLE_OFF;
     const slot = (s: number): number => hx + s;
@@ -304,7 +306,7 @@ function setupComposition(world: RenderWorld, biome: BiomeId): Comp {
     return { biome, pose: { ...BATTLE_POSE, x: bx } };
   }
   // boss intro close-up
-  const hx = ENCX[3]!;
+  const hx = ENCX[3];
   const bossX = hx + 8.3;
   monster("golem", "idle", bossX, 0, -1.0, 1.6, 1.6 * 1.1);
   return { biome, pose: { ...BOSS_INTRO_POSE, x: bossX - 0.4 } };

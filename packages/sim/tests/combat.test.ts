@@ -50,6 +50,12 @@ function lvl(
 ): ResolvedLevel {
   return mkSimpleDef(ids, { current: pool }, { enemies: ENEMY_SET, ...over }, 1, hp);
 }
+const encOf = (d: ReturnType<typeof drive>) => {
+  const e = d.state.enc;
+  if (!e) throw new Error("no encounter");
+  return e;
+};
+
 const drive = (
   def: ResolvedLevel,
   opts: Parameters<typeof mkOptions>[0] = {},
@@ -256,7 +262,7 @@ describe("auto-attack (doc 01 §2, interfaces §3.3 D10 / D12)", () => {
     pend.targetId = a.id;
     a.hpM = 0;
     a.alive = false;
-    d.state.enc!.focusEnemyId = b.id;
+    encOf(d).focusEnemyId = b.id;
     const hs = hit(d, d.step(4));
     expect(hs[0]?.targetId).toBe(b.id);
   });
@@ -272,7 +278,7 @@ describe("auto-attack (doc 01 §2, interfaces §3.3 D10 / D12)", () => {
 
   test("overflow carries over (cap 30) and a second attack can follow", () => {
     const d = drive(lvl(["plain"]), { difficulty: "zen" });
-    d.state.enc!.atbM = 95_000;
+    encOf(d).atbM = 95_000;
     const ev = word(d);
     const filled = d.ofType("AtbFilled", ev)[0];
     expect(filled?.overflowM).toBeLessThanOrEqual(K.ATB_OVERFLOW_CAP_M);
@@ -372,7 +378,7 @@ describe("enemy attacks (doc 01 §1.6-1.7)", () => {
     arm(d, e, 300);
     const g = d.until("GuardWordShown");
     d.type(g.text);
-    const atb = d.state.enc!.atbM;
+    const atb = encOf(d).atbM;
     const hpBefore = e.hpM;
     const from = d.all.length;
     impact(d, e);
@@ -392,7 +398,7 @@ describe("enemy attacks (doc 01 §1.6-1.7)", () => {
     expect(e.hpM).toBe(hpBefore - 5000);
     expect(d.ofType("HeroDamaged", ev)).toHaveLength(0);
     expect(d.state.run.heroHpM).toBe(100_000);
-    expect(d.state.enc!.atbM - atb).toBe(K.PARRY_ATB_M);
+    expect(encOf(d).atbM - atb).toBe(K.PARRY_ATB_M);
     expect(d.state.run.stats.perfectParries).toBe(1);
     expect(d.state.run.stats.hitsTaken).toBe(0); // a parried hit deals no HP damage: still untouched
   });

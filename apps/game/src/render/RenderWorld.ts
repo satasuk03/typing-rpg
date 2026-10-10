@@ -134,7 +134,6 @@ export class RenderWorld {
   private readonly torchColors = new Set<readonly number[]>([TORCH_COLOR]);
   private readonly rays: GodRay[] = [];
   private readonly followCam: Object3D[] = [];
-  private readonly owned: { dispose(): void }[] = [];
   private readonly clear = new Color();
   private readonly tmp = new Vector3();
   private readonly hooks: RendererHooks;
@@ -364,11 +363,6 @@ export class RenderWorld {
   }
 
   // ---------------------------------------------------------------- scene building helpers (used by T2.2 and the dev scene)
-
-  private own<T extends { dispose(): void }>(o: T): T {
-    this.owned.push(o);
-    return o;
-  }
 
   /** Add a lit static prop (tree, pillar...) by SpriteSource key. Returns the mesh. */
   addProp(key: string, x: number, y: number, z: number, o: PropOptions = {}): Mesh {
@@ -631,8 +625,8 @@ export class RenderWorld {
 
     for (const o of this.followCam) o.position.x = x;
     for (const r of this.rays) {
-      (r.mesh.material as ShaderMaterial).uniforms.uI!.value =
-        r.base * m.rays * (0.8 + 0.2 * Math.sin(this.time * 0.5 + r.x));
+      const ui = (r.mesh.material as ShaderMaterial).uniforms.uI;
+      if (ui) ui.value = r.base * m.rays * (0.8 + 0.2 * Math.sin(this.time * 0.5 + r.x));
     }
     if (this.fillLight) {
       this.fillLight.x = x - 1;
@@ -645,8 +639,12 @@ export class RenderWorld {
     for (const f of this.flames) {
       const d = Math.abs(f.ref.x - x);
       f.glow.visible = d < 20 && post.fx;
-      (f.glow.material as ShaderMaterial).uniforms.uI!.value =
-        0.7 + 0.15 * Math.sin(this.time * 11 + f.ref.x) + 0.1 * Math.sin(this.time * 23 + f.ref.x);
+      const ui = (f.glow.material as ShaderMaterial).uniforms.uI;
+      if (ui)
+        ui.value =
+          0.7 +
+          0.15 * Math.sin(this.time * 11 + f.ref.x) +
+          0.1 * Math.sin(this.time * 23 + f.ref.x);
     }
 
     // heat haze above the nearest background torch
@@ -709,8 +707,6 @@ export class RenderWorld {
     this.resizeObs?.disconnect();
     this.ambientPa?.dispose();
     this.ambientPb?.dispose();
-    for (const o of this.owned) o.dispose();
-    this.owned.length = 0;
     const disposeTree = (root: Scene): void => {
       root.traverse((obj) => {
         const mesh = obj as Mesh;

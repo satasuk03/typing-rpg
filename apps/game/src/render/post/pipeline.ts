@@ -2,6 +2,7 @@ import {
   type Color,
   DepthTexture,
   HalfFloatType,
+  type IUniform,
   LinearFilter,
   Mesh,
   OrthographicCamera as OrthoCam,
@@ -336,18 +337,18 @@ export class PostPipeline {
       this.dofU.tDep.value = t.scene.depthTexture;
       this.dofU.uTexel.value.set(1 / w, 1 / h);
       this.runPass(this.dofMat, t.dof);
-      this.copyDownMat.uniforms.tSrc!.value = t.fg.texture;
-      (this.copyDownMat.uniforms.uTexel!.value as Vector2).set(1 / w, 1 / h);
+      uni(this.copyDownMat.uniforms, "tSrc").value = t.fg.texture;
+      (uni(this.copyDownMat.uniforms, "uTexel").value as Vector2).set(1 / w, 1 / h);
       this.runPass(this.copyDownMat, t.fq1);
       const qw = t.fq1.width;
       const qh = t.fq1.height;
       for (let i = 0; i < q.fgBlurPasses; i++) {
         const s = 1.0 + i * 1.2;
-        this.blurMat.uniforms.tSrc!.value = t.fq1.texture;
-        (this.blurMat.uniforms.uDir!.value as Vector2).set(s / qw, 0);
+        uni(this.blurMat.uniforms, "tSrc").value = t.fq1.texture;
+        (uni(this.blurMat.uniforms, "uDir").value as Vector2).set(s / qw, 0);
         this.runPass(this.blurMat, t.fq2);
-        this.blurMat.uniforms.tSrc!.value = t.fq2.texture;
-        (this.blurMat.uniforms.uDir!.value as Vector2).set(0, s / qh);
+        uni(this.blurMat.uniforms, "tSrc").value = t.fq2.texture;
+        (uni(this.blurMat.uniforms, "uDir").value as Vector2).set(0, s / qh);
         this.runPass(this.blurMat, t.fq1);
       }
       fgTex = t.fq1.texture;
@@ -355,10 +356,10 @@ export class PostPipeline {
 
     // 3. combine
     const cu = this.combMat.uniforms;
-    cu.tScene!.value = t.scene.texture;
-    cu.tDof!.value = t.dof.texture;
-    cu.tFg!.value = fgTex;
-    cu.uDofOn!.value = this.fx ? 1 : 0;
+    uni(cu, "tScene").value = t.scene.texture;
+    uni(cu, "tDof").value = t.dof.texture;
+    uni(cu, "tFg").value = fgTex;
+    uni(cu, "uDofOn").value = this.fx ? 1 : 0;
     this.runPass(this.combMat, t.comb);
 
     // 4. bloom
@@ -367,22 +368,25 @@ export class PostPipeline {
       const n = Math.min(q.bloomLevels, t.bd.length);
       this.preU.tSrc.value = t.comb.texture;
       this.preU.uTexel.value.set(1 / w, 1 / h);
-      this.runPass(this.preMat, t.bd[0]!);
+      this.runPass(this.preMat, at(t.bd, 0));
       for (let i = 1; i < n; i++) {
-        const prev = t.bd[i - 1]!;
-        this.copyDownMat.uniforms.tSrc!.value = prev.texture;
-        (this.copyDownMat.uniforms.uTexel!.value as Vector2).set(1 / prev.width, 1 / prev.height);
-        this.runPass(this.copyDownMat, t.bd[i]!);
+        const prev = at(t.bd, i - 1);
+        uni(this.copyDownMat.uniforms, "tSrc").value = prev.texture;
+        (uni(this.copyDownMat.uniforms, "uTexel").value as Vector2).set(
+          1 / prev.width,
+          1 / prev.height,
+        );
+        this.runPass(this.copyDownMat, at(t.bd, i));
       }
-      let low = t.bd[n - 1]!;
+      let low = at(t.bd, n - 1);
       for (let i = n - 2; i >= 0; i--) {
         const uu = this.upMat.uniforms;
-        uu.tLow!.value = low.texture;
-        uu.tHigh!.value = t.bd[i]!.texture;
-        (uu.uTexel!.value as Vector2).set(1 / low.width, 1 / low.height);
-        uu.uMix!.value = this.bloomMix;
-        this.runPass(this.upMat, t.bu[i]!);
-        low = t.bu[i]!;
+        uni(uu, "tLow").value = low.texture;
+        uni(uu, "tHigh").value = at(t.bd, i).texture;
+        (uni(uu, "uTexel").value as Vector2).set(1 / low.width, 1 / low.height);
+        uni(uu, "uMix").value = this.bloomMix;
+        this.runPass(this.upMat, at(t.bu, i));
+        low = at(t.bu, i);
       }
       bloomTex = low.texture;
     }
@@ -450,4 +454,18 @@ export class PostPipeline {
   get internalSize(): { w: number; h: number } {
     return { w: this.t?.w ?? 0, h: this.t?.h ?? 0 };
   }
+}
+
+/** Look up a uniform known to exist on a pass material (throws if the shader lacks it). */
+function uni(uniforms: Record<string, IUniform>, name: string): IUniform {
+  const u = uniforms[name];
+  if (u === undefined) throw new Error(`missing uniform ${name}`);
+  return u;
+}
+
+/** Index into a render-target chain whose length is fixed at construction. */
+function at<T>(arr: readonly T[], i: number): T {
+  const v = arr[i];
+  if (v === undefined) throw new Error(`missing chain entry ${i}`);
+  return v;
 }

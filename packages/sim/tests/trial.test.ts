@@ -20,7 +20,6 @@ import {
   SimError,
   type SimInput,
   stepTrial,
-  tickStartMs,
   trialClaimMismatches,
   trialScore,
 } from "../src/index.ts";
@@ -47,8 +46,6 @@ const ev = (state: ReturnType<typeof createTrial>, inputs: SimInput[]) => {
   }
   return out;
 };
-const toLog = (inputs: SimInput[]): LoggedInput[] =>
-  inputs.map((i) => ({ ms: i.tick === 0 ? 0 : tickStartMs(i.tick), input: i }));
 
 describe("Trial rules", () => {
   test("the clock starts on the first key: not started before it, TrialStarted fires once on it", () => {
