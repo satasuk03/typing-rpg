@@ -2,8 +2,16 @@ import { describe, expect, it } from "vitest";
 import { BIOME_IDS, BIOMES, blendMood, isBiomeId, validateMood } from "./biomes";
 
 describe("biome presets", () => {
-  it("define the Ch1 biomes plus hushwood and grove", () => {
-    expect([...BIOME_IDS].sort()).toEqual(["boss", "cave", "forest", "grove", "hushwood", "ruins"]);
+  it("define the Ch1 biomes plus hushwood, fen and grove", () => {
+    expect([...BIOME_IDS].sort()).toEqual([
+      "boss",
+      "cave",
+      "fen",
+      "forest",
+      "grove",
+      "hushwood",
+      "ruins",
+    ]);
     for (const id of BIOME_IDS) expect(BIOMES[id]).toBeDefined();
   });
 
@@ -31,6 +39,14 @@ describe("biome presets", () => {
     }
     expect(BIOMES.hushwood.bars).toBe(0);
     expect(BIOMES.grove.ambient).toBe("leaves");
+  });
+
+  it("keeps the fen warm-lit from low behind, green-gold, with fireflies", () => {
+    const m = BIOMES.fen;
+    expect(m.sunCol[0]).toBeGreaterThan(m.sunCol[2]);
+    expect(m.sunDir[1]).toBeLessThan(0.5);
+    expect(m.gain[2]).toBeLessThan(1);
+    expect(m.ambient).toBe("fireflies");
   });
 
   it("rejects broken presets", () => {

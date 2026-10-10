@@ -44,6 +44,16 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
   - The hero's fill/rim should be set per mood. The hushwood hero silhouette scores 0.79, a thin margin.
   - Back-row oaks are very dark.
   - Cobweb veil and waystone variants are still to do.
+- **T2.2 fen + water** (`docs/qa/ch2-t2.2/`):
+  - Firefly blink is still missing: `PARTICLE_FS` is shared with Ch1 and the typing VFX pools and has no per-particle phase.
+  - Layouts: add `fen` to `LAYOUT_BIOMES` and to the ground-kind enum in `render/world/layout.ts` (T2.4). `WorldBuilder` already calls `addGround(.., "fen")`, which builds the water.
+  - Backdrop kinds `skyDusk|mountainsDusk|treelineDusk` need adding to the layout backdrop enum too (T2.4).
+  - The mock's warm gold dusk haze behind the far cypresses is a little greener here; the dusk backdrop tint wants a pass.
+  - Reflections of far cypresses and reeds are mostly hidden by fog and reeds in the battle framing; tier 0 vs 1 differ only slightly. A second pool visible between the reeds would show them off.
+  - Lily pads are a flat decal: no sway and no flower variants. Boardwalk planks have no per-plank warp or moss.
+  - Cypress and reed sprites are the mock's, with no outline pass; the sunken columns are barely visible.
+  - Hero rim in the fen: the dev scene sets `caveRim` 0.9 (caveK is 0.3). The game layer should set it per mood (hero silhouette 0.79).
+  - The perf figures are for the bare diorama (no HUD, sim or combat VFX). Re-measure on a real fen level once T2.4 lands (T5.3).
 - **Ch1 flipped-normal fix (proposal).** Mirrored Ch1 props are lit from the wrong side. Negate `nn.x` for mirrored meshes. The effect is subtle in daylight. This changes the Ch1 look, so it needs a before/after (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt

@@ -34,6 +34,7 @@ import {
   SpriteResources,
 } from "./materials/sprite";
 import { backdropMaterial, groundMaterial, wallMaterial } from "./materials/terrain";
+import { WaterReflections } from "./materials/waterReflect";
 import { PostPipeline } from "./post/pipeline";
 import { AutoQuality, type QualityTier, tierSettings } from "./quality";
 import {
@@ -137,6 +138,10 @@ export class RenderWorld {
   private readonly torchColors = new Set<readonly number[]>([TORCH_COLOR]);
   private readonly rays: GodRay[] = [];
   private readonly followCam: Object3D[] = [];
+  /** Fen still water (created by `addGround(.., "fen")`); null on every other biome. */
+  private water: WaterReflections | null = null;
+  /** Props and actors added so far (non-foreground): the water mirrors them, also ones added before the fen ground. */
+  private readonly reflectable: { mesh: Mesh; actor: boolean }[] = [];
   private readonly clear = new Color();
   private readonly tmp = new Vector3();
   private readonly hooks: RendererHooks;
@@ -336,6 +341,7 @@ export class RenderWorld {
   private applyMood(m: BiomeMood): void {
     this.lights.applyMood(m);
     this.requirePost().applyMood(m);
+    this.water?.setFogColor(m.fogCol);
   }
 
   private applyQuality(): void {
@@ -343,6 +349,7 @@ export class RenderWorld {
     this.requirePost().setQuality(q);
     this.requireRes().castShadows = q.castShadows;
     if (this.ambient) this.ambient.density = q.ambientDensity;
+    this.water?.setTier(q.waterReflect);
     if (this.canvas) this.resizeToCanvas();
   }
 
@@ -377,7 +384,13 @@ export class RenderWorld {
     const m = makePropMesh(this.requireRes(), f, twin ? { ...o, flip: false } : o);
     m.position.set(x, y, z);
     (o.foreground ? this.fgScene : this.scene).add(m);
+    if (!o.foreground) this.noteReflectable(m, false);
     return m;
+  }
+
+  private noteReflectable(mesh: Mesh, actor: boolean): void {
+    this.reflectable.push({ mesh, actor });
+    this.water?.add(mesh, actor);
   }
 
   /** Frame height in world units for a prop key (scaled). */
@@ -395,7 +408,9 @@ export class RenderWorld {
   addActor(key: string, anim = "idle", o: SpriteOptions = {}): SpriteActorType {
     const f = this.source.frames(key, anim)[0];
     if (!f) throw new Error(`no frame for ${key}/${anim}`);
-    return new SpriteActor(this.requireRes(), this.scene, f, o);
+    const a = new SpriteActor(this.requireRes(), this.scene, f, o);
+    if (!o.layer) this.noteReflectable(a.mesh, true);
+    return a;
   }
 
   /**
@@ -532,8 +547,9 @@ export class RenderWorld {
   }
 
   /**
-   * Ground plane. `kind` picks the look: `forest` (default, Ch1 grass/dirt/cave dither), `leaf` (hushwood litter) or
-   * `roots` (grove arena radiating from `arena` = the boss x, z).
+   * Ground plane. `kind` picks the look: `forest` (default, Ch1 grass/dirt/cave dither), `leaf` (hushwood litter), `fen`
+   * (boardwalk over still water: also creates the water surface + reflections) or `roots` (grove arena radiating from
+   * `arena` = the boss x, z).
    */
   addGround(
     width: number,
@@ -555,7 +571,26 @@ export class RenderWorld {
     const m = new Mesh(geo, mat);
     m.position.set(cx, 0, cz);
     this.scene.add(m);
+    if (kind === "fen") this.addWater(width, depth, cx, cz);
     return m;
+  }
+
+  /** The fen's still water: surface over the ground's pool cut-outs, the under-water sky card and the mirrored twins. */
+  private addWater(width: number, depth: number, cx: number, cz: number): void {
+    if (this.water) return;
+    const res = this.requireRes();
+    const w = new WaterReflections(
+      this.scene,
+      this.lighting,
+      res.trackGeo(new PlaneGeometry(width, depth).rotateX(-Math.PI / 2)),
+      res.trackGeo(new PlaneGeometry(1, 1)),
+      [cx, 0, cz],
+      this.mood.fogCol,
+      (m) => res.adopt(m),
+    );
+    w.setTier(tierSettings(this.tier).waterReflect);
+    for (const r of this.reflectable) w.add(r.mesh, r.actor);
+    this.water = w;
   }
 
   /**
@@ -694,6 +729,7 @@ export class RenderWorld {
     post.setFocus(cam.pose.dist, this.focusY);
 
     for (const o of this.followCam) o.position.x = x;
+    this.water?.update(x);
     for (const r of this.rays) {
       const ui = (r.mesh.material as ShaderMaterial).uniforms.uI;
       if (ui) ui.value = r.base * m.rays * (0.8 + 0.2 * Math.sin(this.time * 0.5 + r.x));

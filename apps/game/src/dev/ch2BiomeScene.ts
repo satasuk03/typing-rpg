@@ -1,5 +1,5 @@
 /**
- * DEV-ONLY Chapter II biome diorama (T2.1): `?scene=render-test&biome=hushwood|grove[&tier=0|1|2][&freeze=1][&bars=1][&hero=0]`.
+ * DEV-ONLY Chapter II biome diorama (T2.1, T2.2): `?scene=render-test&biome=hushwood|fen|grove[&tier=0|1|2][&freeze=1][&bars=1][&hero=0]`.
  * A hard-coded battle pose (hero vs Ch1 enemies as stand-ins: the Ch2 sprites are T2.3 and the layouts T2.4) that exercises
  * the new moods, the five depth layers, the Ch2 props, the `leaf` / `roots` ground, fog cards and the ambient kinds.
  * Hard-coded coordinates are allowed here only (same rule as renderTestScene.ts).
@@ -8,6 +8,7 @@
  */
 import { type BiomeId, isQualityTier, percentile, type QualityTier, RenderWorld } from "../render";
 import type { SpriteActor } from "../render/materials/sprite";
+import { pathCenter } from "../render/materials/water";
 import { makeRng } from "../render/util";
 
 type V3 = [number, number, number];
@@ -39,7 +40,7 @@ interface Built {
   emit: (dt: number) => void;
 }
 
-function build(world: RenderWorld, biome: "hushwood" | "grove"): Built {
+function build(world: RenderWorld, biome: "hushwood" | "fen" | "grove"): Built {
   const rng = makeRng(0xc2c2 + biome.length);
   const R = (a: number, b: number): number => a + (b - a) * rng();
   const P = world.addProp.bind(world);
@@ -113,7 +114,12 @@ function build(world: RenderWorld, biome: "hushwood" | "grove"): Built {
       rim: hero ? 1.3 : 1.4,
       blobW: hero ? 1.25 : scale * 1.1,
       ...(hero
-        ? { caveRim: Number(new URLSearchParams(location.search).get("heroRim") ?? 0.6) }
+        ? {
+            // the fen's caveK is 0.3 (hushwood 0.45): a stronger hero rim keeps the same absolute lift (0.9 x 0.3 ~ 0.6 x 0.45)
+            caveRim: Number(
+              new URLSearchParams(location.search).get("heroRim") ?? (biome === "fen" ? 0.9 : 0.6),
+            ),
+          }
         : {}),
     });
     a.place(x, y, z);
@@ -203,6 +209,73 @@ function build(world: RenderWorld, biome: "hushwood" | "grove"): Built {
     actor("monster.slimeP", 36.9, 0, -0.15, 1.3);
     light(30.4, 2.1, 0.0, [0.4, 1.2, 1.6], 0.7, 3.5, 0.015, false); // the wisp-stand-in's own light
     addGlow(30.4, 2.25, -0.55, 1.5, [0.3, 0.9, 1.3], 0.5);
+    return { camX, camY: 1.9, dist: 18.6, pitch: 16, fov: 32, hero, emit: () => undefined };
+  }
+
+  // ---------------------------------------------------------------- fen (the Reedmaze, T2.2)
+  if (biome === "fen") {
+    world.addBackdrop("skyDusk", 300, 70, [40, 22, -150], [1, 1, 1], 0, 1, true);
+    world.addBackdrop("mountainsDusk", 460, 43.2, [40, 11, -105], [0.85, 0.9, 0.8], 0.55, 3);
+    world.addBackdrop("treelineDusk", 420, 19.44, [30, 6.4, -58], [0.8, 0.85, 0.75], 0.4, 6);
+    world.addGround(140, 70, 30, -15, "fen");
+    world.addFogCards("fen");
+    const camX = 31;
+    // far + mid cypress line standing in the water (their reflections are the fen's signature)
+    for (let x = 4; x < 62; x += R(3.5, 6))
+      P(`prop.ch2.cypress.${Math.floor(R(0, 3))}`, x, 0, R(-21, -15), {
+        scale: R(1.1, 1.4),
+        tint: [0.62, 0.68, 0.58],
+        rim: 0.5,
+        flip: rng() < 0.5,
+      });
+    for (let x = 6; x < 58; x += R(7, 11))
+      P(`prop.ch2.cypress.${Math.floor(R(0, 3))}`, x, 0, R(-10, -7.5), {
+        scale: R(0.95, 1.15),
+        rim: 0.7,
+        flip: rng() < 0.5,
+      });
+    P("prop.ch2.column.0", 24.5, -0.5, -6.0, { scale: 1.1 });
+    P("prop.ch2.column.1", 27.0, -0.7, -6.6, { scale: 1.0, flip: true });
+    P("prop.ch2.column.0", 43.5, -0.6, -5.2, { scale: 0.95 });
+    for (let x = 6; x < 58; x += R(1.6, 3.4))
+      if (Math.abs(x - 31) > 3.5 || rng() < 0.3)
+        P(`prop.ch2.reeds.${Math.floor(R(0, 3))}`, x, 0, R(-4.2, -2.8), {
+          scale: R(0.9, 1.3),
+          rim: 1.0,
+          flip: rng() < 0.5,
+        });
+    // stilt lanterns along the boardwalk and out in the water
+    lpost("prop.ch2.lpost.0", 22.0, -2.5, 1.8);
+    lpost("prop.ch2.lpost.1", 38.5, -2.4, 1.8);
+    lpost("prop.ch2.lpost.0", 47.5, -4.5, 1.8);
+    lpost("prop.ch2.lpost.1", 14.0, -4.0, 1.8);
+    // boardwalk posts + short stubs on the near rail (z follows the boardwalk's centre line)
+    for (let x = 13.4; x < 50; x += 2.6) {
+      P("prop.ch2.post", x, 0, pathCenter(x) - 2.35, {});
+      P("prop.ch2.post", x + 1.3, 0, pathCenter(x + 1.3) + 2.35, { scale: 0.5 });
+    }
+    // low dusk sun shafts through the fog bank (warm, from the right)
+    for (const [x, w, i] of [
+      [36, 3.2, 0.85],
+      [43, 2.2, 0.7],
+      [50, 3.6, 0.9],
+      [27, 1.6, 0.5],
+      [19, 2.4, 0.6],
+    ] as const)
+      world.addGodRay(x, 6.0, -8 + R(-1, 1), w, 16, 0.38, [1.0, 0.8, 0.4], i);
+    // foreground: reeds + a cypress trunk + Spanish moss
+    P("prop.ch2.reeds.2", 21.0, 0, 6.0, { ...FG, scale: 1.8 });
+    P("prop.ch2.reeds.1", 24.0, 0, 6.4, { ...FG, scale: 1.5, flip: true });
+    P("prop.ch2.reeds.0", 42.0, 0, 6.2, { ...FG, scale: 1.9 });
+    P("prop.ch2.cypress.1", 47.5, 0, 7.4, { ...FG, dark: 0.55, scale: 1.2 });
+    P("prop.ch2.moss.1", 15.5, 9.4, 6.8, { ...FG, dark: 0.5, tint: [0.75, 0.85, 0.7] });
+    // cast: hero on the boardwalk vs three Ch1 stand-ins (a heavy, a flyer, a grunt)
+    const hero = actor("hero", 25.4, 0, 0.25, 1, "idle", true);
+    actor("monster.slimeG", 30.8, 0, -0.35, 1.3);
+    actor("monster.bat", 33.8, 1.6, 0.4, 1.2);
+    actor("monster.goblin", 37.6, 0, 0.05, 1.3);
+    light(33.8, 2.3, 0.9, [0.4, 1.2, 1.6], 0.7, 3.5, 0.015, false); // the flyer stand-in's own light
+    addGlow(33.8, 2.4, 0.35, 1.5, [0.3, 0.9, 1.3], 0.5);
     return { camX, camY: 1.9, dist: 18.6, pitch: 16, fov: 32, hero, emit: () => undefined };
   }
 
@@ -312,7 +385,7 @@ function build(world: RenderWorld, biome: "hushwood" | "grove"): Built {
 
 export function start(
   canvas: HTMLCanvasElement,
-  biome: "hushwood" | "grove",
+  biome: "hushwood" | "fen" | "grove",
   q: URLSearchParams,
 ): void {
   const tierParam = Number(q.get("tier") ?? "0");
