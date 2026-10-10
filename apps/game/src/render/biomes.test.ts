@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { BIOME_IDS, BIOMES, blendMood, isBiomeId, validateMood } from "./biomes";
 
 describe("biome presets", () => {
-  it("define forest, ruins, cave and boss", () => {
-    expect([...BIOME_IDS].sort()).toEqual(["boss", "cave", "forest", "ruins"]);
+  it("define the Ch1 biomes plus hushwood and grove", () => {
+    expect([...BIOME_IDS].sort()).toEqual(["boss", "cave", "forest", "grove", "hushwood", "ruins"]);
     for (const id of BIOME_IDS) expect(BIOMES[id]).toBeDefined();
   });
 
@@ -20,6 +20,17 @@ describe("biome presets", () => {
   it("gives only the boss hollow a letterbox", () => {
     expect(BIOMES.boss.bars).toBeGreaterThan(0);
     expect(BIOMES.cave.bars).toBe(0);
+  });
+
+  it("keeps the Ch2 night moods cool, lit from the hero side, and bar-free outside the boss intro", () => {
+    for (const id of ["hushwood", "grove"] as const) {
+      const m = BIOMES[id];
+      expect(m.sunCol[2]).toBeGreaterThan(m.sunCol[0]);
+      expect(m.fogCol[2]).toBeGreaterThan(m.fogCol[0]);
+      expect(m.caveK).toBeGreaterThan(0);
+    }
+    expect(BIOMES.hushwood.bars).toBe(0);
+    expect(BIOMES.grove.ambient).toBe("leaves");
   });
 
   it("rejects broken presets", () => {

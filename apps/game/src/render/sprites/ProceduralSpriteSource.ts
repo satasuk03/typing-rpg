@@ -1,4 +1,5 @@
 import type { ProceduralArt } from "./artTypes";
+import { ch2Backdrop, registerCh2Props } from "./ch2Props";
 import { buildProceduralArt } from "./proceduralArt";
 import {
   type BackdropKind,
@@ -18,6 +19,7 @@ const one = (f: SpriteFrame): Anims => ({ [DEFAULT_ANIM]: [f] });
  *  - props: `prop.<kind>` or `prop.<kind>.<n>` for the variants the POC generates
  *    (tree 0-4, bush 0-2, fern 0-1, fernD 0-1, grass 0-3, rock 0-2, pillar 0-2, arch, smite 0-3,
  *    stite 0-2, crystalB, crystalP, crystalB2, shroom, post, sconce, vines 0-1, trunk, cRock 0-2)
+ *  - Chapter II props: `prop.ch2.<name>[.<n>]` and their `.flip` twins (normal.x negated), see ch2Props.ts
  */
 export class ProceduralSpriteSource implements SpriteSource {
   readonly name = "procedural-poc-v2";
@@ -147,6 +149,7 @@ export class ProceduralSpriteSource implements SpriteSource {
           a().makeRock(47, 90, 50, a().CAVE, false),
         ][i],
     );
+    registerCh2Props(this.table);
   }
 
   has(key: string): boolean {
@@ -171,6 +174,9 @@ export class ProceduralSpriteSource implements SpriteSource {
   }
 
   backdrop(kind: BackdropKind): HTMLCanvasElement {
+    if (kind === "skyNight" || kind === "mountainsNight" || kind === "treelineNight") {
+      return ch2Backdrop(kind);
+    }
     this.art ??= buildProceduralArt();
     const art = this.art;
     return kind === "sky" ? art.BD_SKY : kind === "mountains" ? art.BD_MTN : art.BD_FAR;

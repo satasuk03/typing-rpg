@@ -197,6 +197,17 @@ interface ZonePreset {
 }
 
 const ZONE_PRESETS: Readonly<Record<AmbientKind, ZonePreset>> = {
+  wisps: {
+    additive: true,
+    kind: 0,
+    color: [0.45, 1.3, 1.6],
+    alpha: 0.8,
+    size: [0.03, 0.06],
+    life: [4, 6],
+    vx: [-0.08, 0.12],
+    vy: [0.04, 0.2],
+    sway: 0.7,
+  },
   pollen: {
     additive: true,
     kind: 0,
@@ -395,7 +406,8 @@ export function buildWorld(
   // --- terrain
   const g = layout.ground;
   world.lighting.uBiome.value.set(g.caveFrom, g.caveTo);
-  world.addGround(g.x1 - g.x0, g.z1 - g.z0, mid(g.x0, g.x1), mid(g.z0, g.z1));
+  world.addGround(g.x1 - g.x0, g.z1 - g.z0, mid(g.x0, g.x1), mid(g.z0, g.z1), g.kind, g.arena);
+  world.addFogCards(toRenderBiome(layout.biome));
   if (layout.wall) {
     const w = layout.wall;
     world.addWall(w.x1 - w.x0, w.height, mid(w.x0, w.x1), w.cy, w.z, w.edgeX);

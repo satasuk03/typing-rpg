@@ -318,6 +318,11 @@ export function start(canvas: HTMLCanvasElement): void {
   const tierParam = Number(q.get("tier") ?? "0");
   const biome: BiomeId = isBiomeId(biomeParam) ? biomeParam : "forest";
   const tier: QualityTier = isQualityTier(tierParam) ? tierParam : 0;
+  if (biome === "hushwood" || biome === "grove") {
+    // Chapter II moods: their own hard-coded diorama (src/dev/ch2BiomeScene.ts), same hooks and query flags.
+    void import("./ch2BiomeScene").then((m) => m.start(canvas, biome, q));
+    return;
+  }
   const auto = q.get("auto") === "1";
   const frozen = q.get("freeze") === "1";
   const rawMode = q.get("raw") === "1";

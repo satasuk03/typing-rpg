@@ -11,7 +11,8 @@ export interface FlameRef {
 }
 
 /**
- * Biome ambience: torch embers, cave ember drift + glints, forest pollen / fireflies / falling leaves.
+ * Biome ambience: torch embers, cave ember drift + glints, forest pollen / fireflies / falling leaves, and the
+ * Ch2 night kinds (wisps, fireflies, leaves).
  * Ported from the POC `updateEnvironment`; spawn decisions use a seeded RNG and the `dt` passed in.
  */
 export class AmbientDirector {
@@ -126,6 +127,12 @@ export class AmbientDirector {
           fadeIn: 0.4,
         });
       }
+    } else if (
+      mood.ambient === "wisps" ||
+      mood.ambient === "fireflies" ||
+      mood.ambient === "leaves"
+    ) {
+      this.night(dt, camX, mood);
     } else if (mood.ambient === "pollen") {
       const dusk = mood.fill > 0.1 && mood.caveK < 0.5 ? 1 : 0;
       if (rnd() < dt * 14 * d) {
@@ -183,6 +190,140 @@ export class AmbientDirector {
           spin: 3,
         });
       }
+    }
+  }
+
+  /**
+   * Ch2 ambience (C0.2 brief 1.5). `wisps` (hushwood): teal motes, a few big drifting lights, sparse DARK night leaves.
+   * `fireflies` (fen): yellow-green fireflies plus slow pollen. `leaves` (grove): the silver-teal leaf storm (12% gold).
+   * Night leaves are dark normal-blend colours (unlit): the Ch1 orange would glow at night.
+   */
+  private night(dt: number, camX: number, mood: BiomeMood): void {
+    const rnd = this.rnd;
+    const rr = (a: number, b: number): number => this.rr(a, b);
+    const d = this.density;
+    const PA = this.additive;
+    const PB = this.normal;
+    const every = (rate: number, fn: () => void): void => {
+      const n = rate * dt * d;
+      for (let i = 0; i < n || rnd() < n - i; i++) fn();
+    };
+    if (mood.ambient === "wisps") {
+      every(16, () =>
+        PA.spawn({
+          x: camX + rr(-13, 13),
+          y: rr(0.3, 4.5),
+          z: rr(-7, 4),
+          vx: rr(-0.08, 0.12),
+          vy: rr(0.04, 0.2),
+          life: rr(4, 6),
+          size: rr(0.03, 0.06),
+          kind: 0,
+          r: 0.45,
+          g: 1.3,
+          b: 1.6,
+          a: 0.8,
+          sway: 0.7,
+          ph: rnd() * 6,
+          fadeIn: 0.5,
+        }),
+      );
+      every(1.6, () =>
+        PA.spawn({
+          x: camX + rr(-12, 12),
+          y: rr(0.8, 3.5),
+          z: rr(-6, 3),
+          vx: rr(-0.15, 0.15),
+          vy: rr(-0.05, 0.12),
+          life: rr(5, 7),
+          size: rr(0.1, 0.15),
+          kind: 0,
+          r: 0.5,
+          g: 1.5,
+          b: 1.9,
+          a: 0.75,
+          sway: 1.1,
+          ph: rnd() * 6,
+          fadeIn: 0.8,
+        }),
+      );
+      every(1.4, () =>
+        PB.spawn({
+          x: camX + rr(-12, 14),
+          y: 8,
+          z: rr(-4, 4),
+          vx: rr(-0.5, 0.2),
+          vy: -0.6,
+          life: 10,
+          size: 0.08,
+          kind: 1,
+          r: 0.24,
+          g: 0.13,
+          b: 0.09,
+          sway: 1.6,
+          ph: rnd() * 6,
+          spin: 3,
+        }),
+      );
+    } else if (mood.ambient === "fireflies") {
+      every(9, () =>
+        PA.spawn({
+          x: camX + rr(-13, 13),
+          y: rr(0.3, 2.6),
+          z: rr(-7, 4),
+          vx: rr(-0.25, 0.25),
+          vy: rr(-0.15, 0.2),
+          life: rr(2, 4),
+          size: rr(0.06, 0.1),
+          kind: 0,
+          r: 1.5,
+          g: 2.2,
+          b: 0.45,
+          a: 1,
+          sway: 1.3,
+          ph: rnd() * 6,
+          fadeIn: 0.4,
+        }),
+      );
+      every(8, () =>
+        PA.spawn({
+          x: camX + rr(-13, 13),
+          y: rr(0.3, 5),
+          z: rr(-7, 4),
+          vx: rr(0.05, 0.2),
+          vy: rr(-0.05, 0.08),
+          life: rr(4, 6),
+          size: rr(0.025, 0.045),
+          kind: 0,
+          r: 1.3,
+          g: 1.1,
+          b: 0.55,
+          a: 0.6,
+          sway: 0.4,
+          ph: rnd() * 6,
+          fadeIn: 0.4,
+        }),
+      );
+    } else {
+      every(9, () => {
+        const gold = rnd() < 0.12;
+        PB.spawn({
+          x: camX + rr(-13, 14),
+          y: rr(8, 10),
+          z: rr(-6, 5),
+          vx: rr(-0.5, 0.3),
+          vy: -rr(0.55, 0.8),
+          life: 12,
+          size: rr(0.07, 0.1),
+          kind: 1,
+          r: gold ? 0.7 : 0.16,
+          g: gold ? 0.5 : 0.34,
+          b: gold ? 0.12 : 0.32,
+          sway: 1.6,
+          ph: rnd() * 6,
+          spin: 3,
+        });
+      });
     }
   }
 

@@ -25,7 +25,14 @@ export interface SpriteFrame {
   readonly hang?: number | boolean | undefined;
 }
 
-export type BackdropKind = "sky" | "mountains" | "treeline";
+/** `*Night` variants are the Ch2 hushwood / grove strips (C0.2 brief 1.4 band 1). */
+export type BackdropKind =
+  | "sky"
+  | "mountains"
+  | "treeline"
+  | "skyNight"
+  | "mountainsNight"
+  | "treelineNight";
 
 export interface SpriteSource {
   readonly name: string;

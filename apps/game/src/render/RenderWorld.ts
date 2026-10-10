@@ -7,9 +7,11 @@ import {
   Scene,
   type ShaderMaterial,
   Vector3,
+  type Vector4,
   type WebGLRenderer,
 } from "three";
 import { AmbientDirector, type FlameRef } from "./ambient/ambient";
+import { FOG_CARDS, fogCardMaterial } from "./ambient/fogCards";
 import { Particles } from "./ambient/particles";
 import { BIOMES, type BiomeId, type BiomeMood, blendMood } from "./biomes";
 import { DioramaCamera } from "./camera";
@@ -20,6 +22,7 @@ import {
   LightRig,
   TORCH_COLOR,
 } from "./lighting";
+import { ch2GroundMaterial, type GroundKind } from "./materials/ch2Ground";
 import { FxKind, fxMaterial } from "./materials/fx";
 import {
   makePropMesh,
@@ -366,9 +369,12 @@ export class RenderWorld {
 
   /** Add a lit static prop (tree, pillar...) by SpriteSource key. Returns the mesh. */
   addProp(key: string, x: number, y: number, z: number, o: PropOptions = {}): Mesh {
-    const f = this.source.frames(key)[0];
+    // Sources may supply a pre-flipped twin (`<key>.flip`, image and normal.x mirrored): Ch2 props use it so a flipped
+    // prop is lit from the right side. Without a twin (every Ch1 prop) the mesh is mirrored as before.
+    const twin = o.flip && this.source.has(`${key}.flip`) ? `${key}.flip` : null;
+    const f = this.source.frames(twin ?? key)[0];
     if (!f) throw new Error(`no frame for ${key}`);
-    const m = makePropMesh(this.requireRes(), f, o);
+    const m = makePropMesh(this.requireRes(), f, twin ? { ...o, flip: false } : o);
     m.position.set(x, y, z);
     (o.foreground ? this.fgScene : this.scene).add(m);
     return m;
@@ -456,6 +462,30 @@ export class RenderWorld {
     }
   }
 
+  /** A soft additive glow quad (lantern halos, moon halo). `fg` puts it in the blurred foreground layer. */
+  addGlow(
+    x: number,
+    y: number,
+    z: number,
+    size: number,
+    color: readonly [number, number, number],
+    intensity: number,
+    fg = false,
+  ): Mesh {
+    const res = this.requireRes();
+    const m = new Mesh(
+      res.trackGeo(new PlaneGeometry(1, 1)),
+      res.adopt(
+        fxMaterial(this.lighting, FxKind.Glow, color, [1, 1, 1], intensity, this.rng() * 100),
+      ),
+    );
+    m.scale.set(size, size, 1);
+    m.position.set(x, y, z);
+    m.renderOrder = 6;
+    (fg ? this.fgScene : this.scene).add(m);
+    return m;
+  }
+
   /** Tilted additive god-ray quad (forest/dusk dressing). Intensity follows the biome's `rays`. */
   addGodRay(
     x: number,
@@ -501,13 +531,53 @@ export class RenderWorld {
     return mat;
   }
 
-  addGround(width: number, depth: number, cx: number, cz: number): Mesh {
+  /**
+   * Ground plane. `kind` picks the look: `forest` (default, Ch1 grass/dirt/cave dither), `leaf` (hushwood litter) or
+   * `roots` (grove arena radiating from `arena` = the boss x, z).
+   */
+  addGround(
+    width: number,
+    depth: number,
+    cx: number,
+    cz: number,
+    kind: GroundKind = "forest",
+    arena?: readonly [number, number],
+  ): Mesh {
     const res = this.requireRes();
     const geo = res.trackGeo(new PlaneGeometry(width, depth).rotateX(-Math.PI / 2));
-    const m = new Mesh(geo, res.adopt(groundMaterial(this.lighting)));
+    let mat: ShaderMaterial;
+    if (kind === "forest") mat = res.adopt(groundMaterial(this.lighting));
+    else {
+      mat = res.adopt(ch2GroundMaterial(this.lighting, kind));
+      const ua = mat.uniforms.uArena;
+      if (arena && ua) (ua.value as Vector4).set(arena[0], arena[1], 6, 0);
+    }
+    const m = new Mesh(geo, mat);
     m.position.set(cx, 0, cz);
     this.scene.add(m);
     return m;
+  }
+
+  /**
+   * The biome's ground-hugging fog cards (brief 1.6). They follow the camera x; noise is sampled in world x so they drift
+   * rather than swim. No-op for moods without cards (all of Ch1).
+   */
+  addFogCards(biome: BiomeId): void {
+    const defs = FOG_CARDS[biome];
+    if (!defs) return;
+    const res = this.requireRes();
+    const quad = res.trackGeo(new PlaneGeometry(1, 1));
+    defs.forEach((d, i) => {
+      const m = new Mesh(
+        quad,
+        res.adopt(fogCardMaterial(this.lighting, d.color, d.alpha, i * 17.3)),
+      );
+      m.scale.set(d.w, d.h, 1);
+      m.position.set(this.camera.pose.x, d.y, d.z);
+      m.renderOrder = 8;
+      (d.foreground ? this.fgScene : this.scene).add(m);
+      this.followCam.push(m);
+    });
   }
 
   /** Cave back wall / forest cliff. `edgeX` is where the cliff face starts. */
