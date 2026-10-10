@@ -34,6 +34,7 @@ import { failLevel, isTerminal, setPhase } from "./flow.ts";
 import { stepGimmicks } from "./gimmick.ts";
 import { enemyDef, holdAttacks, initAttack, stepEnemyAttacks } from "./guard.ts";
 import { deepClone } from "./hash.ts";
+import { healerView, initHeal, stepHeals } from "./heal.ts";
 import type { SimInput } from "./input.ts";
 import { openChest, rollEncounterChest } from "./meta/chests.ts";
 import { computeHeroStats, guardRatingBp } from "./meta/loadout.ts";
@@ -43,11 +44,11 @@ import { chargeSkills, checkSkillCasts, resolveSkillImpacts, tickDots } from "./
 import type { EncounterState, EnemyState, RunState } from "./state.ts";
 import { stepFreezes } from "./statuses.ts";
 import type {
-  Gimmick,
   LevelOptions,
   LevelResult,
   LevelState,
   Loadout,
+  ResolvedEnemyRef,
   ResolvedLevel,
 } from "./types.ts";
 import {
@@ -213,6 +214,7 @@ function stepOne(state: LevelState, emit: Emit): void {
       if (run.options.tutorial && run.stats.wordsCompleted < K.TUTORIAL_HOLD_ATTACKS_UNTIL_WORDS)
         holdAttacks(state); // tutorial: enemies hold their attacks until the hero has typed a few words
       stepEnemyAttacks(state, resolveImpact, emit); // step 3: enemy timers
+      stepHeals(state, emit); // step 3b (v2.0): healer timers
       if (state.phase === "combat") {
         stepGimmicks(state, emit); // step 4: gimmick timers (Fading words)
         stepBoss(state, emit); // step 5: boss script (doom deadline, rubble, phase gates)
@@ -414,12 +416,10 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
   // encounter scaling, exactly like a normal wave: HP = addsPool x hpWeight / sum(add hpWeights), hit = addsGruntHit x
   // hitWeight. resolveLevel sets addsPool = boss HP x BOSS_ADDS_HP_ENC / BOSS_HP_ENC (0.5 / 3.2 = 117.6 at L10, i.e. 58.8 per add
   // on average, the economy_sim add HP: two equal adds of 0.5 x 235.3 / 2) and addsGruntHit = the level's encounter gruntHit.
-  const refs: { enemyId: string; gimmick: Gimmick | null }[] =
+  const refs: ResolvedEnemyRef[] =
     boss !== null && bossSeg
       ? [{ enemyId: boss.enemyId, gimmick: null }, ...boss.phase1.adds]
-      : ((seg as { waves: { enemyId: string; gimmick: Gimmick | null }[][] }).waves[
-          enc.waveIndex
-        ] ?? []);
+      : ((seg as { waves: ResolvedEnemyRef[][] }).waves[enc.waveIndex] ?? []);
   const firstAdd = bossSeg ? 1 : 0; // refs[firstAdd..] share the pool
   let weightSum = 0;
   for (let i = firstAdd; i < refs.length; i++)
@@ -458,11 +458,13 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
       hpM: maxHpM,
       maxHpM,
       hitM,
+      // v2.0 §3.5: a ref's own attackPowerBp overrides the encounter's / the boss adds' value
       attackPowerBp: isBossEnemy
         ? b.attackPowerBp
-        : bossSeg
-          ? (b.phase1.addsAttackPowerBp ?? BP)
-          : (seg as { attackPowerBp: number }).attackPowerBp,
+        : (r.attackPowerBp ??
+          (bossSeg
+            ? (b.phase1.addsAttackPowerBp ?? BP)
+            : (seg as { attackPowerBp: number }).attackPowerBp)),
       shield: def.shield,
       shieldMax: def.shield,
       revealed: [],
@@ -481,6 +483,7 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
       wordsDone: 0,
       dots: [],
       frozenUntil: null,
+      ...(r.elite === true ? { elite: true as const } : {}),
     });
   });
   for (const e of spawned) enc.enemies.push(e);
@@ -501,8 +504,11 @@ function spawnNextWave(state: LevelState, emit: Emit): void {
       maxHp: toDisplay(e.maxHpM),
       isBoss: e.isBoss,
       shieldMax: e.shieldMax,
+      ...(e.elite === true ? { elite: true } : {}),
+      ...(enemyDef(state, e.defId).heal !== undefined ? { healer: true } : {}),
     });
   }
+  for (const e of spawned) initHeal(state, e);
   for (const e of spawned) assignWordPlate(state, e, emit);
   for (const e of spawned) {
     const p = below(enc.aiRng, K.INITIAL_ENEMY_ATB_MAX_BP + 1);
@@ -645,6 +651,8 @@ export function getView(state: Readonly<LevelState>): LevelView {
       guardTotalTicks: isGuard && plate !== null ? (plate.totalTicks ?? 0) : 0,
       guardResult: e.guardResult,
       attackPowerBp: mulBp(state.run.def.parArmorBp, e.attackPowerBp),
+      ...(e.elite === true ? { elite: true } : {}),
+      ...(healerView(state, e, t) !== undefined ? { healer: healerView(state, e, t) } : {}),
       leakBp: guardLeakBp(state, e),
       shield: e.shield,
       shieldMax: e.shieldMax,
