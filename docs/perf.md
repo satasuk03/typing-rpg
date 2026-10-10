@@ -108,3 +108,23 @@ against a recording fake AudioContext and fails if any oscillator or filter freq
     | ch2-l07 | 1.4 ms | 5.6 ms |
     | ch2-l10 Willow | 3.5 ms | 6.2 ms |
 
+
+## Prologue (P4.1)
+Real Metal (Apple M4 Pro), Chromium new headless, 1920x1080 DPR 1, vsync-locked, audio on, wpm-bot 40 (acc 0.97, seed 3). Spec: `apps/game/tests/perf/prologue.spec.ts`
+(`PERF_PORT=<port> ./node_modules/.bin/playwright test -c tests/perf/playwright.config.ts prologue.spec`). Frame time = rAF delta; the first 90 frames of each part are
+dropped from the percentiles (shader compile) and listed under worst frames. Budget: p95 <= 16.8 ms at tier 0; tier 2 with CDP 4x CPU throttle p95 <= 22.2 ms. Both PASS.
+
+| part / window | tier 0 avg / p95 / p99 / max (ms) | tier 2, 4x throttle avg / p95 / p99 / max (ms) |
+|---|---|---|
+| A (cold open) | 16.7 / 16.7 / 16.8 / 16.8 | 16.7 / 16.7 / 16.8 / 16.8 |
+| B (real sim, 3.1k frames) | 16.7 / 16.8 / 16.8 / 50.0 | 16.7 / 16.7 / 16.8 / 133.3 |
+| B at the max surge reached (x4 at 40 WPM, ~430 frames) | 16.7 / 16.8 / 16.8 / 50.0 | 17.0 / 16.7 / 16.8 / 133.3 |
+| C (4.4k frames) | 16.7 / 16.7 / 16.8 / 16.8 | 16.7 / 16.8 / 16.8 / 16.8 |
+| C theft beats (timeline 14-22 s) | 16.7 / 16.8 / 16.8 / 16.8 | 16.7 / 16.8 / 16.8 / 16.8 |
+| C vortex + fog (30-43 s) | 16.7 / 16.7 / 16.8 / 16.8 | 16.7 / 16.8 / 16.8 / 16.8 |
+
+Notes: the only slow frames are the first frame(s) of Part B (B t=0: 50 ms at tier 0, 133 and 67 ms at tier 2 throttled), the one-off Part A -> B stage handover / first
+sim frame; they are not steady-state. The 40 WPM bot only reaches surge x4 in Part B (x16 needs a much slower player, see P3.6 `b4-max-surge-aura`), so "max surge" here is x4.
+Full flow (fresh profile -> A -> B -> C -> story -> calibrate -> L1): 0 console errors, 0 in-app errors.
+Readability (`tests/level/prologue-fx.spec.ts`, real session, max FX): 0 violations at 40 and 90 WPM; min next-letter ring/cell contrast 4.19/6.51 (40) and 3.82/6.34 (90), Part C dialogue contrast min 9.08 (>= 7).
+Skip / replay / idle (`tests/perf/prologue-flow.spec.ts`, Metal): hold-Esc from A, B, C, idle ladder, title replay: 5/5 pass, 0 console errors.
