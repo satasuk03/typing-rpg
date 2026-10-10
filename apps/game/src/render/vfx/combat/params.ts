@@ -162,6 +162,13 @@ export const SKILL_STYLE: Readonly<Record<ActiveSkillId, SkillStyle>> = {
     light: [0.7, 0.8, 1],
     swirl: [2.4, 2.6, 3.8],
   },
+  // v2.0.3 Reveal: no impact body (it deals no damage); only the generic hero cast-up swirl, in pale gold
+  reveal: {
+    core: [3.4, 3.2, 1.8],
+    edge: [2.6, 2.2, 1.0],
+    light: [1, 0.9, 0.55],
+    swirl: [3.2, 2.8, 1.4],
+  },
 };
 
 /** Persistent status markers (read from the view every frame). */

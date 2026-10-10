@@ -217,7 +217,15 @@ export const GearDef = z
 export type GearDef = z.infer<typeof GearDef>;
 
 export const ActiveSkillDef = z.object({
-  id: z.enum(["slashWave", "piercingThrust", "fireball", "frostLock", "mendingLight", "aegis"]),
+  id: z.enum([
+    "slashWave",
+    "piercingThrust",
+    "fireball",
+    "frostLock",
+    "mendingLight",
+    "aegis",
+    "reveal",
+  ]),
   name: z.string(),
   description: z.string(), // may use {dmg},{charge},{secs} placeholders filled from BALANCE
   iconId: z.string(),
@@ -236,6 +244,7 @@ export const PassiveDef = z.object({
     "openingGambit",
     "lastStand",
     "comeback",
+    "calmMind",
   ]),
   name: z.string(),
   description: z.string(),

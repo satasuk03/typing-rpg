@@ -10,6 +10,10 @@ import type { LevelState, PassiveId } from "./types.ts";
 export const hasPassive = (run: Readonly<RunState>, id: PassiveId): boolean =>
   (run.loadout.passives as readonly (string | null)[]).includes(id);
 
+/** Reveal (v2.0.3) is running: new plates carry no gimmick until `run.revealUntil`. */
+export const revealActive = (run: Readonly<RunState>, tick: number): boolean =>
+  run.revealUntil !== undefined && tick < run.revealUntil;
+
 export function emitPassive(
   state: LevelState,
   id: PassiveId,

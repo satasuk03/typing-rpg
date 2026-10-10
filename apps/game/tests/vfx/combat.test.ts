@@ -85,13 +85,13 @@ describe("combat params", () => {
     expect(dissolveCount(true, 1.6)).toBeGreaterThan(dissolveCount(false, 1.6));
   });
 
-  it("all six skills have a distinct colour identity", () => {
+  it("all seven skills have a distinct colour identity", () => {
     const ids = Object.keys(SKILL_STYLE);
-    expect(ids.length).toBe(6);
+    expect(ids.length).toBe(7);
     const keys = new Set(
       ids.map((i) => JSON.stringify((SKILL_STYLE as Record<string, { core: number[] }>)[i]?.core)),
     );
-    expect(keys.size).toBe(6);
+    expect(keys.size).toBe(7);
   });
 });
 

@@ -264,6 +264,8 @@ export const BALANCE = {
     mendingLight: { charge: 12, heal: 0.25, cast: "whenHpBelow", hp_below: 0.6 },
     // T6.1 PO "add risk" (docs/balance-ch1.md §8): charge 10 -> 12, barrier_hits 2 -> 1 (absorbs per word 0.2 -> 0.083)
     aegis: { charge: 12, barrier_hits: 1, cast: "whenTelegraph" },
+    // v2.0.3 (TS-only, Ch2 unlock): strips plate gimmicks (Fading / Scrambled) for duration_s; no damage
+    reveal: { charge: 8, duration_s: 8, cast: "whenGimmick" },
   },
   PASSIVES: {
     cleanCut: { crit_bonus: 0.1 },
@@ -274,6 +276,7 @@ export const BALANCE = {
     openingGambit: { start_atb: 50 },
     lastStand: { hp_below: 0.3, atb_mult: 1.4 },
     comeback: { restore_frac: 0.5 },
+    calmMind: { guard_bonus_s: 0.5 }, // v2.0.3 (TS-only, Ch2 unlock): every guard word lasts this much longer
   },
   TUTORIAL_FIRST_GUARD_MULT: 2.0,
   TUTORIAL_HOLD_ATTACKS_UNTIL_WORDS: 3,
@@ -432,6 +435,7 @@ function deriveConstants(B: typeof BALANCE) {
       frostLock: milli(B.SKILLS.frostLock.charge),
       mendingLight: milli(B.SKILLS.mendingLight.charge),
       aegis: milli(B.SKILLS.aegis.charge),
+      reveal: milli(B.SKILLS.reveal.charge),
     } as Readonly<Record<ActiveSkillId, Milli>>,
     SLASH_WAVE_ATK_BP: bp(B.SKILLS.slashWave.atk_mult_all),
     SLASH_WAVE_MIN_ENEMIES: B.SKILLS.slashWave.min_enemies,
@@ -444,6 +448,7 @@ function deriveConstants(B: typeof BALANCE) {
     MENDING_HEAL_BP: bp(B.SKILLS.mendingLight.heal),
     MENDING_HP_BELOW_BP: bp(B.SKILLS.mendingLight.hp_below),
     AEGIS_BARRIER_HITS: B.SKILLS.aegis.barrier_hits,
+    REVEAL_T: ticks(B.SKILLS.reveal.duration_s),
     // ---- passives (T1.4) ----
     CLEAN_CUT_CRIT_BP: bp(B.PASSIVES.cleanCut.crit_bonus),
     BULWARK_EVERY_COMBO: B.PASSIVES.bulwarkStreak.every_combo,
@@ -453,6 +458,7 @@ function deriveConstants(B: typeof BALANCE) {
     LAST_STAND_HP_BELOW_BP: bp(B.PASSIVES.lastStand.hp_below),
     LAST_STAND_ATB_MULT_BP: bp(B.PASSIVES.lastStand.atb_mult),
     COMEBACK_RESTORE_BP: bp(B.PASSIVES.comeback.restore_frac),
+    CALM_MIND_GUARD_T: ticks(B.PASSIVES.calmMind.guard_bonus_s),
     // ---- guard / enemy timers ----
     GUARD_T: ticks(B.GUARD_S),
     GUARD_MIN_T: ticks(B.GUARD_MIN_S),

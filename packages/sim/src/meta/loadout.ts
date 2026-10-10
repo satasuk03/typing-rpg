@@ -59,6 +59,7 @@ const ACTIVES: readonly string[] = [
   "frostLock",
   "mendingLight",
   "aegis",
+  "reveal",
 ];
 const PASSIVES: readonly string[] = [
   "cleanCut",
@@ -69,6 +70,7 @@ const PASSIVES: readonly string[] = [
   "openingGambit",
   "lastStand",
   "comeback",
+  "calmMind",
 ];
 
 const active = (id: string | null): ActiveSkillId | null => {

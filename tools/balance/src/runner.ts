@@ -38,7 +38,7 @@ export interface Job {
   noise: boolean;
   whatif?: WhatIf;
   /** starter (default): the Ch1 starter kit. bare: Fireball only, Clean Cut + Steady Hands (no Aegis, no Iron Will). */
-  kit?: "starter" | "bare";
+  kit?: "starter" | "bare" | "ch2";
   /** free (default): scrambled/faded words are decoded for free. realistic: the T6.2 reading model (bot.ts). */
   gimmicks?: GimmickMode;
   /** T1.5 gear offset (the --gear value): par (default) | par-N | armor+N | weapon+N | all+N. See gear.ts. */
@@ -47,14 +47,25 @@ export interface Job {
 
 /** Ch1 starter kit (content skills.ts, no unlockLevel): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will, par gear. */
 export function starterLoadout(
-  kit: "starter" | "bare" = "starter",
+  kit: "starter" | "bare" | "ch2" = "starter",
   chapter = 1,
   gear?: string,
 ): Loadout {
   const l = applyGear(parLoadout(chapter), parseGear(gear));
-  l.actives = kit === "bare" ? ["fireball", null] : ["fireball", "aegis"];
+  l.actives =
+    kit === "bare"
+      ? ["fireball", null]
+      : kit === "ch2"
+        ? ["fireball", "reveal"]
+        : ["fireball", "aegis"];
+  // ch2 (v2.0.3): the Ch2 unlocks in play. Reveal replaces Aegis (it deals no damage, so the skill share is carried by
+  // Fireball alone), Calm Mind replaces Steady Hands. Not used by the default report, only by --kit ch2.
   l.passives =
-    kit === "bare" ? ["cleanCut", "steadyHands", null] : ["cleanCut", "steadyHands", "ironWill"];
+    kit === "bare"
+      ? ["cleanCut", "steadyHands", null]
+      : kit === "ch2"
+        ? ["cleanCut", "calmMind", "ironWill"]
+        : ["cleanCut", "steadyHands", "ironWill"];
   return l;
 }
 

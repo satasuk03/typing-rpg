@@ -4,6 +4,7 @@ import type { Emit } from "./bus.ts";
 import type { HitKind, PlateId } from "./events.ts";
 import { fadeTick, scrambleWord } from "./gimmick.ts";
 import { cancelAttack, enemyDef } from "./guard.ts";
+import { revealActive } from "./passives.ts";
 import type { EncounterState, EnemyState, PlateState } from "./state.ts";
 import { clearEnemyStatuses } from "./statuses.ts";
 import type { LevelState, ResolvedLevel } from "./types.ts";
@@ -34,7 +35,9 @@ export function assignWordPlate(
   while (enc.recent.length > RECENT_LIMIT) enc.recent.shift();
   // typing gimmicks (T1.5): a scrambled plate shows shuffled letters; a fading plate fades FADE_DELAY after it is shown
   let display: string | undefined;
-  if (enemy.gimmick === "scrambled") {
+  // Reveal (v2.0.3): while it runs, a new plate is plain (no scramble, no fade)
+  const gimmick = revealActive(state.run, state.tick) ? null : enemy.gimmick;
+  if (gimmick === "scrambled") {
     // the replaced plate (guard swap, break) is leaving, so its letters are free again
     const scrambled = scrambleWord(enc.gimmickRng, word, visibleFirstLetters(enc, replacesPlateId));
     if (scrambled !== null) display = scrambled;
@@ -47,10 +50,9 @@ export function assignWordPlate(
       text: word,
       replacesPlateId,
       display,
-      gimmick: enemy.gimmick,
+      gimmick,
       // the clock starts when typing is live (a plate spawned during the intro does not fade before the fight)
-      fadeAt:
-        enemy.gimmick === "fading" ? fadeTick(Math.max(state.tick, enc.typingFromTick)) : null,
+      fadeAt: gimmick === "fading" ? fadeTick(Math.max(state.tick, enc.typingFromTick)) : null,
     },
     emit,
   );
