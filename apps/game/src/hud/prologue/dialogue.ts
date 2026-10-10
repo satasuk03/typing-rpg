@@ -8,7 +8,7 @@ import { frame, txt } from "../draw";
 import { FONT_UI } from "../theme";
 import type { DialogueGeom } from "./geometry";
 import { DLG_FONT, DLG_LINE_H, DLG_PLATE_OVER, wrapLines } from "./geometry";
-import { DIALOGUE_PANEL, DIALOGUE_TEXT, type SpeakerId, SPEAKERS } from "./palette";
+import { DIALOGUE_PANEL, DIALOGUE_TEXT, SPEAKERS, type SpeakerId } from "./palette";
 
 export const TYPE_CPS = 40;
 /** The advance hint appears once the text is fully revealed (or after this many ms, whichever is first). */
@@ -94,12 +94,20 @@ export function drawDialogue(c: Ctx, g: DialogueGeom, d: DialogueDraw): void {
     const shown = ln.slice(0, Math.max(0, left));
     left -= ln.length + 1; // the space the wrap consumed
     if (shown.length === 0) continue;
-    txt(c, shown, g.inner.x, g.inner.y + DLG_LINE_H * i + DLG_LINE_H / 2, d.layout.fontPx, DIALOGUE_TEXT, {
-      f: FONT_UI,
-      w: 700,
-      ls: 1,
-      stroke: false,
-    });
+    txt(
+      c,
+      shown,
+      g.inner.x,
+      g.inner.y + DLG_LINE_H * i + DLG_LINE_H / 2,
+      d.layout.fontPx,
+      DIALOGUE_TEXT,
+      {
+        f: FONT_UI,
+        w: 700,
+        ls: 1,
+        stroke: false,
+      },
+    );
   }
   // advance hint: "SPACE" and a small triangle, blinking while it waits
   if (full || d.ageMs > HINT_AFTER_MS) {
@@ -107,7 +115,13 @@ export function drawDialogue(c: Ctx, g: DialogueGeom, d: DialogueDraw): void {
     c.globalAlpha = d.alpha * blink;
     const hx = box.x + box.w - 24;
     const hy = box.y + box.h - 11;
-    txt(c, "SPACE", hx - 14, hy, 11, "#ffd98a", { align: "right", f: FONT_UI, w: 700, ls: 2, stroke: false });
+    txt(c, "SPACE", hx - 14, hy, 11, "#ffd98a", {
+      align: "right",
+      f: FONT_UI,
+      w: 700,
+      ls: 2,
+      stroke: false,
+    });
     c.fillStyle = "#ffd98a";
     c.beginPath();
     c.moveTo(hx - 8, hy - 5);

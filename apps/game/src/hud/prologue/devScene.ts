@@ -20,13 +20,13 @@ import { blendMood, STORM_GOLD, THEFT_RAMP, UNWRITTEN } from "../../render/biome
 import type { CameraPose } from "../../render/camera";
 import { createTypingFx, type TypingFxHandle } from "../../render/vfx/TypingFxHandle";
 import { loadLevel } from "../../render/world";
-import { Hud } from "../hud";
 import { loadHudFonts } from "../fonts";
+import { Hud } from "../hud";
 import { checkSnapshot } from "../invariants";
 import { MockDriver } from "../mock/mockDriver";
 import { checkPrologueSnapshot } from "./check";
-import { DEFAULT_KIT, DEFAULT_PASSIVES } from "./palette";
 import { NUL_HEIGHT_M } from "./geometry";
+import { DEFAULT_KIT, DEFAULT_PASSIVES } from "./palette";
 
 const DT = 1 / 60;
 
@@ -65,14 +65,56 @@ export interface StillSpec {
   note: string;
 }
 export const STILLS: Readonly<Record<string, StillSpec>> = {
-  grimoireB: { t: null, cam: "battle", blend: 0, note: "Part B: the Grimoire bar, 6 orbs + 9 passives" },
-  shatter1: { t: 13700, from: 12800, cam: "two", blend: THEFT_RAMP[1], note: "theft beat 1: Fireball shards in flight" },
-  shatter3: { t: 15900, from: 12800, cam: "two", blend: THEFT_RAMP[3], note: "theft beat 3: Slash Wave shards" },
-  shatter6: { t: 18900, from: 12800, cam: "two", blend: THEFT_RAMP[6], note: "theft beat 6: Frost Lock shards" },
-  dialogueNul: { t: 4500, lineClock: 1700, cam: "mask", blend: 0, note: "Nul speaking (2-line wrap)" },
-  dialogueKnight: { t: 7500, lineClock: 1500, cam: "knight", blend: 0, note: "the Knight speaking" },
+  grimoireB: {
+    t: null,
+    cam: "battle",
+    blend: 0,
+    note: "Part B: the Grimoire bar, 6 orbs + 9 passives",
+  },
+  shatter1: {
+    t: 13700,
+    from: 12800,
+    cam: "two",
+    blend: THEFT_RAMP[1],
+    note: "theft beat 1: Fireball shards in flight",
+  },
+  shatter3: {
+    t: 15900,
+    from: 12800,
+    cam: "two",
+    blend: THEFT_RAMP[3],
+    note: "theft beat 3: Slash Wave shards",
+  },
+  shatter6: {
+    t: 18900,
+    from: 12800,
+    cam: "two",
+    blend: THEFT_RAMP[6],
+    note: "theft beat 6: Frost Lock shards",
+  },
+  dialogueNul: {
+    t: 4500,
+    lineClock: 1700,
+    cam: "mask",
+    blend: 0,
+    note: "Nul speaking (2-line wrap)",
+  },
+  dialogueKnight: {
+    t: 7500,
+    lineClock: 1500,
+    cam: "knight",
+    blend: 0,
+    note: "the Knight speaking",
+  },
   ink: { t: 11700, from: 10400, cam: "two", blend: 0, note: "the ink line mid-write" },
-  swirl: { t: 23000, from: 22700, lineClock: 1700, cam: "nul", blend: 1, note: "colourSwirl in Nul's cloak, with the 23.0 s line" },
+  swirl: {
+    t: 23000,
+    from: 22700,
+    lineClock: 1700,
+    cam: "nul",
+    blend: 1,
+    note: "colourSwirl in Nul's cloak, with the 23.0 s line",
+  },
   ember: { t: 42800, from: 38800, cam: "ember", blend: 1, note: "the HUD ember in the hand" },
   skipRing: { t: null, cam: "battle", blend: 0, note: "the skip ring at 62%" },
   nudge: { t: null, cam: "battle", blend: 0, note: "the idle nudge card" },
@@ -142,7 +184,8 @@ export function startPrologueHud(glCanvas: HTMLCanvasElement, q: URLSearchParams
   pro.autoHints = true;
   let bd: WorldBackdrop | null = null;
   let fx: TypingFxHandle | null = null;
-  const resize = (): void => hud.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
+  const resize = (): void =>
+    hud.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
   window.addEventListener("resize", resize);
   resize();
 
@@ -246,7 +289,9 @@ export function startPrologueHud(glCanvas: HTMLCanvasElement, q: URLSearchParams
       return null;
     const r = hud.getLetterRect(plate.id, plate.typedIndex);
     if (!r) return null;
-    const ctx = hudCanvas.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+    const ctx = hudCanvas.getContext("2d", {
+      willReadFrequently: true,
+    }) as CanvasRenderingContext2D;
     const k = hudCanvas.width / window.innerWidth;
     const x = Math.max(0, Math.floor(r.x * k));
     const y = Math.max(0, Math.floor(r.y * k));
@@ -302,7 +347,8 @@ export function startPrologueHud(glCanvas: HTMLCanvasElement, q: URLSearchParams
       }
     if (cg === 0 || cCell === 0) return null;
     const lg = g / cg;
-    const ratio = (a: number, b: number): number => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    const ratio = (a: number, b: number): number =>
+      (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
     return { ring: ratio(lg, cRing ? nRing / cRing : 0), cell: ratio(lg, nCell / cCell) };
   };
 
@@ -450,7 +496,10 @@ export function startPrologueHud(glCanvas: HTMLCanvasElement, q: URLSearchParams
           const mk = snap.prologue?.maskRect;
           if (mk)
             for (const r of snap.popRects)
-              if (Math.hypot(r.x + r.w / 2 - (mk.x + mk.w / 2), r.y + r.h / 2 - (mk.y + mk.h / 2)) < 220)
+              if (
+                Math.hypot(r.x + r.w / 2 - (mk.x + mk.w / 2), r.y + r.h / 2 - (mk.y + mk.h / 2)) <
+                220
+              )
                 popsNearMask++;
           const tag = `t=${(driver.tick / 60).toFixed(2)}s`;
           violations.push(...violationsNow(tag));
@@ -462,7 +511,9 @@ export function startPrologueHud(glCanvas: HTMLCanvasElement, q: URLSearchParams
               minRing = Math.min(minRing, c.ring);
               minCell = Math.min(minCell, c.cell);
               if (c.ring < 3 || c.cell < 4.5)
-                violations.push(`${tag} next-letter contrast ring ${c.ring.toFixed(2)} cell ${c.cell.toFixed(2)}`);
+                violations.push(
+                  `${tag} next-letter contrast ring ${c.ring.toFixed(2)} cell ${c.cell.toFixed(2)}`,
+                );
             }
           } else overlap++;
         }
@@ -558,7 +609,11 @@ export function startPrologueHud(glCanvas: HTMLCanvasElement, q: URLSearchParams
       },
       bench(frames) {
         // one static view (the same plates, pops and fx for both runs), alternating mounted / unmounted in short rounds
-        for (let i = 0; i < 3000 && !(driver.view.phase === "combat" && driver.view.plates.length >= 1); i++)
+        for (
+          let i = 0;
+          i < 3000 && !(driver.view.phase === "combat" && driver.view.plates.length >= 1);
+          i++
+        )
           tick();
         for (let i = 0; i < 20; i++) tick();
         const v = pview();
@@ -580,7 +635,8 @@ export function startPrologueHud(glCanvas: HTMLCanvasElement, q: URLSearchParams
           wo.push(run(per));
           hud.attachPrologue(mounted ?? undefined);
         }
-        const med = (a: number[]): number => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] ?? 0;
+        const med = (a: number[]): number =>
+          [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] ?? 0;
         const withMs = med(w);
         const withoutMs = med(wo);
         return { withMs, withoutMs, deltaMs: withMs - withoutMs, frames: per * 8 };

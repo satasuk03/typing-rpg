@@ -51,6 +51,8 @@ export interface PanelCtx {
   textRects?: { id: string; rect: Rect }[];
   /** Debug collector: per-enemy tag/badge rects (design px); chips of the same enemy must never overlap. */
   chipRects?: { owner: string; id: string; rect: Rect }[];
+  /** Prologue mode: no guard-leak badge on enemies (noise in a new player's first minute). */
+  noLeak?: boolean;
 }
 
 /** Records the rect of a text run that is about to be drawn (design px). */
@@ -191,6 +193,8 @@ export function drawStatsPanel(p: PanelCtx, v: LevelView): void {
     ["ACCURACY", `${acc}%`, acc >= 95 ? "#a8f290" : acc >= 85 ? "#ffe070" : "#ff8a7a"],
     ["GOLD", String(v.goldCollected), "#ffd860"],
   ];
+  // the prologue pays nothing: no GOLD row
+  if (v.prologue !== undefined) rows.pop();
   rows.forEach(([k, val, col], i) => {
     txt(c, k, x + 20, y + 28 + i * 25, 12, "#b0a0c0", { ls: 1 });
     txt(c, val, x + w - 20, y + 28 + i * 25, 16, col, { align: "right", f: FONT_DISP, w: 700 });
@@ -543,7 +547,7 @@ export function drawEnemyBars(
     { edge: "rgba(0,0,0,0)" },
   );
   if (e.shieldMax > 0) shieldBadge(c, x - 58, y + 6, String(e.shield), broken, 13);
-  const leak = leakBadgeLabel(e);
+  const leak = p.noLeak ? null : leakBadgeLabel(e);
   // P1-2: the tag row (healer / ELITE) is drawn first; the leak badge sits right of it, never under it
   const tagsEnd = enemyHasTags(e) && !e.isBoss ? drawEnemyTags(p, e, x, fy + 1) : null;
   if (leak) {
@@ -637,7 +641,7 @@ export function drawBossPlate(p: PanelCtx, v: LevelView, e: EnemyView, st: Enemy
       stroke: false,
     });
   if (e.shieldMax > 0) shieldBadge(c, r.x + 30, r.y + 46, String(e.shield), broken, 17);
-  const leak = leakBadgeLabel(e);
+  const leak = p.noLeak ? null : leakBadgeLabel(e);
   if (leak) drawLeakBadge(c, leak, r.x + r.w - 12, r.y + 18);
   e.weaknesses.forEach((wk, i) => {
     damageIcon(c, wk.type, r.x + r.w - 40 + (i - 0.5) * 22, r.y + 46, 7, wk.revealed);

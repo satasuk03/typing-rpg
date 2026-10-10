@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const OUT = process.env.STILL_DIR ?? join(here, "..", "..", "..", "..", "docs", "qa", "prologue-p3.3");
+const OUT =
+  process.env.STILL_DIR ?? join(here, "..", "..", "..", "..", "docs", "qa", "prologue-p3.3");
 mkdirSync(OUT, { recursive: true });
 
 test.setTimeout(600_000);

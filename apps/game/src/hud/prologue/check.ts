@@ -20,14 +20,17 @@ export function checkPrologueSnapshot(s: HudDebugSnapshot): string[] {
     ["skip ring", p.ringRect],
     ["ink line", p.inkRect],
   ];
-  for (const [n, r] of named) if (r && !rectInside(r, w, h, 0)) out.push(`${n} outside the viewport`);
+  for (const [n, r] of named)
+    if (r && !rectInside(r, w, h, 0)) out.push(`${n} outside the viewport`);
 
   // ---- dialogue: contrast, 2 lines, nothing over it
   if (p.dialogue) {
     if (p.dialogue.contrast < DIALOGUE_MIN_CONTRAST)
       out.push(`dialogue contrast ${p.dialogue.contrast.toFixed(2)} < ${DIALOGUE_MIN_CONTRAST}`);
     if (p.dialogue.speakerContrast < DIALOGUE_MIN_CONTRAST)
-      out.push(`speaker plate contrast ${p.dialogue.speakerContrast.toFixed(2)} < ${DIALOGUE_MIN_CONTRAST}`);
+      out.push(
+        `speaker plate contrast ${p.dialogue.speakerContrast.toFixed(2)} < ${DIALOGUE_MIN_CONTRAST}`,
+      );
     if (p.dialogue.lines.length > 2) out.push(`dialogue wraps to ${p.dialogue.lines.length} lines`);
     if (p.dialogue.fontPx < 14) out.push(`dialogue font ${p.dialogue.fontPx}px < 14`);
   }
@@ -39,7 +42,8 @@ export function checkPrologueSnapshot(s: HudDebugSnapshot): string[] {
     s.bannerRects.forEach((r, i) => {
       if (hit(r, dr)) out.push(`banner ${i} covers the dialogue`);
     });
-    for (const pl of s.plates) if (hit(pl.rect, dr)) out.push(`plate ${pl.id} overlaps the dialogue`);
+    for (const pl of s.plates)
+      if (hit(pl.rect, dr)) out.push(`plate ${pl.id} overlaps the dialogue`);
     if (p.grimoireRect && hit(p.grimoireRect, dr)) out.push("grimoire overlaps the dialogue");
     if (p.emberRect && hit(p.emberRect, dr)) out.push("ember overlaps the dialogue");
     if (p.inkRect && hit(p.inkRect, dr)) out.push("ink line overlaps the dialogue");

@@ -4,8 +4,8 @@
  */
 import type { Ctx } from "../draw";
 import { clamp, frame, txt } from "../draw";
-import { FONT_UI, GOLD_HI } from "../theme";
 import type { Rect } from "../layout";
+import { FONT_UI, GOLD_HI } from "../theme";
 
 export function measureHint(c: Ctx, text: string): number {
   c.font = `700 16px ${FONT_UI}`;
@@ -70,7 +70,12 @@ export function drawSkipRing(
   c.beginPath();
   c.roundRect(cx - 34 - lw - 22, cy - 14, lw + 26, 28, 14);
   c.fill();
-  txt(c, label, cx - 34 - lw - 9, cy + 1, 13, "#f6e6c4", { f: FONT_UI, w: 700, ls: 1, stroke: false });
+  txt(c, label, cx - 34 - lw - 9, cy + 1, 13, "#f6e6c4", {
+    f: FONT_UI,
+    w: 700,
+    ls: 1,
+    stroke: false,
+  });
   // disc, track, progress arc
   c.fillStyle = "rgba(10,7,16,0.78)";
   c.beginPath();

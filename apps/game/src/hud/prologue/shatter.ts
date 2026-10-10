@@ -169,30 +169,10 @@ export function drawShatter(
         c.rotate(rot);
         c.globalAlpha = fade;
         const sw = CELL_PX * S;
-        c.drawImage(
-          ic.color,
-          i * CELL_PX,
-          j * CELL_PX,
-          CELL_PX,
-          CELL_PX,
-          -sw / 2,
-          -sw / 2,
-          sw,
-          sw,
-        );
+        c.drawImage(ic.color, i * CELL_PX, j * CELL_PX, CELL_PX, CELL_PX, -sw / 2, -sw / 2, sw, sw);
         if (grey > 0) {
           c.globalAlpha = fade * grey;
-          c.drawImage(
-            ic.dim,
-            i * CELL_PX,
-            j * CELL_PX,
-            CELL_PX,
-            CELL_PX,
-            -sw / 2,
-            -sw / 2,
-            sw,
-            sw,
-          );
+          c.drawImage(ic.dim, i * CELL_PX, j * CELL_PX, CELL_PX, CELL_PX, -sw / 2, -sw / 2, sw, sw);
         }
         c.restore();
       }

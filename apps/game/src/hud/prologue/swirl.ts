@@ -138,7 +138,8 @@ export function drawEmber(
 export const SHARDS_FALL_MS = 1900;
 export const SHARDS_STAGGER_MS = 350;
 /** Total time until the last shard has landed (and started to fade into the ember). */
-export const shardsLandMs = (n: number): number => SHARDS_FALL_MS + SHARDS_STAGGER_MS * Math.max(0, n - 1);
+export const shardsLandMs = (n: number): number =>
+  SHARDS_FALL_MS + SHARDS_STAGGER_MS * Math.max(0, n - 1);
 
 /**
  * The starter-kit shards drifting down from the tear into the open hand: dim icons (no colour: the grade took it),
@@ -172,7 +173,17 @@ export function drawShardsReturn(
     c.rotate(reducedMotion ? 0 : Math.sin(p * 5 + i) * 0.3 * (1 - p));
     if (hasSkillIcon(id)) {
       const S = 2;
-      c.drawImage(getSkillIcon(id).dim, 0, 0, ICON_PX, ICON_PX, -ICON_PX * S / 2, -ICON_PX * S / 2, ICON_PX * S, ICON_PX * S);
+      c.drawImage(
+        getSkillIcon(id).dim,
+        0,
+        0,
+        ICON_PX,
+        ICON_PX,
+        (-ICON_PX * S) / 2,
+        (-ICON_PX * S) / 2,
+        ICON_PX * S,
+        ICON_PX * S,
+      );
     } else {
       // a passive (Clean Cut): its chip in grey outline
       const pg = passiveGlyph(id);

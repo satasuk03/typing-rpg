@@ -45,6 +45,8 @@ import {
   popAlpha,
   popScale,
 } from "./pops";
+import type { PrologueAnchorSource, PrologueDebug, PrologueDrawEnv } from "./prologue/PrologueHud";
+import { PrologueHud } from "./prologue/PrologueHud";
 import {
   activeRiddle,
   drawRiddlePanel,
@@ -54,12 +56,6 @@ import {
 } from "./riddlePanel";
 import type { HudSettings } from "./settings";
 import { DEFAULT_HUD_SETTINGS, normalizeSettings } from "./settings";
-import type {
-  PrologueAnchorSource,
-  PrologueDebug,
-  PrologueDrawEnv,
-} from "./prologue/PrologueHud";
-import { PrologueHud } from "./prologue/PrologueHud";
 import { getSkillIcon } from "./skillIcons";
 import type { PlatePalette } from "./theme";
 import {
@@ -966,7 +962,7 @@ export class Hud {
     for (const e of view.enemies) {
       if (!e.alive || e.isBoss || introHold) continue;
       const f = this.anchorDesign(e, "feet");
-      avoid.push(enemyBarsRect(f.x, f.y, (e.leakBp ?? 0) > 0, enemyHasTags(e)));
+      avoid.push(enemyBarsRect(f.x, f.y, !pm && (e.leakBp ?? 0) > 0, enemyHasTags(e)));
     }
     for (const r of this.reserved) {
       avoid.push({ x: r.x / this.s, y: r.y / this.s, w: r.w / this.s, h: r.h / this.s });
@@ -1071,6 +1067,7 @@ export class Hud {
     };
     this.panelText.length = 0;
     pc.textRects = this.panelText;
+    pc.noLeak = pm;
     this.chipRects.length = 0;
     pc.chipRects = this.chipRects;
     const proFade = pro ? pro.panelFade() : 1;

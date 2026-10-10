@@ -17,7 +17,7 @@ import type { Ctx } from "../draw";
 import { clamp } from "../draw";
 import type { Rect } from "../layout";
 import type { HudSettings } from "../settings";
-import { drawGrimoire, type ChipState, type OrbState, orbCentre } from "./grimoire";
+import { type DialogueLayout, drawDialogue, layoutDialogue, revealedChars } from "./dialogue";
 import type { DialogueGeom, GrimoireGeom, P2 } from "./geometry";
 import {
   cloakTrapezoid,
@@ -31,7 +31,7 @@ import {
   rectsHit,
   ringRect,
 } from "./geometry";
-import { drawDialogue, type DialogueLayout, layoutDialogue, revealedChars } from "./dialogue";
+import { type ChipState, drawGrimoire, type OrbState, orbCentre } from "./grimoire";
 import { drawCaption, drawInk, type InkLayout, measureInk } from "./ink";
 import { drawHint, drawSkipRing, measureHint } from "./overlay";
 import {
@@ -42,7 +42,7 @@ import {
   speakerContrast,
 } from "./palette";
 import { SHATTER_DONE_S } from "./shatter";
-import { drawEmber, drawShardsReturn, drawSwirl, shardsLandMs } from "./swirl";
+import { drawEmber, drawShardsReturn, drawSwirl } from "./swirl";
 
 /** CSS-px anchor getters. P3.6 overrides these with the stage's exact projections; the Hud supplies projector fallbacks. */
 export interface PrologueAnchorSource {
@@ -224,7 +224,8 @@ export class PrologueHud {
         this.inkDoneAt = null;
       }
       const n = h.ink.shown.length;
-      for (let i = this.inkShown; i < n; i++) this.inkBirths[i] = jumped ? this.clock - 5 : this.clock;
+      for (let i = this.inkShown; i < n; i++)
+        this.inkBirths[i] = jumped ? this.clock - 5 : this.clock;
       this.inkShown = Math.max(this.inkShown, n);
       if (n >= h.ink.text.length && this.inkDoneAt === null)
         this.inkDoneAt = jumped ? this.clock - 99 : this.clock;
@@ -338,15 +339,19 @@ export class PrologueHud {
     for (let i = 0; i < this.nOrbs; i++) {
       const sv = view?.skills.find((x) => x.slot === i);
       const at = this.shatterAt.get(i);
-      const o = (this.orbs[i] ??= {
-        id: "",
-        charge: 0,
-        ready: false,
-        armed: false,
-        castFlash: 0,
-        shatterAge: null,
-        wake: 1,
-      });
+      let o = this.orbs[i];
+      if (!o) {
+        o = {
+          id: "",
+          charge: 0,
+          ready: false,
+          armed: false,
+          castFlash: 0,
+          shatterAge: null,
+          wake: 1,
+        };
+        this.orbs[i] = o;
+      }
       o.id = this.skillIds[i] ?? DEFAULT_KIT[i] ?? "fireball";
       o.charge = sv?.chargeFrac ?? 0;
       o.ready = sv?.ready ?? false;
@@ -427,16 +432,21 @@ export class PrologueHud {
     const grVisible = active && this.grAlpha > 0.02;
     this.grGeom = grVisible ? grimoireGeom(W, H, this.nOrbs, ease(this.slide)) : null;
     // the dialogue wins: while the bar is still sliding up (or on a tall/short viewport) it never overlaps the box
-    if (this.grGeom && this.dlg && this.dlgA > 0.02 && rectsHit(this.grGeom.rect, this.dlgGeom.rect))
+    if (
+      this.grGeom &&
+      this.dlg &&
+      this.dlgA > 0.02 &&
+      rectsHit(this.grGeom.rect, this.dlgGeom.rect)
+    )
       this.grGeom = null;
     if (this.cs?.hud.ink || this.inkText) {
-      if (!this.inkLay || this.inkLay.text !== this.inkText) this.inkLay = measureInk(c, this.inkText);
+      if (!this.inkLay || this.inkLay.text !== this.inkText)
+        this.inkLay = measureInk(c, this.inkText);
     }
     const inkA = this.inkAlpha();
     this.inkR = inkA > 0.02 && this.inkLay ? inkRect(W, H, this.inkLay.total) : null;
     const hintText = this.hint?.text ?? (this.hintA > 0 ? this.hintLastText : null);
-    this.hintR =
-      hintText && this.hintA > 0.02 ? hintRect(W, H, measureHint(c, hintText)) : null;
+    this.hintR = hintText && this.hintA > 0.02 ? hintRect(W, H, measureHint(c, hintText)) : null;
     this.ringR = this.ringA > 0.02 ? ringRect(W, H) : null;
     this.maskR = null;
     if (bossAlive) {
@@ -533,7 +543,15 @@ export class PrologueHud {
       const feet = this.anchor(env, "nulFeet");
       if (head && feet) {
         this.swirlTrap = cloakTrapezoid(head, feet);
-        drawSwirl(c, this.swirlTrap, env.time, this.clock - this.swirlAt, this.swirlA * settings.effectsIntensity, env.quality, rm);
+        drawSwirl(
+          c,
+          this.swirlTrap,
+          env.time,
+          this.clock - this.swirlAt,
+          this.swirlA * settings.effectsIntensity,
+          env.quality,
+          rm,
+        );
       }
     }
     // ---- shards and ember (below the dialogue in z-order)
@@ -550,13 +568,32 @@ export class PrologueHud {
     if (this.capA > 0.01) drawCaption(c, W, H, this.capText, ease(this.capA));
     const ia = this.inkAlpha();
     if (ia > 0.02 && this.inkLay && this.inkR)
-      drawInk(c, this.inkLay, W / 2, this.inkR.y + this.inkR.h * 0.82, this.inkShown, this.inkBirths, this.clock, ia, settings.effectsIntensity, rm);
+      drawInk(
+        c,
+        this.inkLay,
+        W / 2,
+        this.inkR.y + this.inkR.h * 0.82,
+        this.inkShown,
+        this.inkBirths,
+        this.clock,
+        ia,
+        settings.effectsIntensity,
+        rm,
+      );
     // ---- hint card and skip ring
     if (this.hintR) {
       const text = this.hint?.text ?? this.hintLastText;
       drawHint(c, this.hintR, text, this.hintA, ease(this.hintA), env.time, rm);
     }
-    if (this.ringR) drawSkipRing(c, this.ringR, this.ringProgress ?? 0, this.ringA, env.time, settings.reducedFlash);
+    if (this.ringR)
+      drawSkipRing(
+        c,
+        this.ringR,
+        this.ringProgress ?? 0,
+        this.ringA,
+        env.time,
+        settings.reducedFlash,
+      );
     // ---- the dialogue box, last
     if (this.dlg && this.dlgLay && this.dlgA > 0.01)
       drawDialogue(c, this.dlgGeom, {
