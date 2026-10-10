@@ -1,17 +1,22 @@
 /**
- * Level registry: every `src/assets/levels/ch*-l*.json` file, parsed + validated on first access.
+ * Level registry: every `src/assets/levels/ch*-l*.json` file plus `prologue.json`, parsed + validated on first access.
  * Vite inlines the JSON; vitest resolves the same glob.
+ * The prologue's layout is served under the id "prologue" (`PrologueDef.layoutId`). The layout schema's id field only accepts
+ * `chN-lNN`, so the file carries the placeholder id `ch1-l00` and `loadLevel` renames the parsed layout.
  */
 import { type LevelLayout, parseLevelLayout } from "./layout";
 
-const files = import.meta.glob<unknown>("../../assets/levels/ch*-l*.json", {
-  eager: true,
-  import: "default",
-});
+const files = import.meta.glob<unknown>(
+  ["../../assets/levels/ch*-l*.json", "../../assets/levels/prologue.json"],
+  {
+    eager: true,
+    import: "default",
+  },
+);
 
 const raw = new Map<string, unknown>();
 for (const [path, json] of Object.entries(files)) {
-  const id = /\/(ch\d+-l\d+)\.json$/.exec(path)?.[1];
+  const id = /\/(ch\d+-l\d+|prologue)\.json$/.exec(path)?.[1];
   if (id) raw.set(id, json);
 }
 
@@ -33,7 +38,8 @@ export function loadLevel(id: string): LevelLayout {
   if (hit) return hit;
   const json = raw.get(id);
   if (json === undefined) throw new Error(`unknown level "${id}" (have: ${levelIds().join(", ")})`);
-  const layout = parseLevelLayout(json);
+  const parsed = parseLevelLayout(json);
+  const layout = id === "prologue" ? { ...parsed, id } : parsed;
   cache.set(id, layout);
   return layout;
 }

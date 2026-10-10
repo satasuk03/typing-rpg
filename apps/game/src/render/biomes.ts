@@ -264,6 +264,65 @@ export const GROVE_DAWN: BiomeMood = {
   exposure: 1.1,
 };
 
+/**
+ * Prologue "The Unwriting" (docs/vfx/prologue-art-direction.md 2.1-2.3). `STORM_GOLD` is the Word Gate segment grade: the `ruins`
+ * biome plus the `mood` tweak authored in `assets/levels/prologue.json` (keep the two in sync). Not a `BiomeId`.
+ */
+export const STORM_GOLD: BiomeMood = {
+  ...ruins,
+  amb: [0.26, 0.2, 0.31],
+  gamb: [0.22, 0.13, 0.08],
+  sunCol: [2.05, 1.22, 0.52],
+  sunDir: [-0.38, 0.3, -0.87],
+  fogCol: [0.7, 0.4, 0.21],
+  fog: [0.011, 14, 0.26],
+  scatter: 0.95,
+  exposure: 1.0,
+  lift: [0.026, 0.012, 0.042],
+  gamma: [1, 1, 1.02],
+  gain: [1.1, 0.98, 0.83],
+  sat: 1.18,
+  contrast: 1.15,
+  sh: [0.02, 0.0, 0.055],
+  hi: [0.065, 0.035, 0.0],
+  bloom: 0.62,
+  thr: 0.95,
+  vig: 0.56,
+  clear: [0.7, 0.4, 0.21],
+  rays: 1.5,
+  fill: 0.45,
+  ambient: "embers",
+};
+
+/** The world after the theft (art direction 2.2). Not a `BiomeId`; blend `STORM_GOLD` -> `UNWRITTEN` with `blendMood`. */
+export const UNWRITTEN: BiomeMood = {
+  ...STORM_GOLD,
+  amb: [0.22, 0.23, 0.26],
+  gamb: [0.12, 0.12, 0.13],
+  sunCol: [0.62, 0.64, 0.7],
+  fogCol: [0.3, 0.31, 0.34],
+  fog: [0.012, 14, 0.3],
+  scatter: 0.35,
+  exposure: 0.92,
+  lift: [0.012, 0.014, 0.02],
+  gamma: [1, 1, 1.02],
+  gain: [0.96, 0.98, 1.02],
+  sat: 0.15,
+  contrast: 1.0,
+  sh: [0.0, 0.006, 0.02],
+  hi: [0.0, 0.005, 0.015],
+  bloom: 0.25,
+  thr: 1.15,
+  vig: 0.71,
+  clear: [0.3, 0.31, 0.34],
+  rays: 0.2,
+  fill: 0.25,
+  ambient: "none",
+};
+
+/** Blend factor toward `UNWRITTEN` after each of the 6 thefts (index 0 = before the first); front-loaded so step 1 already reads. */
+export const THEFT_RAMP = [0, 0.24, 0.42, 0.57, 0.71, 0.85, 1] as const;
+
 export const BIOMES: Readonly<Record<BiomeId, BiomeMood>> = {
   forest,
   ruins,
