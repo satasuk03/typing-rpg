@@ -15,6 +15,23 @@ export const CONFIG = {
   biome: { min: 60, max: 100, minDistinctInitials: 12 },
   /** Distinct first letters needed per level: max visible plates + guard swaps. */
   feasibility: { guardSwaps: 2, bossVisiblePlates: 4, defaultVisiblePlates: 4 },
+  /** Chapter 2 vocabulary (CH2_PLAN 3.2): per-biome pools, plate bands, sentence pools and the Riddle of Leaves. */
+  ch2: {
+    biomes: ["hushwood", "fen", "grove"] as const,
+    minPool: 60,
+    /** Plate length bands (levels reach 3-8 letters late in the chapter): each needs minInitialsPerBand first letters. */
+    bands: [
+      [3, 5],
+      [4, 6],
+      [5, 7],
+      [6, 8],
+    ] as readonly (readonly [number, number])[],
+    minInitialsPerBand: 12,
+    sentenceMin: { doom: 16, finisher: 3, secondWind: 10, intro: 3 } as Record<string, number>,
+    introLen: [12, 60] as [number, number],
+    riddleMaxLen: 10,
+    riddle: { minCount: 48, minInitials: 10 },
+  },
   /** Word-entry text limits. */
   maxDefinitionLen: 80,
   /** Typing Trial (interfaces D25 and TrialDef). */

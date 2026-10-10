@@ -4,6 +4,7 @@ export * from "./config.ts";
 export * from "./filters.ts";
 export * from "./layouts.ts";
 export * from "./rules.ts";
+export * from "./rules-ch2.ts";
 export * from "./rules-content.ts";
 export * from "./types.ts";
 export * from "./validate.ts";
