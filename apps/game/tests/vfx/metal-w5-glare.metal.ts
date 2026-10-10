@@ -48,6 +48,16 @@ async function installFx(page: Page): Promise<void> {
     }
     for (const ray of wa.rays) keep.add(ray.mesh);
     const fxMeshes: { visible: boolean }[] = [];
+    // sprite hit-flash uniforms (enemy white flash): the FX-off render zeroes them so a flash-only clip counts as FX
+    const flashU: { value: number }[] = [];
+    const collectFlash = (): void => {
+      flashU.length = 0;
+      // biome-ignore lint/suspicious/noExplicitAny: test-only scene walk
+      world.scene.traverse((o: any) => {
+        const u = o.material?.uniforms?.uFlash;
+        if (u && !flashU.includes(u)) flashU.push(u);
+      });
+    };
     // biome-ignore lint/suspicious/noExplicitAny: test-only scene walk
     const walk = (o: any): void => {
       if ((o.isMesh || o.isPoints) && o.renderOrder >= 6 && !keep.has(o)) fxMeshes.push(o);
@@ -58,6 +68,7 @@ async function installFx(page: Page): Promise<void> {
     w.__fx = (): { clip: number; x: number; y: number } => {
       fxMeshes.length = 0;
       world.scene.traverse(walk);
+      collectFlash();
       world.render();
       c1.drawImage(gl, 0, 0);
       const on = c1.getImageData(0, 0, gl.width, gl.height).data;
@@ -66,6 +77,8 @@ async function installFx(page: Page): Promise<void> {
       const vis = fxMeshes.map((m) => m.visible);
       for (const l of dyn) if (l !== wa.fillLight) l.intensity = 0;
       for (const m of fxMeshes) m.visible = false;
+      const flashSaved = flashU.map((u) => u.value);
+      if (!w.__noSpriteFlash) for (const u of flashU) u.value = 0;
       lightsUpdate();
       world.render();
       c2.drawImage(gl, 0, 0);
@@ -75,6 +88,9 @@ async function installFx(page: Page): Promise<void> {
       });
       dyn.forEach((l, i) => {
         l.intensity = saved[i] as number;
+      });
+      flashU.forEach((u, i) => {
+        u.value = flashSaved[i] as number;
       });
       lightsUpdate();
       const w0 = gl.width;

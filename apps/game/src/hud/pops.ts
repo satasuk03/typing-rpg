@@ -1,4 +1,5 @@
 /** Damage pops and tags: lifetime + stacking logic (pure, no DOM). */
+import type { Rect } from "./layout";
 
 export type PopKind =
   | "dmg"
@@ -195,4 +196,70 @@ export function popScale(age: number, reducedMotion = false): number {
   const c3 = c1 + 1;
   const e = 1 + c3 * (k - 1) ** 3 + c1 * (k - 1) ** 2;
   return 2.1 + (1 - 2.1) * e;
+}
+
+/** Boss BREAK pop: max design-px distance of its centre from the boss head anchor. */
+export const BOSS_BREAK_MAX_DIST = 160;
+/** Any other enemy's BREAK pop: max design-px distance of its centre from its head (hard clamp, even when crowded). */
+export const BREAK_MAX_DIST = 140;
+/** Size factors tried (largest first) when a crowded BREAK pop does not fit within its clamp at full size. */
+export const BREAK_SHRINK = [1, 0.8, 0.64, 0.5] as const;
+
+export function inflate(r: Rect, n: number): Rect {
+  return { x: r.x - n, y: r.y - n, w: r.w + 2 * n, h: r.h + 2 * n };
+}
+export function overlapsRect(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+/** Smallest offset that clears every obstacle and satisfies `ok`; NaN when nothing fits (hide the pop). */
+export function freeSpot(
+  base: Rect,
+  obst: readonly Rect[],
+  ok: (r: Rect) => boolean,
+): { x: number; y: number } {
+  const gap = 6;
+  const dxs = [0];
+  const dys = [0];
+  for (const o of obst) {
+    if (!overlapsRect(base, o)) continue;
+    dys.push(o.y - gap - (base.y + base.h), o.y + o.h + gap - base.y);
+    dxs.push(o.x - gap - (base.x + base.w), o.x + o.w + gap - base.x);
+  }
+  let best: { x: number; y: number; c: number } | null = null;
+  for (const dx of dxs)
+    for (const dy of dys) {
+      const r: Rect = { ...base, x: base.x + dx, y: base.y + dy };
+      if (!ok(r)) continue;
+      const c = dx * dx + (dy > 0 ? 1.15 : 1) * dy * dy;
+      if (!best || c < best.c) best = { x: dx, y: dy, c };
+    }
+  if (!best) {
+    // crowded: scan a grid around the pop for the nearest free spot
+    for (let dy = -320; dy <= 320; dy += 10)
+      for (let dx = -420; dx <= 420; dx += 12) {
+        const r: Rect = { ...base, x: base.x + dx, y: base.y + dy };
+        if (!ok(r)) continue;
+        const c = dx * dx + dy * dy;
+        if (!best || c < best.c) best = { x: dx, y: dy, c };
+      }
+  }
+  // still nothing (screen full of plates): hide this pop rather than cover a word
+  return best ?? { x: Number.NaN, y: Number.NaN };
+}
+
+/**
+ * Crowded BREAK pop: find a spot that satisfies `ok` (which embeds the max-distance clamp and the keep-out rects) by
+ * shrinking the pop instead of drifting it away. `baseAt(k)` is the pop box at size factor k. Null = skip this frame.
+ */
+export function fitBreakPop(
+  baseAt: (k: number) => Rect,
+  ok: (r: Rect) => boolean,
+  obst: readonly Rect[],
+): { k: number; x: number; y: number } | null {
+  for (const k of BREAK_SHRINK) {
+    const best = freeSpot(baseAt(k), obst, ok);
+    if (!Number.isNaN(best.x)) return { k, ...best };
+  }
+  return null;
 }
