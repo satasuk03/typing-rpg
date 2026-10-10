@@ -222,6 +222,8 @@ describe("chapter 2 level layouts (T2.4)", () => {
   it("P2-1 variety: every level carries its own signature set piece, flip twins exist, and moods differ per level", () => {
     const src = new ProceduralSpriteSource();
     const SIGNATURE: Record<string, string> = {
+      "ch2-l03": "prop.ch2.hollowTrunk.",
+      "ch2-l04": "prop.ch2.owlPerch",
       "ch2-l05": "prop.ch2.lily.",
       "ch2-l06": "prop.ch2.shrineGate",
       "ch2-l08": "prop.ch2.bridge",
@@ -234,7 +236,17 @@ describe("chapter 2 level layouts (T2.4)", () => {
         `${id} uses ${key}`,
       ).toBe(true);
     }
-    for (const k of ["shrineGate", "bridge", "lily.0", "lily.1", "weeper.0", "weeper.1"]) {
+    for (const k of [
+      "shrineGate",
+      "bridge",
+      "lily.0",
+      "lily.1",
+      "weeper.0",
+      "weeper.1",
+      "hollowTrunk.0",
+      "hollowTrunk.1",
+      "owlPerch",
+    ]) {
       expect(src.has(`prop.ch2.${k}`), k).toBe(true);
       expect(src.has(`prop.ch2.${k}.flip`), `${k}.flip`).toBe(true);
     }
@@ -243,7 +255,23 @@ describe("chapter 2 level layouts (T2.4)", () => {
     const sunCols = new Set(
       IDS.slice(0, 9).map((i) => JSON.stringify(loadLevel(i).segments[0]?.mood.sunCol ?? null)),
     );
-    expect(sunCols.size).toBeGreaterThanOrEqual(8);
+    expect(sunCols.size).toBe(9);
+    // hushwood L3 is a violet-black forest, L4 a pale silver-gold moonlit clearing; every battle camera has its own mood
+    const sun = (id: string) => loadLevel(id).segments[0]?.mood.sunCol ?? [0, 0, 0];
+    expect(sun("ch2-l03")[2]).toBeGreaterThan(sun("ch2-l03")[1] + 0.3); // violet: blue far above green
+    expect(sun("ch2-l04")[0]).toBeGreaterThan(sun("ch2-l04")[2]); // silver-gold: warm, not teal
+    for (const id of ["ch2-l03", "ch2-l04"]) {
+      const l = loadLevel(id);
+      expect(l.segments.length, `${id} one mood per battle camera`).toBe(3);
+      expect(
+        new Set(
+          l.cameras
+            .filter((c) => c.name.startsWith("battle:"))
+            .map((c) => JSON.stringify([c.y, c.dist, c.pitch, c.fov])),
+        ).size,
+        `${id} per-battle camera framing`,
+      ).toBe(3);
+    }
   });
 
   it("multi-segment levels crossfade moods (L8 dusk deepens, L10 outer grove to the heart)", () => {
