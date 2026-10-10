@@ -132,8 +132,10 @@ describe("resolvePrologue / prologueRunConfig (§3.7.1)", () => {
   });
 
   test("throws SimError: no prologue, unknown enemy/boss, boss not last, riddle boss", () => {
-    expect(() => resolvePrologue(contentBundle)).toThrow(SimError);
-    expect(() => prologueRunConfig(contentBundle)).toThrow(SimError);
+    // the real bundle ships a prologue since P1.2, so strip it for the "no prologue" case
+    const { prologue: _omit, ...noPrologue } = contentBundle;
+    expect(() => resolvePrologue(noPrologue)).toThrow(SimError);
+    expect(() => prologueRunConfig(noPrologue)).toThrow(SimError);
     const bad = (over: Record<string, unknown>) => () => resolvePrologue(prologueBundle(over));
     const enc = (enemy: string) => ({
       kind: "encounter",
