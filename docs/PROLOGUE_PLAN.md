@@ -482,3 +482,15 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
   - P3.2: the sun Glow quads don't fade with the theft ramp, so the VFX layer or mood should dim them stepwise.
   - P4.2 polish: the ruins ground still renders lush green; the backlit-stone tint is a workaround.
   - ~~Tech debt: `layout.ts` only accepts `chN-lNN` ids, so `prologue.json` carries the placeholder id `ch1-l00` and `loadLevel("prologue")` renames it. Fix the regex and add a prologue-layout load test (mood tweak equals `STORM_GOLD`).~~ Done 2026-10-10.
+- **P3.2 merged (orchestrator review of the stills).** For R1 and P4.2:
+  - (a) Weak cues: the skyTear open, the inkWrite sparks, the catch crumble and the grey theft ribbons. The aura collapse reads as white puffs, not a collapse.
+  - (b) `clusterC-densest`: Nul appears to float at the top of the gate, and a large "OH" glyph sits on his cloak. Check the actor y and the glyph placement during the vortex.
+  - (c) `partB-maxfx` (mock driver, Golem stand-in): orbiting letters bunch up next to the guard plate. Re-probe on the real session once P3.5 lands.
+  - Integration jobs for P3.6, from the P3.2 report:
+    - apply `inkRiseOffsetY` in the stage;
+    - spawn the sword prop;
+    - add the auraCollapse camera shake and the 160 ms catch hit-stop;
+    - remove the combat Fireball projectile on `PrologueClimax`;
+    - apply fog density from `PrologueFx.out`;
+    - keep `auraCollapse` active to the end of Part C.
+  - Possible tweak: `hushBolt` lands about 440 ms after the damage. If that reads late, retrigger on windup.
