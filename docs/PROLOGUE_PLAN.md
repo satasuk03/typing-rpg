@@ -514,3 +514,4 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
     - The returning shards read faint.
     - Faint glyphs are baked into Nul's `rise` frame.
     - The `?scene=prologue&part=cutscene` dev route still plays the old test timeline. Use `window.__play.proSeek(t)` for stills.
+- **P4.1 merged.** Perf, readability, skip and idle all pass on Metal (`docs/perf.md`, Prologue section). Watch item for P4.2: a one-off hitch on the first frames of Part B (50 ms at tier 0, 133 ms at tier 2 with 4x throttle). Pre-warm the prologue VFX and HUD before `startPlay`.
