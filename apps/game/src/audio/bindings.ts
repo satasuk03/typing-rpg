@@ -58,6 +58,7 @@ export const KNOWN_SIM_EVENTS = [
   "EnemyAttack",
   "HeroDamaged",
   "HeroHealed",
+  "EnemyHealed", // interfaces v2.0
   "EnemyDeath",
   "HeroDowned",
   "SecondWindStarted",
@@ -80,6 +81,9 @@ export const KNOWN_SIM_EVENTS = [
   "MinigameWordCleared",
   "MinigameWordMissed",
   "MinigameEnded",
+  "RiddleStarted", // interfaces v2.0
+  "RiddleLeafPicked", // interfaces v2.0
+  "RiddleResolved", // interfaces v2.0
   "FinisherShown",
   "FinisherCompleted",
   "GoldGained",
@@ -135,6 +139,11 @@ export const AUDIO_SILENT_EVENTS: readonly string[] = [
   "TrialStarted",
   "CacheRolled",
   "GearUpgraded",
+  // interfaces v2.0 stubs (§11.5): silent until T3.3 binds the heal chime and the riddle stingers
+  "EnemyHealed",
+  "RiddleStarted",
+  "RiddleLeafPicked",
+  "RiddleResolved",
 ];
 
 /** Table-driven bindings: event type string -> handler. */

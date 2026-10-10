@@ -2,12 +2,34 @@
 
 | | |
 |---|---|
-| **Doc version** | **1.9** (2026-10-10) |
-| **SIM_VERSION** | `1` (nothing is implemented yet, so v1.1 does not bump it) |
+| **Doc version** | **2.0** (2026-10-10, Chapter 2 "The Hushwood") |
+| **SIM_VERSION** | `1` (v2.0 does not bump it: every new rule is gated by new content, Ch1 and the Trial replay identically, §13.1) |
 | **Authority** | Plan §12 step 3. Overrides nothing in `00-overview.md` §6. Choices made where the brainstorm docs were ambiguous are listed in §12. |
 | **Change process** | §11. Agents never edit this file directly; they propose. |
 
 **Changelog**
+- **2.0** (2026-10-10): proposed (plan C0.1, `docs/CH2_PLAN.md` with the PO answers). The Chapter 2 contracts. Every change is **additive and optional**; the full spec is §13, and the blocks in §3–§6 and §8–§9 are updated in place (new lines are marked `v2.0`). The blocks are also re-synced with the code shipped in v1.5–v1.9 (`ResolvedStar`, `parArmorBp`, `foldSentences`, guard-leak fields, boss view fields), so C0.3 can copy them verbatim.
+  - **Ch1 stays byte-identical** (§13.1): every new `Resolved*`/state/options key is *absent* (not `null`, not `undefined`) unless content uses the feature. Ch1 events, results, balance cells and bot output do not change; the only state-hash change is `def.contentVersion`, which T1.1 pins in the golden harness.
+  - **Content (§6):** `Biome` + `hushwood | fen | grove`. `WordEntry.uses` + `riddle | intro`, plus `chapter?` (scopes sentence pools) and `clue?` (riddle text). `EnemyRef.attackPower?` and `elite?`. `EnemyDef.heal?` (the healer). `MinigameDef` becomes a discriminated union with a `riddle` variant. `LevelDef.reviewBiomes?`. Per-chapter knob table `CHAPTER_KNOBS` (§13.6).
+  - **Sim (§3, §3.5, §3.6):** healer cadence/targets/cap; the Riddle of Leaves (deterministic picks on a new `riddle` RNG stream, exact draw order); `LevelOptions.caseAssist?` ("Ignore capitals"); new pure chapter helpers in `sim/meta` (§8). The existing sentence-case rule is verified and documented, including a doc fix to the targeting rule (§3.3).
+  - **Events (§4):** `EnemyHealed`, `RiddleStarted`, `RiddleLeafPicked`, `RiddleResolved`; `MinigameStarted.kind` gains `"riddle"`; optional `EnemySpawned.elite/healer`, `CharCorrect.shifted`.
+  - **View (§5):** `PlateView.exactCase?/shiftNext?` (the ⇧ cue), `EnemyView.elite?/healer?` (name tag, ✚ badge), `LevelView.minigame.kind?/riddle?` (the riddle panel).
+  - **Save (§9.1):** no new version. Ch2 progress uses the existing keys (by level id and chapter). One additive key: `settings.caseAssist` (zod default `false`; older v2 clients strip it harmlessly).
+  - **Not changed:** the Trial, `hdk1`, the run ticket and the Worker re-sim (§10 note). `SIM_VERSION` stays 1; `CONTENT_VERSION` changes with the Ch2 content.
+  - **Review notes (Opus Reviewer, self-review; for the orchestrator):**
+    1. *Riddle end rule.* The finisher appears after exactly `count` riddles (5), whatever the boss HP; right answers hit for `clearAtkMult x ATK` and the finisher removes the rest. This follows the plan's "five riddles, then the finisher" and keeps the learning beat for fast typists. Phase-3 *time* is therefore set by the riddle timers, not by HP/DPS. T5.1 must tune `readS/answerS/gapS` to the boss time targets. The alternative (each right answer removes 1/count of the phase-3 band so the bar lands on the gate exactly) is a one-line change if the PO prefers a "readable" HP bar.
+    2. *No boss word plate in the riddle phase,* and leaf plates pay no ATB (as Falling Rubble words today). Phase 3 is a pure reading-and-typing beat, so weapon ATK and skills barely matter in it. Confirm with the PO; that is the intent of "word meaning at the climax".
+    3. *Shift on the first letter.* In code, an untargeted exact-case plate is acquired only by the exact first key: `h` on "Hush now…" is a **stray typo** (combo latch). That is correct for the lesson, but harsh. The ⇧ cue therefore also shows on untargeted exact-case plates (`shiftNext`). The bot's Shift cost must model it, and the L1 intro card must teach it.
+    4. *caseAssist and stars.* The assist is story-only and costs nothing (it is accessibility, like `autoUnlock`). If the PO wants it to cap ★★★ like Zen, that is a client/meta rule; the sim already exposes the option.
+    5. *Pools were global.* `resolveLevel` built the doom/secondWind/finisher/minigame pools, and the `current` plate pool (tier 1, no biome), from the whole bundle. Adding Ch2 Hush Spells, or new generic T1 words, would have leaked into Ch1 and broken byte-identity. `WordEntry.chapter` ("introduced in", absent = 1) fixes this: sentence pools match the chapter exactly, and the other pools take chapter ≤ the level's. **T4.1/T4.2 must set `chapter: 2` on every entry they add**; the §13.1 Ch1 fixture test catches any miss.
+    6. *C0.3 cannot be types-only.*
+       - The `MinigameDef` union makes `resolve.ts`, `boss.ts`, `bossPlates.ts` and the HUD narrow on `kind`. They need minimal narrowing, e.g. `if (mg.kind !== "fallingRubble") throw new SimError("riddle: T1.3")`.
+       - The 4 new event types need stub bindings in `level/eventBindings.ts`, because `EventHandlers` is exhaustive. The audio list (`audio/bindings.ts`, `KNOWN_SIM_EVENTS` + silent) was already stubbed in the C0.1 commit, because its drift test reads this doc's §4.
+       - New saves need `caseAssist: false`.
+       - C0.3's write list must include these files. None of it changes behaviour: the probe parse shows Ch1 data gains no keys, so `CONTENT_VERSION` and the goldens stay the same.
+    7. *Skill ids.* Reveal, Calm Mind and Scholar (T1.4) are **reserved** here (`reveal`, `calmMind`, `scholar`) but not added to the unions yet. Adding them breaks every `Record<ActiveSkillId|PassiveId, …>` (BALANCE.SKILLS, `damageBySkillM`), so T1.4 adds them by ICP together with their BALANCE rows.
+    8. *Healer counterplay.* Break and Frost Lock defer heals (§3.5). That is intended (it rewards weakness play), but T5.1 should watch the Beginner time, which is already 4.31 of 4.5 min.
+    9. *Doc blocks were stale.* The §3/§5/§6 blocks had not been updated for v1.5–v1.9 (`ResolvedStar`, `parArmorBp`, `foldSentences`, leak fields, boss view fields). v2.0 re-syncs them with the code so C0.3 can copy them verbatim. Please diff them against `types.ts`/`view.ts`/`schemas.ts` once more during review.
 - **1.9** (2026-10-10): proposed (PO "not every attack is fully blocked", option G of `docs/qa/block-chance-analysis.md`). **Guard leak**: deterministic, no RNG, `SIM_VERSION` stays 1 (pre-release), `CONTENT_VERSION` changes.
   - Formula (integers, bp): `G` = the hero's Guard Rating = `itemScoreBp` of the equipped armor (`guardRatingBp(loadout)`). `P` = `mulBp(parArmorBp(chapter), enemy.attackPowerBp)`. `leakBp = clamp(10000 - floor(G*10000/P), 0, GUARD_LEAK_CAP_BP 5000)`. A typed guard always succeeds. **Parry:** the hit becomes `hit x leak`; the counter and `PARRY_ATB` are unchanged. **Block:** `hit x leak + (hit - hit x leak) x blockMult` (the leak applies first, BLOCK_MULT or Iron Will on the rest). An unguarded hit is unchanged. **Barrier:** it absorbs the leaked damage of a Parry (consuming a charge) as it absorbs a normal hit; a Parry with leak 0 never touches the barrier, and a Block with a barrier is still absorbed whole, as before.
   - Events (§4, additive; typed optional so the existing HUD mocks still compile, the sim always sets them): `GuardBlocked` and `GuardParried` gain `leakBp?: number` (0..5000) and `leakDamage?: number` (display HP actually leaked after any barrier; for a Block `damage` is still the total). `EnemyAttack.damage` of a parried attack is now the leaked damage.
@@ -182,7 +204,7 @@ The M0 placeholder (closures) is replaced: RNG state must be plain data so that 
 ```ts sim
 // packages/sim/src/rng.ts
 export type RngState = [a: number, b: number, c: number, d: number]; // uint32 each
-export const RNG_STREAMS = ["words", "combat", "enemyAi", "gimmick", "boss", "loot", "trial", "meta"] as const;
+export const RNG_STREAMS = ["words", "combat", "enemyAi", "gimmick", "boss", "loot", "trial", "meta", "riddle"] as const; // v2.0: + riddle (appended; existing streams are keyed by name, so unchanged)
 export type RngStream = (typeof RNG_STREAMS)[number];
 /** splitmix32 seeded with (seed ^ fnv1a32(stream) ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0, 4 draws, 12 warm-up. */
 export declare function deriveRng(seed: number, stream: RngStream, index?: number): RngState;
@@ -200,6 +222,8 @@ There are no float draws.
 **Stream rules**
 - **Per encounter:** each encounter `e` gets fresh `words`, `combat`, `enemyAi` and `gimmick` streams (`index = e`) at `EncounterStarted`; a boss encounter also gets `boss`. A change in encounter 1 never shifts rolls in encounter 2.
 - **Loot:** `loot` is derived **at roll time** (`deriveRng(seed, "loot", e)`). Loot is therefore independent of how the fight went.
+- **Riddle (v2.0):** `riddle` serves the Riddle of Leaves only (§3.6). It is derived as `deriveRng(seed, "riddle", e)` when phase 3 of a riddle boss starts. The Ch1 `boss` stream (Doom Spells, rubble) never shares draws with it, so the Hush Spell picks and the riddle picks are independent.
+- **Healers (v2.0)** draw nothing: heal timing and targets are pure functions of state (§3.5).
 - **Trial and meta:** `trial` serves the Typing Trial. `meta` is never used in a level; the save's `metaRng` (§9.1) drives cache rolls and story attempt seeds.
 - **Adding or changing consumers:** a new randomness consumer gets a **new stream name**. Removing or reordering draws inside a stream bumps `SIM_VERSION`.
 
@@ -260,7 +284,12 @@ export declare function normalizeKey(e: {
 4. Typographic normalization: `’ ‘` → `'`, `“ ”` → `"`, `–` → `-`, NBSP → space.
 5. A single char that is in `TYPABLE_CHARS` → itself, **case preserved**. Anything else → null.
 
-**Case (D5).** `caseMode: "auto"` (the default) compares case-insensitively when the plate text has no uppercase letters, which covers all of Ch1, and case-sensitively otherwise. `"strict"` always compares exactly. Logged keys keep their real case.
+**Case (D5; v1.5; v2.0).** Logged keys keep their real case. A plate either *folds* (compares case-insensitively) or is *exact*. The rule is computed once, when the plate is created (`PlateState.fold`, `typing.ts plateFoldsFor`):
+1. `options.caseAssist === true` ("Ignore capitals", v2.0): **every plate folds**. This beats `caseMode`.
+2. Otherwise, for a sentence plate (`doom`, `finisher`, `secondWind`, `minigame`) when `def.foldSentences` (chapter ≤ `SENTENCE_FOLD_CASE_MAX_CHAPTER` = 1) and `caseMode !== "strict"`: it folds.
+3. Otherwise `caseMode: "auto"` folds iff the text has no uppercase letter, and `"strict"` never folds.
+
+So from Ch2 on, Hush Spells, the finisher and Second Wind sentences are exact (they contain capitals), and lowercase word plates fold as before. The Trial never reads `LevelOptions` and is always exact.
 
 **Escape vs. pause (D6, a client rule).**
 - Escape while the view has a locked target is sent to the sim, which drops the target.
@@ -341,32 +370,68 @@ export interface LevelOptions {
   goldMultBp: Bp;               // replay/stale/soft-cap multiplier from meta; 10_000 on first clear
   allowExternalRevive: boolean; // slice: false (gem revive hook)
   tutorial: boolean;            // L1-1: TutorialCue events, gentler first guard (BALANCE.TUTORIAL_*)
+  /**
+   * v2.0 "Ignore capitals" assist (story only). true = every plate compares case-insensitively (beats caseMode, §2 Case).
+   * Absent = false. The client sets the key only when the setting is on, so default runs hash exactly as before.
+   */
+  caseAssist?: boolean;
 }
 
 // ---- Resolved (sim-input) data: integers only, produced by resolveLevel/resolveTrial ----
-export interface ResolvedEnemyRef { enemyId: string; gimmick: Gimmick | null }
+// v2.0 rule: every new optional key below is ABSENT (never undefined/null) unless the content uses the feature (§13.1).
+export interface ResolvedEnemyRef {
+  enemyId: string; gimmick: Gimmick | null;
+  attackPowerBp?: Bp;  // v2.0: per-ref P (x par armor); overrides the encounter's / the boss adds' P. Absent = inherit.
+  elite?: true;        // v2.0: elite tag (gold name tag, howl telegraph). Presentation only; P comes from attackPowerBp.
+}
 export type ResolvedSegment =
   | { kind: "walk"; ticks: number; heal: boolean }
-  | { kind: "encounter"; name: string; hpPoolM: Milli; gruntHitM: Milli; waves: ResolvedEnemyRef[][] }
+  | { kind: "encounter"; name: string; hpPoolM: Milli; gruntHitM: Milli; attackPowerBp: Bp; waves: ResolvedEnemyRef[][] } // v1.9 attackPowerBp
   | { kind: "boss"; bossId: string };
+/** v2.0 healer (§3.5). Integers; produced from EnemyDef.heal. */
+export interface ResolvedHeal {
+  everyTicks: number;   // base cadence at pace 35, standard preset (x PACE_FACTOR_BP[pace] x PRESET_INTERVAL_MULT[difficulty] at run time)
+  fracBp: Bp;           // heal per target = mulBp(target.maxHpM, fracBp)
+  maxTargets: number;   // 1..4 targets per heal
+  maxHeals: number;     // heals per healer per encounter; 0 = unlimited
+}
 export interface ResolvedEnemy {
   id: string; archetype: "grunt" | "brute" | "speedster" | "boss";
   baseIntervalTicks: number; heavy: boolean;
   plateLength: [min: number, max: number];
   weaknesses: DamageType[]; shield: number;
   hpWeightBp: Bp; hitWeightBp: Bp;      // enemy HP = hpPoolM * hpWeightBp / Σ weights in its wave; hit = gruntHitM * hitWeightBp / BP
+  heal?: ResolvedHeal;                  // v2.0: present only on healers
 }
+export type ResolvedMinigame =
+  | { kind: "fallingRubble"; lanes: number; spawnEveryTicks: number; fallTicks: number; clearAtkMultBp: Bp; missHitM: Milli }
+  | {                                   // v2.0 Riddle of Leaves (§3.6)
+      kind: "riddle";
+      count: number;                    // riddles asked, then the finisher (5)
+      leaves: 3;                        // plates per riddle: the answer + 2 decoys, in lanes 0..2
+      readTicks: number; answerTicks: number; // timer at pace 35 = read + answer (x the boss-script pace factor at run time)
+      gapTicks: number;                 // breather end -> first riddle, and resolution -> next riddle (not pace-scaled)
+      clearAtkMultBp: Bp; missHitM: Milli;
+      lengthRange: [min: number, max: number]; // answer and decoy length band
+    };
 export interface ResolvedBoss {
   id: string; name: string; title: string; enemyId: string;
-  hpM: Milli; hitM: Milli; plateLength: [min: number, max: number];
-  phase1: { endAtHpBp: Bp; adds: ResolvedEnemyRef[] };
-  phase2: { endAtHpBp: Bp; doomEveryTicks: number; minDoomSpells: number };
-  phase3: {
-    minigame: { kind: "fallingRubble"; lanes: number; spawnEveryTicks: number; fallTicks: number; clearAtkMultBp: Bp; missHitM: Milli };
-    finisherText: string;
+  hpM: Milli; hitM: Milli;
+  attackPowerBp: Bp;                    // v1.9: the boss's P (x par armor)
+  plateLength: [min: number, max: number];
+  phase1: {
+    endAtHpBp: Bp; adds: ResolvedEnemyRef[];
+    addsHpPoolM?: Milli; addsGruntHitM?: Milli; // T1.5 (resolveLevel always sets them)
+    addsAttackPowerBp?: Bp;             // v1.9: P of the adds unless a ref overrides it (v2.0)
   };
+  phase2: { endAtHpBp: Bp; doomEveryTicks: number; minDoomSpells: number };
+  phase3: { minigame: ResolvedMinigame; finisherText: string }; // v2.0: minigame is a union
   breatherTicks: number; introTicks: number;
 }
+/** v2.0: one riddle answer candidate. `clue` = WordEntry.clue ?? WordEntry.definition (§3.6). */
+export interface ResolvedRiddleWord { text: string; clue: string }
+/** v1.5: the third-star challenge as the sim consumes it (parTime.slack as integer bp). */
+export type ResolvedStar = Exclude<StarChallenge, { kind: "parTime" }> | { kind: "parTime"; slackBp: Bp };
 export interface ResolvedLevel {
   levelId: string; chapter: number; index: number; isBoss: boolean; contentVersion: string;
   segments: ResolvedSegment[];
@@ -374,14 +439,18 @@ export interface ResolvedLevel {
   boss: ResolvedBoss | null;
   words: {
     current: string[]; review: string[]; biome: string[]; weak: string[]; // weak = SRS due list for this attempt
-    guard: string[]; doom: string[]; finisher: string[]; secondWind: string[]; minigame: string[];
+    guard: string[]; doom: string[]; finisher: string[]; secondWind: string[]; minigame: string[]; // v2.0: sentence pools chapter-scoped (§6)
   };
+  /** v2.0: riddle candidates in bundle order (deduped by text). Present iff the level's boss has a riddle minigame. */
+  riddles?: ResolvedRiddleWord[];
   tierMixBp: { current: Bp; review: Bp; biome: Bp; weak: Bp }; // 6000/2000/1500/500; an empty pool's weight goes to current
   plateLength: [min: number, max: number];
   goldTotal: number;                        // levelGold(chapter, index); options.goldMultBp applies on top
+  parArmorBp: Bp;                           // v1.9: parArmorBp(chapter), the unit of Attack Power P (Ch1 10000, Ch2 11400)
   parHpM: Milli;                            // computeHeroStats(parLoadout(chapter)).maxHp (Doom Spell damage base)
-  star3: StarChallenge; parRefTicks: number;
+  star3: ResolvedStar; parRefTicks: number; // v1.5: ResolvedStar
   tutorial: boolean;
+  foldSentences: boolean;                   // v1.5: chapter <= BALANCE.SENTENCE_FOLD_CASE_MAX_CHAPTER (1)
 }
 /** Deterministic given (bundle contents, levelId, ctx). Fixtures are keyed on (contentVersion, levelId, ctx). */
 export declare function resolveLevel(bundle: ContentBundle, levelId: string, ctx: { dueWeakWords: string[] }): ResolvedLevel;
@@ -465,16 +534,17 @@ For tick `t`, the client applies all inputs with `tick === t` in order. `step` t
 1. Expire statuses and timers.
 2. Resolve scheduled hero impacts (auto-attack hits, skill impacts, DoT ticks).
 3. Run enemy timers: a windup start emits `EnemyAttackWindup` + `GuardWordShown`; an impact emits `EnemyAttack`.
+   - 3b (v2.0). Then run healer timers in slot order: a due heal emits `EnemyHealed` per target (§3.5).
 4. Run gimmick timers.
-5. Run the boss script: doom deadline, minigame spawns and landings, phase gates.
+5. Run the boss script: doom deadline, minigame spawns and landings, riddle deadline and next riddle (v2.0, §3.6), phase gates.
 6. Check skills for auto-cast.
 7. Handle deaths, re-pick the focus, then run encounter, wave, phase and segment transitions.
 
 ### 3.3 Typing rules (normative)
 
 **Targeting.**
-- With no target, the first key must equal the case-folded first char of a targetable plate. That emits `TargetAcquired` + `CharCorrect(index 0)`.
-- Targetable plates (enemy words, guard words, doom, minigame words) have **distinct first letters**.
+- With no target, the first key must match char 0 of a targetable plate **under that plate's case rule** (§2 Case). That emits `TargetAcquired` + `CharCorrect(index 0)`. *(v2.0 doc fix: earlier versions said "the case-folded first char", but the code (`typing.ts handleKey`, test `caseFold.test.ts`) compares with the plate's own `fold`.)* So on an exact-case plate, `h` does not acquire "Hush now…": it is a stray `Typo`. That is why the ⇧ cue (`PlateView.shiftNext`) also shows on untargeted exact-case plates.
+- Targetable plates (enemy words, guard words, doom, minigame words, riddle leaves) have **distinct first letters, compared case-folded** (`words.ts firstLetter`). So "Hush…" and "hollow" can never be visible together.
 - Second Wind and Finisher plates are exclusive and auto-targeted.
 - With no target, a space is ignored. Any other key that matches no plate is a stray `Typo` (`plateId: null`).
 
@@ -577,6 +647,54 @@ There is no random variance (`DMG_VARIANCE = 0`, D31).
   - The boss's HP clamps at 1 milli; when the wave in progress ends with HP at 1 milli, `FinisherShown` fires.
   - The Finisher has no timer. Completing it emits `FinisherCompleted`, then `EnemyDeath{byKind: "finisher"}` (D15).
 - **Between phases:** `BossPhaseChanged`, a breather of `breatherTicks`, and `HeroHealed{phase}` for `PHASE_HEAL`.
+- **v2.0:** the template is the same for every boss. The Whispering Willow (Ch2) differs only in data (exact-case Hush Spells in phase 2, a healer add in phase 1) and in its phase-3 minigame (`kind: "riddle"`, §3.6).
+
+### 3.5 Healers and elites (v2.0)
+**Elite** (`EnemyRef.elite`). Elite is presentation only: `EnemySpawned.elite`, `EnemyView.elite`, the gold name tag and the howl telegraph (render, bound to `EnemyAttackWindup` of an elite). Its danger is data: the ref's `attackPower` (P 1.25 in Ch2) feeds the v1.9 guard leak. A validator requires every elite ref to set `attackPower`.
+
+**Per-ref Attack Power.** `EnemyState.attackPowerBp` = `ref.attackPowerBp ?? <encounter attackPowerBp>` (normal waves), or `ref.attackPowerBp ?? boss.phase1.addsAttackPowerBp ?? BP` (boss adds). The boss itself keeps `ResolvedBoss.attackPowerBp`. The leak formula is unchanged (v1.9).
+
+**Healer** (an `EnemyDef` with `heal`; its archetype stays `grunt`, so it still attacks on the grunt timer). All of the following is integer and RNG-free:
+- **Cadence (pace-scaled like attacks):** `healTicks = mulBp(mulBp(heal.everyTicks, PACE_FACTOR_BP[pace]), PRESET_INTERVAL_MULT_BP[difficulty])`, at least 1. The first heal is due at `max(spawnTick, typingFromTick) + healTicks`, and each next one is due `healTicks` after the previous due tick fired. There is no random start offset, so nothing is drawn.
+- **Deferral:** a heal that falls due while the healer is Broken (`brokenUntil`) or Frost-Locked (`frozenUntil`) is deferred to the tick that status ends. Encounter freezes (Second Wind, boss breather) shift the due tick like every other enemy timer. Zen does **not** stop heals, because healing is not an attack.
+- **Targets:** the *other* living, non-boss enemies of the current encounter with `hpM < maxHpM`. They are sorted by HP fraction ascending (`a.hpM * b.maxHpM < b.hpM * a.maxHpM`, integer cross-multiplication), then by slot. The first `maxTargets` are healed. The boss is never healed, and a healer never heals itself.
+- **Amount and cap:** `min(mulBp(target.maxHpM, fracBp), target.maxHpM − target.hpM)`. HP never goes above max. If no target qualifies, the heal is spent with no event and the cadence continues. With `maxHeals > 0`, the healer stops after that many *effective* heals (heals that restored HP) in the encounter.
+- **Events:** one `EnemyHealed` per target, in target order, after the step-3 attack events of the same tick. A dead healer has no timer.
+- **Determinism:** `EnemyState` gains sim-internal `nextHealTick` / `healsDone`, and `elite`. They are **absent on non-healers and non-elites**, so Ch1 state hashes do not change (§13.1).
+
+### 3.6 Boss phase 3: Riddle of Leaves (v2.0)
+Phase 3 of a boss whose `phase3.minigame.kind === "riddle"` replaces Falling Rubble. Everything else in §3.4 holds: the breather and `PHASE_HEAL` before it, boss attacks suspended in phase 3, HP clamped at `FINAL_GATE_M`, the finisher with no timer, and D15.
+
+**Flow.**
+1. At breather end: `MinigameStarted{kind:"riddle", lanes: 3}`. The `riddle` stream is derived (`deriveRng(seed, "riddle", enc.index)`), and the first riddle is due at `t + gapTicks`.
+2. **The boss shows no word plate in phase 3**, and leaf plates pay no ATB (`paysAtb` is word/guard only, as for rubble words). The three leaves are the only targetable plates. Auto-attacks already in flight still land, and skills still auto-cast from their existing charge.
+3. **A riddle starts** (`riddleIndex` 0-based). The picks below run, then three `PlateShown{kind:"minigame", lane: 0|1|2}`, then `RiddleStarted`. The deadline is `t + riddleTicks`, where `riddleTicks = max(1, mulBp(readTicks + answerTicks, scriptPaceBp))` and `scriptPaceBp` is the boss-script pace factor (`PACE_FACTOR_BP[pace]` when `BOSS_SCRIPT_PACE_SCALE`, else `BP`; `bossPlates.ts`).
+4. **The pick.** Acquiring a leaf (`TargetAcquired` on one of the riddle's plates) also emits `RiddleLeafPicked`, every time, including after an Escape and a re-pick. Escape works as on any non-exclusive plate.
+5. **Right** (the answer leaf is completed). Event order: `WordCompleted` → `PlateRemoved{completed}` → `RiddleResolved{outcome:"right"}` → `PlateRemoved{expired}` for the 2 decoys → `Hit{kind:"minigame", origin:"minigame"}` on the boss for `mulBp(heroAtkM, clearAtkMultBp)`. The hit goes through the §3.3 damage chain with `damageType null` (so no weakness) and no crit, and is clamped at the final gate.
+6. **Wrong** (a decoy is completed). Same order with `outcome:"wrong"`, then the hero takes `missHitM` (`HeroDamaged{cause:"minigame"}`). As for rubble misses: the barrier does not absorb it, Zen makes it 0, and it can down the hero (Second Wind).
+7. **Timeout** (`t >= deadline` in step 5). Order: `TargetDropped{plateChanged}` if a leaf was targeted → `PlateRemoved{expired}` ×3 → `RiddleResolved{outcome:"timeout", pickedPlateId:null}` → the `missHitM` damage as in 6.
+8. After a resolution, the next riddle is due at `t + gapTicks`. After the `count`-th resolution: `MinigameEnded{cleared: rights, missed: wrongs + timeouts}`, then the finisher (`FinisherShown`), **whatever the boss HP**. Completing the finisher kills the boss as today (`killEnemy` sets HP to 0; Review note 1).
+9. **Falling Rubble events are never emitted for leaves** (`MinigameWordSpawned/Cleared/Missed`), so the rubble HUD and VFX never fire for them.
+10. **Second Wind:** freeze and restore exactly as `bossPlates.ts` does for rubble. The leaves come back with the same texts, lanes and the shifted deadline, with typed progress reset; no new draws are made and `RiddleStarted` is not re-emitted. The pending gap timer shifts too.
+
+**Deterministic picks (normative; exactly 5 `below()` draws per riddle on the `riddle` stream, in this order).** `pool = def.riddles` (bundle order); `fl(w) = firstLetter(w.text)` (case-folded); `forbidden = visibleFirstLetters(enc)` (normally empty in phase 3); `asked` = the answer texts of earlier riddles in this fight.
+```text
+A  = pool.filter(w => !asked.includes(w.text) && !forbidden.includes(fl(w)))
+answer = A[below(rng, A.length)]                                         // draw 1
+D1 = pool.filter(w => w.text !== answer.text && fl(w) ∉ forbidden ∪ {fl(answer)})
+d1 = D1[below(rng, D1.length)]                                           // draw 2
+D2 = pool.filter(w => w.text !== answer.text && fl(w) ∉ forbidden ∪ {fl(answer), fl(d1)})
+d2 = D2[below(rng, D2.length)]                                           // draw 3
+leaves = [answer, d1, d2]
+for i of [2, 1]: j = below(rng, i + 1); swap(leaves[i], leaves[j])      // draws 4, 5 (Fisher-Yates)
+leaves[k] -> lane k ; the panel shows answer.clue
+```
+- Decoys may be earlier answers. The three leaves always have distinct case-folded first letters, and none collides with another visible plate.
+- If `A`, `D1` or `D2` is empty (impossible with validated content), the riddle phase ends early: `MinigameEnded`, then the finisher. No fallback words are used, because a riddle needs a real clue.
+- `resolveLevel` throws `SimError` when a riddle boss's pool has fewer than `count + 2` words or fewer than 3 distinct first letters. The content validator enforces the real bar (≥ 60 words, ≥ 12 initials).
+- **Pool:** entries with `uses ∋ "riddle"`, `kind === "word"`, `(chapter ?? 1) <= level.chapter`, and text length in `lengthRange`. Dedupe by text, keep the bundle order. `clue = entry.clue ?? entry.definition`.
+
+**Sim-internal state** (`BossState.riddle?`, absent for the Golem): the stream, `index`, `asked[]`, the active riddle's leaf plate ids, texts, lanes, deadline and answer slot (or null between riddles), `nextAt`, and the right/wrong/timeout counters. It is plain data, as §1.4 requires.
 
 ---
 
@@ -612,7 +730,7 @@ export type SimEvent =
   | Ev<"WalkEnded", { segmentIndex: number }>
   | Ev<"EncounterStarted", { encounterIndex: number; name: string; isBoss: boolean; waveCount: number; typingFromTick: Tick }>
   | Ev<"WaveStarted", { encounterIndex: number; waveIndex: number; enemyIds: EntityId[] }>
-  | Ev<"EnemySpawned", { enemyId: EntityId; defId: string; slot: number; maxHp: number; isBoss: boolean; shieldMax: number }>
+  | Ev<"EnemySpawned", { enemyId: EntityId; defId: string; slot: number; maxHp: number; isBoss: boolean; shieldMax: number; elite?: boolean; healer?: boolean }> // v2.0 elite/healer: set (true) only when true
   | Ev<"EncounterCleared", { encounterIndex: number; durationTicks: number }>
   | Ev<"LevelCleared", { levelId: string; durationTicks: number; gold: number }>
   | Ev<"LevelFailed", { reason: "defeated" | "abandoned" | "timeout"; goldKept: number }>
@@ -622,7 +740,7 @@ export type SimEvent =
   | Ev<"PlateRemoved", { plateId: PlateId; reason: "completed" | "replaced" | "ownerDied" | "expired" | "phaseEnded" }>
   | Ev<"TargetAcquired", { plateId: PlateId; ownerId: EntityId | null }>
   | Ev<"TargetDropped", { plateId: PlateId; ownerId: EntityId | null; reason: TargetDropReason }>
-  | Ev<"CharCorrect", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; index: number; char: string; isLast: boolean; combo: number; comboTier: ComboTier; keyStreak: number; keyStreakTier: KeyStreakTier; atbGainM: number }>
+  | Ev<"CharCorrect", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; index: number; char: string; isLast: boolean; combo: number; comboTier: ComboTier; keyStreak: number; keyStreakTier: KeyStreakTier; atbGainM: number; shifted?: boolean }> // v2.0 shifted: an uppercase letter typed exactly on an exact-case plate (capital accent VFX); set only when true
   | Ev<"Typo", { plateId: PlateId | null; ownerId: EntityId | null; kind: PlateKind | null; index: number; expected: string | null; got: string; comboBefore: number; combo: number; keyStreakBefore: number; penalty: "halved" | "reset" | "none" | "latched" | "forgiven" }>
   | Ev<"WordCompleted", { plateId: PlateId; ownerId: EntityId | null; kind: PlateKind; text: string; wordKey: string; perfect: boolean; swift: boolean; atbGainM: number; combo: number }>
   | Ev<"SentenceWordDone", { plateId: PlateId; kind: PlateKind; wordIndex: number; wordCount: number }> // projectile per word (T2.6)
@@ -633,8 +751,8 @@ export type SimEvent =
   | Ev<"EnemyAttackWindup", { enemyId: EntityId; impactTick: Tick; heavy: boolean }>
   | Ev<"GuardWordShown", { enemyId: EntityId; plateId: PlateId; text: string; impactTick: Tick; spanTicks: number }>
   | Ev<"GuardWordTyped", { enemyId: EntityId; plateId: PlateId; perfect: boolean; result: "block" | "parry" }>
-  | Ev<"GuardBlocked", { enemyId: EntityId; damage: number }>
-  | Ev<"GuardParried", { enemyId: EntityId; counterDamage: number }> // the counter itself is Hit{kind:"counter"}
+  | Ev<"GuardBlocked", { enemyId: EntityId; damage: number; leakBp?: number; leakDamage?: number }>          // v1.9 leak fields
+  | Ev<"GuardParried", { enemyId: EntityId; counterDamage: number; leakBp?: number; leakDamage?: number }> // the counter itself is Hit{kind:"counter"}
   // ---- ATB & hero offense ----
   | Ev<"AtbFilled", { overflowM: number }>
   | Ev<"AutoAttack", { targetId: EntityId; archetype: WeaponArchetype; hits: number; impactTick: Tick; crit: boolean }>
@@ -650,6 +768,7 @@ export type SimEvent =
   | Ev<"EnemyAttack", { enemyId: EntityId; outcome: "hit" | "blocked" | "parried" | "barrier"; damage: number }>
   | Ev<"HeroDamaged", { sourceId: EntityId | null; cause: "attack" | "doom" | "minigame"; damage: number; hpAfter: number; maxHp: number; blocked: boolean }>
   | Ev<"HeroHealed", { cause: "walk" | "skill" | "phase" | "secondWind" | "revive" | "passive"; amount: number; hpAfter: number; maxHp: number }>
+  | Ev<"EnemyHealed", { sourceId: EntityId; targetId: EntityId; amount: number; amountM: number; hpAfter: number; maxHp: number }> // v2.0 healer (§3.5), one per target
   | Ev<"EnemyDeath", { enemyId: EntityId; defId: string; isBoss: boolean; byKind: HitKind }>
   | Ev<"HeroDowned", { secondWindAvailable: boolean }>
   | Ev<"SecondWindStarted", { plateId: PlateId; text: string; deadlineTick: Tick }>
@@ -670,11 +789,15 @@ export type SimEvent =
   | Ev<"DoomSpellStarted", { enemyId: EntityId; plateId: PlateId; text: string; deadlineTick: Tick }>
   | Ev<"DoomSpellCompleted", { enemyId: EntityId; plateId: PlateId; staggerUntilTick: Tick }>
   | Ev<"DoomSpellFailed", { enemyId: EntityId; plateId: PlateId; damage: number }>
-  | Ev<"MinigameStarted", { enemyId: EntityId; kind: "fallingRubble"; lanes: number }>
+  | Ev<"MinigameStarted", { enemyId: EntityId; kind: "fallingRubble" | "riddle"; lanes: number }> // v2.0: + riddle (lanes 3)
   | Ev<"MinigameWordSpawned", { plateId: PlateId; text: string; lane: number; landTick: Tick }>
   | Ev<"MinigameWordCleared", { plateId: PlateId; lane: number }>
   | Ev<"MinigameWordMissed", { plateId: PlateId; lane: number; damage: number }>
-  | Ev<"MinigameEnded", { cleared: number; missed: number }>
+  | Ev<"MinigameEnded", { cleared: number; missed: number }> // riddle: cleared = right, missed = wrong + timeout
+  // ---- v2.0 Riddle of Leaves (§3.6). The answer is revealed only at resolution. ----
+  | Ev<"RiddleStarted", { enemyId: EntityId; riddleIndex: number; riddleCount: number; clue: string; leafPlateIds: [PlateId, PlateId, PlateId]; deadlineTick: Tick; totalTicks: number }> // leafPlateIds in lane order 0..2
+  | Ev<"RiddleLeafPicked", { riddleIndex: number; plateId: PlateId; lane: number }> // right after TargetAcquired on a leaf
+  | Ev<"RiddleResolved", { enemyId: EntityId; riddleIndex: number; outcome: "right" | "wrong" | "timeout"; pickedPlateId: PlateId | null; answerPlateId: PlateId; answerText: string; answerLane: number }>
   | Ev<"FinisherShown", { enemyId: EntityId; plateId: PlateId; text: string }>
   | Ev<"FinisherCompleted", { enemyId: EntityId; plateId: PlateId }>
   // ---- rewards ----
@@ -692,12 +815,13 @@ export const ALL_EVENT_TYPES = [
   "EnemyAttackWindup", "GuardWordShown", "GuardWordTyped", "GuardBlocked", "GuardParried",
   "AtbFilled", "AutoAttack", "Hit", "WeaknessRevealed", "ShieldDamaged", "Break", "BreakEnded",
   "StatusApplied", "StatusEnded", "FocusChanged",
-  "EnemyAttack", "HeroDamaged", "HeroHealed", "EnemyDeath", "HeroDowned",
+  "EnemyAttack", "HeroDamaged", "HeroHealed", "EnemyHealed", "EnemyDeath", "HeroDowned",
   "SecondWindStarted", "SecondWindSucceeded", "SecondWindFailed", "Revived",
   "SkillCharged", "SkillCast", "PassiveTriggered",
   "WordFaded", "WordScrambled", "WordUnscrambled",
   "BossIntroStarted", "BossPhaseChanged", "DoomSpellStarted", "DoomSpellCompleted", "DoomSpellFailed",
   "MinigameStarted", "MinigameWordSpawned", "MinigameWordCleared", "MinigameWordMissed", "MinigameEnded",
+  "RiddleStarted", "RiddleLeafPicked", "RiddleResolved",
   "FinisherShown", "FinisherCompleted",
   "GoldGained", "ChestDropped",
   "TrialStarted", "TrialEnded",
@@ -722,6 +846,11 @@ export const ALL_META_EVENT_TYPES = ["CacheRolled", "ChestOpened", "GearUpgraded
 - **Crit and weakness** are flags on `Hit`, not separate events. `WeaknessRevealed` is a one-shot that unveils the weakness icon.
 - **Chip damage** is only ever `Hit{kind:"chip"}`.
 - **Skill-share metric:** sum `Hit.damageM` by `origin`; `LevelResult.stats.damageByOriginM` already does this.
+- **v2.0 optional event fields** (`elite`, `healer`, `shifted`) are written only when `true`, so Ch1 event streams (and their golden hashes) stay byte-identical. Consumers treat absent as `false`.
+- **v2.0 new event types** (`EnemyHealed`, `RiddleStarted`, `RiddleLeafPicked`, `RiddleResolved`):
+  - The audio event list (`apps/game/src/audio/bindings.ts`) already lists them as silent stubs; its drift test parses this section.
+  - C0.3 must add stub bindings in `level/eventBindings.ts` in the same commit as the sim types (§11.5). `EventHandlers` is exhaustive, so the client would otherwise fail to typecheck.
+- **Heal VFX** groups `EnemyHealed` by `(sourceId, tick)` for one beam per cast. The heal number uses `amount` (display HP, green).
 
 ---
 
@@ -749,8 +878,12 @@ export interface PlateView {
   hadTypo: boolean;        // current attempt is not perfect
   lastTypoTick: Tick | null;
   lane: number | null;     // minigame lane; null for other plates
-  expiresAtTick: Tick | null; // guard impact / doom deadline / minigame landing / second wind deadline
+  expiresAtTick: Tick | null; // guard impact / doom deadline / minigame landing / riddle deadline / second wind deadline
   totalTicks: number | null;  // for timer strips
+  /** v2.0: the plate compares case-exactly (PlateState.fold === false). Set only when true. */
+  exactCase?: boolean;
+  /** v2.0 ⇧ cue: exactCase && text[typedIndex] is an uppercase A-Z (untargeted plates too, §3.3). Set only when true. */
+  shiftNext?: boolean;
 }
 export interface StatusView { id: StatusId; ticksLeft: number | null; stacks: number }
 export interface EnemyView {
@@ -760,6 +893,11 @@ export interface EnemyView {
   plateId: PlateId | null;
   isGuard: boolean; guardTicksLeft: number; guardTotalTicks: number;
   guardResult: "block" | "parry" | null; // typed, waiting for impact
+  attackPowerBp?: number;              // v1.9: P in score bp (par armor x attackPower); compare with hero.guardRatingBp
+  leakBp?: number;                     // v1.9: guard-leak preview 0..5000; 0 = no cracked-shield badge
+  elite?: boolean;                     // v2.0: gold name tag (set only when true)
+  /** v2.0 ✚ badge + charge ring (healers only). ticksLeft null = paused (Broken / Frost Lock) or no heals left. */
+  healer?: { ticksLeft: number | null; totalTicks: number; healsLeft: number | null }; // healsLeft null = unlimited
   shield: number; shieldMax: number;
   weaknesses: { type: DamageType; revealed: boolean }[];
   brokenTicksLeft: number;
@@ -771,6 +909,7 @@ export interface HeroView {
   hp: number; maxHp: number; hpFrac: number;
   atbFrac: number; archetype: WeaponArchetype; weaponDamageType: DamageType;
   barrierCharges: number; statuses: StatusView[];
+  guardRatingBp?: number;              // v1.9: G, the equipped armor score in bp
   secondWindAvailable: boolean;
   pose: HeroPose; poseSinceTick: Tick;
 }
@@ -786,12 +925,27 @@ export interface LevelView {
   combo: number; comboTier: ComboTier; comboMult: number; comboMode: ComboMode; // mechanical
   keyStreak: number; keyStreakTier: KeyStreakTier;                              // VFX colour tiers
   skills: SkillView[]; passives: PassiveId[];
-  boss: { enemyId: EntityId; name: string; title: string; phase: 1 | 2 | 3; gateHpFrac: number | null } | null;
+  boss: {
+    enemyId: EntityId; name: string; title: string; phase: 1 | 2 | 3; gateHpFrac: number | null;
+    gates?: number[]; holding?: "adds" | "doom" | null; doomsResolved?: number; minDoomSpells?: number; // v1.6 (T1.5)
+  } | null;
   doom: { plateId: PlateId; ticksLeft: number; totalTicks: number } | null;
-  minigame: { lanes: number; cleared: number; missed: number } | null;
+  minigame: {
+    lanes: number; cleared: number; missed: number;
+    kind?: "fallingRubble" | "riddle";  // v2.0 (absent = fallingRubble)
+    riddle?: RiddleView | null;         // v2.0: present iff kind === "riddle"; null between riddles (gap) and after the last
+  } | null;
   secondWind: { plateId: PlateId; ticksLeft: number; totalTicks: number } | null;
   stats: { netWpm: number; accuracy: number; burstWpm: number; elapsedTicks: number; activeTicks: number };
   goldCollected: number;
+}
+/** v2.0 riddle panel (§3.6). The HUD draws `clue` in its own panel, never over the leaf plates (readability invariant). */
+export interface RiddleView {
+  riddleIndex: number; riddleCount: number;
+  clue: string;
+  leafPlateIds: [PlateId, PlateId, PlateId];  // lane order 0..2 (the plates themselves are in `plates`, kind "minigame")
+  ticksLeft: number; totalTicks: number;
+  last: { outcome: "right" | "wrong" | "timeout"; answerText: string } | null; // previous riddle's result (bloom/wither, panel line)
 }
 export interface TrialView {
   tick: Tick; started: boolean; ticksLeft: number; passage: string; typedIndex: number;
@@ -818,7 +972,7 @@ export const TYPABLE_CHARS =
 const escapeForCharClass = (s: string): string => s.replace(/[\\\]^-]/g, "\\$&");
 export const TypableText = z.string().regex(new RegExp(`^[${escapeForCharClass(TYPABLE_CHARS)}]+$`));
 
-export const Biome = z.enum(["forest", "ruins", "cave", "hollow"]);
+export const Biome = z.enum(["forest", "ruins", "cave", "hollow", "hushwood", "fen", "grove"]); // v2.0: + Ch2 (grove = the boss arena, like hollow)
 export type Biome = z.infer<typeof Biome>;
 export const WordTier = z.number().int().min(1).max(10);
 export const DamageType = z.enum(["slash", "pierce", "blunt", "arcane", "fire", "ice", "light"]);
@@ -838,14 +992,30 @@ export const WordEntry = z.object({
   freqRank: z.number().int().positive().optional(),
   cefr: z.enum(["A1", "A2", "B1", "B2", "C1", "C2"]).optional(),
   biomes: z.array(Biome).default([]),
-  uses: z.array(z.enum(["plate", "guard", "doom", "finisher", "secondWind", "minigame", "trial"])).min(1),
+  uses: z.array(z.enum(["plate", "guard", "doom", "finisher", "secondWind", "minigame", "trial", "riddle", "intro"])).min(1), // v2.0: + riddle, intro
   definition: z.string().min(1).max(140),     // simple English
   example: z.string().min(1).max(160),
   translations: z.record(z.string(), z.string()).default({}), // BCP-47 tag -> text (optional, Journal only)
+  /**
+   * v2.0 "introduced in chapter N" (absent = 1). Sentence pools (doom, finisher, secondWind, minigame, intro) take
+   * entries with (chapter ?? 1) === level.chapter; every other pool (current, review, biome, weak, guard, riddle) takes
+   * (chapter ?? 1) <= level.chapter. So nothing authored for Ch2 can reach a Ch1 level.
+   */
+  chapter: z.number().int().min(1).max(30).optional(),
+  /** v2.0 riddle text (simple English, must not contain the answer). Absent = `definition` is the clue. */
+  clue: z.string().min(1).max(90).optional(),
 });
 export type WordEntry = z.infer<typeof WordEntry>;
 
 export const Gimmick = z.enum(["fading", "scrambled"]);
+export type Gimmick = z.infer<typeof Gimmick>;
+/** v2.0 healer (§3.5). Numbers at pace 35 / standard preset; the sim pace-scales the cadence. */
+export const HealDef = z.object({
+  everyS: z.number().positive(),                          // Moth Mender: 10
+  frac: z.number().positive().max(1),                     // of each target's max HP; Moth Mender: 0.15
+  maxTargets: z.number().int().min(1).max(4).default(4),
+  maxHeals: z.number().int().min(0).default(0),           // per encounter; 0 = unlimited
+});
 export const EnemyDef = z.object({
   id: z.string(), name: z.string(),
   archetype: z.enum(["grunt", "brute", "speedster", "boss"]),
@@ -857,29 +1027,55 @@ export const EnemyDef = z.object({
   shield: z.number().int().min(1).max(9),
   hpWeight: z.number().positive().default(1), // share of the wave's HP pool
   hitWeight: z.number().positive().default(1),// x encounter gruntHit
+  heal: HealDef.optional(),                   // v2.0: healer capability (archetype stays grunt/brute/...)
 });
 export type EnemyDef = z.infer<typeof EnemyDef>;
 
-export const EnemyRef = z.object({ enemy: z.string(), gimmick: Gimmick.optional() });
+export const EnemyRef = z.object({
+  enemy: z.string(), gimmick: Gimmick.optional(),
+  attackPower: z.number().positive().optional(), // v2.0: per-ref P (x chapter par armor); overrides the encounter / adds P
+  elite: z.boolean().optional(),                 // v2.0: elite tag (presentation); requires attackPower
+}).refine((r) => r.elite !== true || r.attackPower !== undefined, "an elite ref must set attackPower");
+export type EnemyRef = z.infer<typeof EnemyRef>;
 export const EncounterDef = z.object({
   name: z.string(),
   hp: z.number().positive(),                  // HP pool per wave (generated by tools/balance, D32)
   gruntHit: z.number().positive(),
+  attackPower: z.number().positive().default(1), // v1.9: P of this encounter's enemies (x chapter par armor score)
   waves: z.array(z.array(EnemyRef).min(1).max(4)).min(1), // >1 wave -> WaveStarted
 }).refine((e) => new Set(e.waves.flat().flatMap((r) => (r.gimmick ? [r.gimmick] : []))).size <= 2, "max 2 gimmicks/encounter");
 
-export const MinigameDef = z.object({
+export const FallingRubbleDef = z.object({
   kind: z.literal("fallingRubble"),
   lanes: z.number().int().min(2).max(4),
   spawnEveryS: z.number().positive(), fallS: z.number().positive(),
   clearAtkMult: z.number().positive(),
   missHit: z.number().positive(),
 });
+/** v2.0 Riddle of Leaves (§3.6). Timer at pace 35 = readS + answerS, x the boss-script pace factor. */
+export const RiddleDef = z.object({
+  kind: z.literal("riddle"),
+  count: z.number().int().min(1).max(9).default(5),
+  leaves: z.literal(3).default(3),
+  readS: z.number().positive(),
+  answerS: z.number().positive(),
+  gapS: z.number().positive().default(1.5),
+  clearAtkMult: z.number().positive(),
+  missHit: z.number().positive(),
+  lengthRange: z.tuple([z.number().int().min(2), z.number().int().max(14)]).default([3, 8]),
+});
+/** v2.0: a discriminated union (was the falling-rubble object; Ch1 data parses unchanged). */
+export const MinigameDef = z.discriminatedUnion("kind", [FallingRubbleDef, RiddleDef]);
+export type MinigameDef = z.infer<typeof MinigameDef>;
 export const BossDef = z.object({
   id: z.string(), name: z.string(), title: z.string(), enemyId: z.string(),
   hp: z.number().positive(), hit: z.number().positive(),
+  attackPower: z.number().positive().default(1), // v1.9: the boss's P (Willow 1.30)
   plateLength: z.tuple([z.number().int(), z.number().int()]),
-  phase1: z.object({ endAtHpPct: z.number().default(66), adds: z.array(EnemyRef).max(2) }),
+  phase1: z.object({
+    endAtHpPct: z.number().default(66), adds: z.array(EnemyRef).max(2),
+    addsAttackPower: z.number().positive().default(1), // v1.9 (a ref's own attackPower wins, v2.0)
+  }),
   phase2: z.object({ endAtHpPct: z.number().default(33), doomEveryS: z.number().positive(), minDoomSpells: z.number().int().min(1) }),
   phase3: z.object({ minigame: MinigameDef, finisherText: TypableText }),
   breatherS: z.number().default(2),
@@ -912,6 +1108,11 @@ export const LevelDef = z.object({
   star3: StarChallenge,
   parRefS: z.number().positive(),             // active time of the 35-WPM reference typist
   tutorial: z.boolean().default(false),
+  /**
+   * v2.0: when present, the `review` pool = plate words (kind "word") whose biomes intersect this list, any tier
+   * (Ch2: ["forest", "ruins", "cave"] = the Ch1 biome words). Absent = the v1 rule (tier < wordTier, no biome).
+   */
+  reviewBiomes: z.array(Biome).min(1).optional(),
 });
 export type LevelDef = z.infer<typeof LevelDef>;
 
@@ -955,6 +1156,15 @@ export declare const CONTENT_VERSION: string;
 - guard words are ≤ 5 chars and tier 1
 - every level's segments start with a walk
 - passages contain no double spaces.
+
+**v2.0 validator rules** (`tools/content`, T4.1/T4.3):
+- level ids are exactly `ch${chapter}-l${pad2(index)}`, each chapter has indices 1..10 with no gaps, `kind: "boss"` only at index 10, and `bundle.levels` is sorted by (chapter, index).
+- every entry *added* for Ch2+ sets `chapter` explicitly. That covers sentences, new non-biome plate words, new guard words and new riddle-only words; Ch2 biome words should set it too. Without it, the entry would leak into Ch1 pools. A test compares the Ch1 `resolveLevel` fixture (§13.1), which catches any miss. Adding `"riddle"` to the `uses` of an *existing* T1 word is allowed, because Ch1 never reads the riddle pool.
+- Ch2+ plate and guard words are all lowercase (PO: "enemy words stay lowercase"). Hush Spells and Ch2 finisher/Second Wind/intro lines contain ≥ 1 uppercase letter (otherwise they would fold).
+- riddle pool per riddle boss: ≥ 60 words, ≥ 12 distinct first letters, kind `word`, lengths inside `lengthRange`. Each clue (`clue ?? definition`) must not contain the answer (case-insensitive, also as a word stem of ≥ 4 letters). No two riddle words share a clue.
+- healers: at most 1 per wave, and never the only non-boss enemy of a wave (it would have nothing to heal).
+- elite refs set `attackPower`, which the schema enforces.
+- a boss whose minigame is `riddle` has a phase-2 doom pool (chapter-scoped) of ≥ 8 sentences with ≥ 6 distinct first letters.
 
 ---
 
@@ -1050,6 +1260,10 @@ export const BALANCE = {
   },
   TUTORIAL_FIRST_GUARD_MULT: 2.0, TUTORIAL_HOLD_ATTACKS_UNTIL_WORDS: 3,
   MAX_LEVEL_S: 1200, TRIAL_DURATION_S: 60,
+  // ---- synced from code (v1.5-v1.9); unchanged by v2.0 ----
+  GUARD_LEAK_CAP: 0.5,                         // v1.9
+  SENTENCE_FOLD_CASE_MAX_CHAPTER: 1,           // v1.5: Ch1 sentences fold; Ch2+ exact (unless caseAssist)
+  BOSS_SCRIPT_PACE_SCALE: true,                // v1.6: rubble, doom cadence and (v2.0) the riddle timer use the pace factor
 } as const;
 ```
 **Python names deliberately not ported.** These are persona and model abstractions; they live in `tools/balance/src/model.ts`.
@@ -1094,6 +1308,26 @@ export interface LoadoutSource {
 export declare function buildLoadout(src: LoadoutSource, bundle: ContentBundle): Loadout;
 /** Par build of chapter c: slotTier(slot, c) at PAR_RARITY_BY_CH/PAR_RARITY, PAR_UPG/PAR_UPG_DEFAULT; sword; no skills/passives. */
 export declare function parLoadout(chapter: number): Loadout;
+/** v1.9: itemScoreBp of parLoadout(chapter).armor, the unit of Attack Power P. Pinned: ch1 10000, ch2 11400 (T1 C +2). */
+export declare function parArmorBp(chapter: number): Bp;
+/** v1.9: hero Guard Rating G = itemScoreBp of the equipped armor. */
+export declare function guardRatingBp(loadout: Loadout): Bp;
+
+// ---- v2.0 chapter plumbing (pure; used by the client map/flow, tools/bot and tools/balance) ----
+/** "ch2-l07" -> { chapter: 2, index: 7 }; null if the id does not match /^ch(\d+)-l(\d\d)$/. */
+export declare function parseLevelId(id: string): { chapter: number; index: number } | null;
+/** The chapters present in the bundle, ascending (from LevelDef.chapter). */
+export declare function bundleChapters(bundle: ContentBundle): number[];
+/**
+ * Unlock rule, by id (never by bundle array order): ch1-l01 is always open; (c, 1) opens when (c-1, 10) is cleared;
+ * (c, i>1) opens when (c, i-1) is cleared. Unknown ids are locked.
+ */
+export declare function levelUnlocked(cleared: (levelId: string) => boolean, bundle: ContentBundle, levelId: string): boolean;
+/**
+ * Derived frontier: max(stored, 1 + the highest chapter c whose level (c, 10) is cleared), capped at the highest chapter
+ * in the bundle. The client applies it after every result AND on load (old saves with Ch1 cleared open Ch2 with no migration).
+ */
+export declare function frontierChapterOf(stored: number, cleared: (levelId: string) => boolean, bundle: ContentBundle): number;
 
 // ---- chests (used in-level by the sim with the `loot` stream; exported for tests/tools) ----
 export declare function rollEncounterChest(rng: RngState, ctx: { boss: boolean; firstClear: boolean }): ChestTier | null;
@@ -1228,11 +1462,14 @@ export const SaveBlobV1 = z.object({
 });
 export const JOURNAL_NOTE_MAX_CHARS = 120, JOURNAL_NOTES_MAX = 2000, JOURNAL_NOTE_KEY_MAX = 64;
 export const JournalNotes = z.record(z.string().min(1).max(JOURNAL_NOTE_KEY_MAX), z.string().min(1).max(JOURNAL_NOTE_MAX_CHARS)).refine((r) => Object.keys(r).length <= JOURNAL_NOTES_MAX);
+/** doc v2.0 (no version bump): + caseAssist ("Ignore capitals"); the default fills it for every existing blob. */
+export const SettingsV2 = SaveBlobV1.shape.settings.extend({ caseAssist: z.boolean().default(false) });
 /** v2 (doc v1.8): adds journal.notes (player translations) and resetEpoch (New Game generation). */
-export const SaveBlobV2 = SaveBlobV1.omit({ schemaVersion: true, journal: true }).extend({
+export const SaveBlobV2 = SaveBlobV1.omit({ schemaVersion: true, journal: true, settings: true }).extend({
   schemaVersion: z.literal(2),
   resetEpoch: z.number().int().min(0).max(1_000_000),
   journal: z.object({ firstSeen: z.record(z.string(), z.number().int()), notes: JournalNotes }),
+  settings: SettingsV2,                                     // doc v2.0
 });
 export const SaveBlob = SaveBlobV2;                         // alias to the latest version
 export type SaveBlob = z.infer<typeof SaveBlob>;
@@ -1249,6 +1486,13 @@ export declare function mergeSaves(base: SaveBlob | null, local: SaveBlob, serve
 - Any shape change bumps `schemaVersion` and adds `MIGRATIONS[n]` (n → n+1). Old migrations are never edited or deleted.
 - There is one fixture blob per version in `packages/shared/tests/fixtures/`, with a test that each fixture migrates to the latest version and parses.
 - A blob with a **newer** version than the client knows puts the client in read-only mode: it never PUTs, and it shows "please refresh".
+
+**Chapter 2 progress (v2.0): no schema change.**
+- `progress.levels` is keyed by level id (`ch2-l01`…), so Ch2 stars, bests and attempts need no new field.
+- `starChestsClaimed` is keyed by chapter.
+- `summarize.levelMax` already encodes `chapter*100 + level`.
+- `frontierChapter` (merge: max) now really advances, via `frontierChapterOf` (§8) after each result and on load. Its existing consumers then see 2: chest gear tier and cache price (both T1 at ch2, so no visible change), and replay pay, which is stale only for `chapter < frontier − 1`, so Ch1 replays are not stale at frontier 2.
+- `settings.caseAssist` is the one additive key. It is a zod default, so v1/v2 fixtures still migrate and parse. An older v2 client strips the unknown key and parses fine, and settings never merge (local wins), so no `SAVE_SCHEMA_VERSION` bump is needed. Code that builds a `SaveBlob` literal (`ops.ts` new game) must add `caseAssist: false`.
 
 **Sync and merge (409).**
 - **New Game generation (v1.8):** if `local.resetEpoch !== server.resetEpoch`, the side with the higher epoch wins wholesale (settings stay local) and none of the rules below apply. `SaveStore.reset()` bumps the epoch, so old-generation data can never win a merge, online or offline.
@@ -1488,6 +1732,12 @@ The claimed numbers are never written.
 
 Story levels are not verified in the slice. `replay()` and `LEVEL_LOG_LIMITS` exist so the same contract can extend to Boss of the Week.
 
+**v2.0 and anti-cheat.**
+- **Trial: nothing changes.** It never reads `LevelOptions` (so `caseAssist` cannot reach it). It is always case-exact, and the ticket, `hdk1` and the claim are unchanged.
+- The new `CONTENT_VERSION` must ship to the client and the Worker together (the existing step-4 rule).
+- **Future verified level modes** (Boss of the Week, Leagues, deferred to Meta-1): the signed ticket must carry the full `LevelOptions`, including `caseAssist`. Ranked modes **force `caseAssist: false`** and standardized gear, as they already force standardized gear. Healer heals and riddle picks need no client trust: they are pure functions of (seed, inputs, content), and the `riddle` stream is derived from the ticket seed.
+- `hdk1` logs keep real key case, so a re-sim reproduces exact-case typing (and the stray typos from a missing Shift) bit for bit.
+
 **Parity tests (gate §8.1).**
 - **Golden fixtures** cover two cases:
   - Trial: `(contentVersion, trialId, seed, hdk1 log) → TrialResult + hash`.
@@ -1555,9 +1805,128 @@ Story levels are not verified in the slice. `replay()` and `LEVEL_LOG_LIMITS` ex
 | D31 | No damage variance (it stays a tunable). | Parity with the economy sim. |
 | D32 | Encounter HP pools and grunt hits are explicit in level data, generated by `tools/balance`. | Tunable and reviewable. |
 | D33 | Chest gems are reported as `gemsUncredited`. Gear-cache pity is client-owned. | The server owns gems and cosmetic pity. |
+| D34 | **(v2.0)** The healer is a capability (`EnemyDef.heal`), not a new `archetype` value. | The archetype drives the attack timer and the balance personas; a Moth Mender still attacks like a grunt. A new archetype value would break every archetype switch for no gain. |
+| D35 | **(v2.0)** Elite is a per-ref tag, and its danger is the per-ref `attackPower`. | The plan wants any enemy usable as an elite in a given wave; making P explicit keeps the leak table (plan §4.3) the single source. |
+| D36 | **(v2.0)** The Riddle of Leaves uses its own `riddle` stream, exactly 5 draws per riddle, and leaf plates of kind `minigame`. | The picks are independent of how many Hush Spells were drawn. Reusing the plate kind keeps the fold/ATB/plate rules untouched; riddle-only events keep rubble VFX from firing. |
+| D37 | **(v2.0)** The riddle phase ends after `count` riddles, not at an HP gate. | The plan's "five riddles, then the finisher"; a fast typist still sees every riddle. Alternative in the v2.0 Review notes (1). |
+| D38 | **(v2.0)** "Ignore capitals" = `LevelOptions.caseAssist` (sim input) fed from `settings.caseAssist` (save). It beats `caseMode`. | Folding happens in the sim, so it must be an input. A separate boolean avoids widening the `caseMode` enum, which older clients would reject on parse. |
+| D39 | **(v2.0)** `WordEntry.chapter` ("introduced in chapter N") scopes sentence pools by exact chapter and every other pool cumulatively (≤). | The pools were global: Ch2 Hush Spells would have reached the Ruin Golem and broken Ch1 identity. |
+| D40 | **(v2.0)** Per-chapter knobs are content constants (`CHAPTER_KNOBS`), baked into `LevelDef`/`BossDef` numbers at authoring time; the sim never reads them. | It is the existing T6.1 mechanism made per chapter, and Ch1's values are pinned by a test. |
 
 **Rejected or adjusted reviewer items:** none rejected. Two were adjusted:
 - `buildLoadout` takes a structural `LoadoutSource` rather than `SaveBlob`. The sim cannot import `@hd2d/shared` without creating a cycle; `shared` proves at compile time that a save is assignable to it.
 - The sim imports one pure **value** from content (`TYPABLE_CHARS`) in addition to its types, so that the regex and the key filter share a single source.
 
 **Open questions:** none blocking. Two items will be revisited with real data: the IKI heuristic thresholds (§10) and the T6.1 HP retune for D11.
+
+---
+
+## 13. Chapter 2 contracts (v2.0)
+
+The normative types are in place in §3–§6, §8 and §9.1, marked `v2.0`. This section adds the cross-cutting rules, the knob tables, and the client-side pieces.
+
+### 13.1 Ch1 stays byte-identical (normative)
+**Definition.** After any v2.0 code or content lands, for every Ch1 level `L` and every `ctx`:
+- `resolveLevel(bundle, L, ctx)` deep-equals the pre-v2.0 value, **except `contentVersion`**;
+- therefore replays give the same event list, `LevelResult`, balance cells (31/31) and bot output. A state hash differs only through `run.def.contentVersion`.
+
+**How it holds:**
+1. Every new `Resolved*` key (`attackPowerBp`/`elite` on refs, `heal`, `riddles`) and every new sim-internal key (`EnemyState.nextHealTick/healsDone/elite`, `BossState.riddle`) is **absent** unless content uses the feature. `canonicalJson` throws on `undefined`, so the code must omit the key, not set it to `undefined`.
+2. `LevelOptions.caseAssist` is absent by default. New event fields are written only when `true`.
+3. Pool scoping by `WordEntry.chapter` (§6) keeps every Ch2 entry out of Ch1 pools. Ch1 numbers come from `CHAPTER_KNOBS[1]` (§13.6), with the same values as today.
+4. No new draw is added to an existing RNG stream: healers draw nothing, and riddles use the new `riddle` stream.
+
+**Gates (T1.1 AC):**
+- Commit `packages/sim/tests/fixtures/ch1-resolved.json` *before* any Ch2 content lands. It holds, per Ch1 level, `fnv1a32(canonicalJson({...resolveLevel(bundle, id, {dueWeakWords: []}), contentVersion: ""}))`, and a test asserts it forever.
+- The golden harness (`typingGolden.ts`) pins `def.contentVersion` to a constant for the Golem scenarios, so Ch2 content does not churn the Ch1 golden state hashes.
+- `pnpm balance` and `pnpm bot` Ch1 output diff to empty.
+
+### 13.2 Chapter plumbing
+- **Level ids:** `ch2-l01` … `ch2-l10` (`/^ch\d+-l\d+$/` already allows them; the v2.0 validator requires the 2-digit form and contiguous indices). Ch2 layouts are `ch2-lNN.json`, and `layoutId === id`.
+- **One bundle, one `CONTENT_VERSION`.** `bundle.levels` = Ch1 then Ch2, sorted by (chapter, index). Chapter selection is by `LevelDef.chapter` plus the pool scoping (§6). There is no per-chapter bundle filtering in Ch2; a lazy split can come later behind the same `ContentBundle` type. Data files: `levels.ts` becomes `levels-ch1.ts` + `levels-ch2.ts`, and `levels.ts` re-exports `LEVELS = [...CH1, ...CH2]`.
+- **Unlocks:** `levelUnlocked` (§8), by id: ch1-l01 is open; ch2-l01 opens on ch1-l10 cleared; then each level opens on the one before. The client's `meta/ops.ts levelUnlocked` (today: bundle order) delegates to it.
+- **Frontier:** `frontierChapterOf` (§8), after each result and on load. Clearing ch1-l10 sets frontier 2, which drives the chapter-complete flow, then the Ch2 intro card and the map's chapter tab II.
+- **Par:** `parArmorBp(1) = 10000` and `parArmorBp(2) = 11400` (T1 Common +2, `PAR_UPG[2] = 2`, already in BALANCE), plus `parHpM(2)`. A test pins both. `ResolvedLevel.parArmorBp` carries the value, so the sim never recomputes it per chapter.
+- **Skill unlocks:** `unlockLevel: "ch2-l03"` etc. work as today (first-clear only). The ids `reveal`, `calmMind` and `scholar` are reserved here; T1.4 adds them to `ActiveSkillId`/`PassiveId`, BALANCE and `ActiveSkillDef`/`PassiveDef` by ICP (Review note 7).
+- **Tools:** `pnpm balance --chapter N` and `pnpm bot --chapter N` select levels by `LevelDef.chapter` and the knobs from `CHAPTER_KNOBS[N]`. `PLAN_TARGETS`, `pymodel.ts` and `solveHits.ts` become keyed by chapter. The default (no flag) stays Ch1, so `check.sh` output is unchanged until T5.2 widens the gate to 20 levels.
+
+### 13.3 Exact case, the ⇧ cue and "Ignore capitals" (client side)
+- **Sim facts** (verified in code: `resolve.ts` `foldSentences`, `typing.ts` `plateFoldsFor`/`matches`/`handleKey`, `caseFold.test.ts`):
+  - From Ch2, doom (Hush Spells), finisher, Second Wind and minigame plates are exact when their text has a capital.
+  - The first key of an untargeted exact plate must have the right case (§3.3).
+  - Enemy and guard words stay lowercase, so they fold.
+- **⇧ cue (HUD, T3.1):** draw it on any plate with `shiftNext === true`. That includes untargeted Hush Spells, whose first letter is a capital, and the auto-targeted finisher and Second Wind plates. Readability rules apply: the cue sits beside or above the next letter and never covers it. With `caseAssist` on, `exactCase` and `shiftNext` are never set, so the cue disappears.
+- **Capital accent (VFX/SFX, T3.2):** bind it to `CharCorrect.shifted === true` (≤ 0.45 ms per key budget).
+- **"Ignore capitals" (T3.4):**
+  - It is a Settings toggle in the assists group, default off, story levels only, and it never applies to the Trial.
+  - Stored in `settings.caseAssist` (§9.1). `SaveStore.runConfig` sets `options.caseAssist = true` only when the setting is on.
+  - While it is on, the Case mode control is shown disabled with the hint "Ignore capitals is on". The existing help text "Auto ignores capitals in Chapter 1 sentences" stays correct.
+  - No star or gold penalty in Ch2 (Review note 4).
+- **Typed chapter intro card (T3.4):**
+  - It is client-only, not a sim plate.
+  - Lines come from `bundle.words` filtered by `uses ∋ "intro"` and `chapter === 2`, in bundle order (3 lines).
+  - Typing uses `normalizeKey` and an exact per-char comparison (folded when `caseAssist` is on). It cannot fail, is not logged and pays nothing. It shows the same ⇧ cue rule.
+  - It can be skipped after the first viewing (client flag).
+  - The balance bot ignores it.
+
+### 13.4 `resolveLevel` v2.0 rules (T1.1–T1.3)
+1. **Pools.**
+   - Every pool applies the `chapter` scope from §6, and `weak` applies it to the looked-up entry.
+   - `review` uses `reviewBiomes` when the level sets it.
+   - Sentence pools filter on `uses` and scope as before.
+   - `riddles` is built only for a level whose boss minigame is `riddle` (§3.6 pool rule), and is otherwise absent.
+2. **Refs.**
+   - `attackPowerBp: bp(ref.attackPower)` and `elite: true` are copied only when the content sets them.
+   - Boss adds use the same resolution.
+3. **Enemies:** `heal: { everyTicks: ticks(everyS), fracBp: bp(frac), maxTargets, maxHeals }` only on `EnemyDef`s with `heal`.
+4. **Boss minigame:**
+   - `fallingRubble` maps exactly as today.
+   - `riddle` maps `readTicks/answerTicks/gapTicks = ticks(...)`, `clearAtkMultBp = bp(...)`, `missHitM = milli(...)`, and copies `count`, `leaves` and `lengthRange`.
+   - Validation throws are listed in §3.6.
+
+### 13.5 Render biome ids (client, illustrative; owned by render, T2.1/T2.2)
+```ts client
+// apps/game/src/render/biomes.ts
+export type BiomeId = "forest" | "ruins" | "cave" | "boss" | "hushwood" | "fen" | "grove";   // v2.0
+// BiomeMood.ambient gains the Ch2 flavours (AMBIENT_KINDS in world/layout.ts already lists fireflies and leaves):
+type AmbientFlavour = "pollen" | "embers" | "none" | "wisps" | "leaves" | "fireflies";
+// apps/game/src/render/world/layout.ts
+export const LAYOUT_BIOMES = ["forest", "ruins", "cave", "hollow", "boss", "hushwood", "fen", "grove"] as const;
+// toRenderBiome: "hollow" -> "boss" (Ch1 legacy); the Ch2 ids map to themselves. "grove" is its own mood (not "boss").
+```
+`BIOME_NAME` on the map gets "The Hushwood", "Lantern Fen" and "Willow's Heart". The fen's reflection pass is tier-gated by the render quality tier (T2.2). No contract change is needed for it.
+
+### 13.6 Per-chapter knob tables (content; T1.1 creates the file, T5.1 solves Ch2)
+```ts content
+// packages/content/src/data/knobs.ts (v2.0). Authoring-time constants: tools/balance solves them, levels-chN.ts and
+// bosses.ts multiply the authored numbers by them. The sim never reads this table (D40).
+export interface ChapterKnobs {
+  encHpMult: number;            // x encounter HP of L1-L9
+  hitMult: number;              // x gruntHit of L1-L9 (Ch2: solved WITH guard leak on, at par gear, plan §4.3)
+  bossLevelHitMult: number;     // x every hit of L10 (its waves' gruntHit, which the adds use, and the boss hit)
+  gruntAttackPower: number;     // EncounterDef.attackPower of L1-L9 and of the L10 waves (x par armor)
+  eliteAttackPower: number | null; // EnemyRef.attackPower of elite refs; null = the chapter has no elites
+  bossAttackPower: number;      // BossDef.attackPower
+  bossAddsAttackPower: number;  // BossDef.phase1.addsAttackPower
+}
+export const CHAPTER_KNOBS: Readonly<Record<number, ChapterKnobs>> = {
+  // PINNED: these are today's levels.ts / bosses.ts values; a test asserts them (Ch1 byte-identity, §13.1).
+  1: { encHpMult: 1.2, hitMult: 1.34, bossLevelHitMult: 1.15, gruntAttackPower: 1, eliteAttackPower: null, bossAttackPower: 1.25, bossAddsAttackPower: 1.25 },
+  // Ch2: the P values are from the plan (§1.3, §4.3). The three multipliers are PLACEHOLDERS (= Ch1) until T5.1 solves them.
+  2: { encHpMult: 1.2, hitMult: 1.34, bossLevelHitMult: 1.15, gruntAttackPower: 1.07, eliteAttackPower: 1.25, bossAttackPower: 1.3, bossAddsAttackPower: 1.25 },
+};
+/** Throws on a chapter with no row (no silent fallback to Ch1 numbers). */
+export declare function knobsFor(chapter: number): ChapterKnobs;
+```
+- `levels-ch1.ts` keeps its named exports (`ENC_HP_MULT`, `HIT_MULT`, `BOSS_LEVEL_HIT_MULT`, `BOSS_ATTACK_POWER`) as aliases of `CHAPTER_KNOBS[1]`, so `tools/balance/src/report.ts` and the tests keep compiling.
+- Ch1's L10 pre-boss waves keep P 1 (`gruntAttackPower`). That matches v1.9.
+- Authored Ch2 numbers before the knobs come from plan §4.1: encounter HP 244 → 284, Willow ≈ 923, `DMG_FRAC` 0.525, `BOSS_ENC_DMG` 1.7. `tools/balance` generates them as it did for Ch1 (D32).
+
+### 13.7 What each task writes (contract consumers)
+| Task | Contract pieces |
+|---|---|
+| C0.3 stubs | Copy the §3/§4/§5/§6 blocks verbatim. Minimal `kind` narrowing in `resolve.ts`, `boss.ts`, `bossPlates.ts` (throw on `riddle`); stub bindings for the 4 new events in `level/eventBindings.ts` (the audio list is already stubbed); `caseAssist: false` in `ops.ts` new saves. No behaviour change, and goldens unchanged (Review note 6). |
+| T1.1 | §13.1 gates, §13.2 plumbing, §8 chapter helpers, `knobs.ts`, the pool scoping (§13.4.1) |
+| T1.2 | §3.5 (healer and elite), per-ref P, `EnemyHealed`, the `EnemyView.elite/healer` and `EnemySpawned` flags |
+| T1.3 | §3.6 riddle, the `riddle` stream, `RiddleView`, the case view fields (`exactCase`, `shiftNext`, `shifted`), `caseAssist` folding |
+| T4.1 / T4.2 / T4.3 | the v2.0 validator rules (§6), `chapter` on every Ch2 entry, `clue` where the definition leaks the answer |
