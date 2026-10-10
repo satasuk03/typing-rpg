@@ -93,3 +93,4 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
 - 2026-10-10: The game's name is "Typing Adventure" (pixel-art title logo). Skill icons are pixel art.
 - 2026-10-10: Ch2 plan (`docs/CH2_PLAN.md`) approved. The boss signature is the Riddle of Leaves, and capitals start in Ch2 boss sentences (with a ⇧ cue and an assist). Leagues and Survival are deferred to a separate milestone. Art stays procedural but at production quality. Beginner boss clear: 75–90% at par, 55–70% with no upgrades.
 - 2026-10-10: Frontend live on GitHub Pages (local-only).
+- 2026-10-10 (interfaces v2.0 review notes): the Willow's riddle phase ends after a fixed 5 riddles, then the finisher. Phase 3 stays a reading test (weapon ATK and skills barely matter; wrong answers or timeouts deal missHit). "Ignore capitals" (caseAssist) costs nothing (no star or reward penalty); future ranked modes force it off.
