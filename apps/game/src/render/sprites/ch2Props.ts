@@ -547,6 +547,9 @@ export function makeWillowFronds(seed = 1, tint = 'silver', wd = 60, ht = 140) {
   return L.finish({ ax: wd / 2, ay: 0, hang: 1, bulge: 0.5 });
 }
 
+// ------------------------------------------------------------------ shared helpers (T2.3: ch2Monsters.ts reuses the same art kit)
+export { bayer, clamp, clump, flipC, flipN, hash, hex, Layer, lerp, limb, lock, mk, pal, pick, RNG, strand };
+
 // ------------------------------------------------------------------ flip twin (normal.x negated)
 /** A mirrored copy of a frame: image + glow flipped, authored normal flipped AND x-negated (Ch1's mesh flip does not). */
 export function flipFrame(f: SpriteFrame): SpriteFrame {

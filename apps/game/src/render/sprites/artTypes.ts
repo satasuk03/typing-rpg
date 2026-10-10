@@ -2,6 +2,8 @@ import type { SpriteFrame } from "./SpriteSource";
 
 type Palette = readonly (readonly number[])[];
 export type MonsterArt = "slimeG" | "slimeP" | "bat" | "goblin" | "goblinR" | "golem";
+/** Chapter II enemy ids (T2.3, ch2Monsters.ts): `monster.<id>`, plus `monster.<id>.elite` and `monster.willow.lash`. */
+export type Ch2MonsterArt = "wisp" | "shade" | "moth" | "toad" | "wolf" | "willow";
 export type HeroAnim = "idle" | "walk" | "raise" | "slash" | "cast" | "hurt" | "win";
 
 /** Typed surface of the (untyped, ported) procedural art module. */
