@@ -73,6 +73,15 @@ export function checkSnapshot(s: HudDebugSnapshot): string[] {
         if (hit(r, l)) out.push(`enemy tag ${i} covers a letter of plate ${p.id}`);
       });
     }
+  // P1-2: an enemy's tags and badges (healer, ELITE, leak %) never overlap each other
+  const chips = s.chipRects ?? [];
+  for (let i = 0; i < chips.length; i++)
+    for (let j = i + 1; j < chips.length; j++) {
+      const a = chips[i];
+      const b = chips[j];
+      if (a && b && a.owner === b.owner && hit(a.rect, b.rect))
+        out.push(`enemy ${a.owner}: ${a.id} tag overlaps ${b.id}`);
+    }
   // T6.3 #9: panel text rows never overlap (e.g. "2ND WIND" vs the HP numbers)
   const pt = s.panelTextRects ?? [];
   for (let i = 0; i < pt.length; i++)

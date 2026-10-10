@@ -138,8 +138,6 @@ export interface PlateDrawCtx {
   quality?: number;
   /** Fading-word level 0 (fully visible) .. 1 (faded); default = `view.faded ? 1 : 0`. */
   fadeT?: number;
-  /** Chapter 2+ fading look (dimmed letters + violet underline); chapter 1 keeps its blank-dash look. */
-  fadeV2?: boolean;
   /** Receives the alpha the next letter was drawn with (readability invariant: >= NEXT_LETTER_MIN_ALPHA). */
   nextAlphaOut?: { v: number };
 }
@@ -486,14 +484,7 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
         glow = tinted?.glow ?? "rgba(255,190,60,0.6)";
         gb = tinted?.typedGlowPx ?? 6;
       }
-      if (p.faded && !typed && !d.fadeV2) {
-        // Chapter 1 fading gimmick: untyped chars become blanks; the gimmick overrides the next-letter rule
-        c.fillStyle = "rgba(235,225,205,0.7)";
-        c.fillRect(cx - g.cw * 0.28, cy + g.sz * 0.28, g.cw * 0.56, 3);
-        if (isNext && d.isTarget) underline(c, d, g, cx, ly, true);
-        continue;
-      }
-      if (d.fadeV2 && p.faded && !typed) {
+      if (p.faded && !typed) {
         // Chapter 2 fading word (brief 5.3): untyped letters dim to the floor, the next one stays >= 0.85;
         // a violet underline marks the word as fading
         const la = fadedLetterAlpha(d.fadeT ?? 1, isNext, typed);
@@ -570,7 +561,7 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
         glow: inten > 0 ? glow : null,
         gb: gb * inten,
       });
-      if (d.fadeV2) c.globalAlpha = d.alpha;
+      if (p.faded) c.globalAlpha = d.alpha;
       if (isNext && !scrambled) underline(c, d, g, cx, ly, d.isTarget);
     }
   }

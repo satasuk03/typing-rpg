@@ -49,6 +49,8 @@ export interface PanelCtx {
   tierFlash: number;
   /** Debug collector: text rects (design px) of the hero-panel rows, checked for overlap by invariants. */
   textRects?: { id: string; rect: Rect }[];
+  /** Debug collector: per-enemy tag/badge rects (design px); chips of the same enemy must never overlap. */
+  chipRects?: { owner: string; id: string; rect: Rect }[];
 }
 
 /** Records the rect of a text run that is about to be drawn (design px). */
@@ -118,7 +120,7 @@ export function drawHeroPanel(p: PanelCtx, v: LevelView, atbFrac: number, hpFrac
   bar(c, tx + 28, y + 51, w - 92 - 28 - 12, 11, hpFrac, hpCol0, hpCol1, p.heroHpTrail, {
     trailCol: "#ff6a5a",
   });
-  const hpText = `${Math.max(0, Math.round(v.hero.hp))} / ${v.hero.maxHp}`;
+  const hpText = `${Math.max(0, Math.round(v.hero.hp))} / ${Math.round(v.hero.maxHp)}`;
   txt(c, hpText, x + w - 14, y + 72, 12, INK, { align: "right" });
   noteText(p, "hp", hpText, x + w - 14, y + 72, 12, "right");
   // ATB gauge: full / ignite state
@@ -361,7 +363,7 @@ export function drawSkill(p: PanelCtx, sk: SkillView, charge: number): void {
 export const ENEMY_BAR_W = 88;
 export const enemyBarsRect = (fx: number, fy: number, leak = false, tags = false): Rect =>
   tags
-    ? { x: fx - 74, y: fy - 14, w: 156, h: 70 }
+    ? { x: fx - 74, y: fy - 14, w: leak ? 196 : 156, h: 70 }
     : leak
       ? { x: fx - 74, y: fy - 6, w: 156, h: 62 }
       : {
@@ -380,11 +382,14 @@ export function leakBadgeLabel(e: { leakBp?: number }): string | null {
 export const LEAK_BADGE_H = 18;
 
 /** Cracked-shield pill (pixel icon + leak %). `x` is the right edge, `cy` the vertical centre (design px). */
+export function leakBadgeWidth(c: Ctx, label: string): number {
+  c.font = `700 13px ${FONT_UI}`;
+  return ICON_PX + 8 + c.measureText(label).width + 4;
+}
+
 export function drawLeakBadge(c: Ctx, label: string, x: number, cy: number): void {
   const sz = 13;
-  c.font = `700 ${sz}px ${FONT_UI}`;
-  const tw = c.measureText(label).width;
-  const w = ICON_PX + 8 + tw + 4;
+  const w = leakBadgeWidth(c, label);
   const x0 = x - w;
   const y0 = cy - LEAK_BADGE_H / 2;
   c.save();
@@ -419,11 +424,12 @@ export function healerCharge(h: NonNullable<EnemyView["healer"]>): number | null
  * the gold ELITE tag. Green is reserved for healing; gold matches the elite sprite rim. Both are static
  * except a small badge swell in the last 600 ms before a heal (off in reduced motion).
  */
-export function drawEnemyTags(p: PanelCtx, e: EnemyView, x: number, cy: number): void {
+export function drawEnemyTags(p: PanelCtx, e: EnemyView, x: number, cy: number): number {
   const { c } = p;
   let tx = x - 44;
   const h = e.healer;
   if (h) {
+    const hx0 = tx - 12;
     const charge = healerCharge(h);
     const cx = tx + 10;
     const soon = h.ticksLeft !== null && h.ticksLeft <= 36 && !p.settings.reducedMotion;
@@ -454,9 +460,19 @@ export function drawEnemyTags(p: PanelCtx, e: EnemyView, x: number, cy: number):
       txt(c, label, tx, cy + 1, 12, charge === null ? "#8aa894" : "#8af0ae", { w: 700 });
       tx += label.length * 8 + 8;
     }
+    p.chipRects?.push({
+      owner: String(e.id),
+      id: "healer",
+      rect: { x: hx0, y: cy - 12, w: tx - hx0, h: 24 },
+    });
   }
   if (e.elite) {
     const w = 50;
+    p.chipRects?.push({
+      owner: String(e.id),
+      id: "elite",
+      rect: { x: tx - 1, y: cy - 9, w: w + 2, h: 18 },
+    });
     c.fillStyle = "rgba(0,0,0,0.9)";
     c.fillRect(tx - 1, cy - 9, w + 2, 18);
     c.fillStyle = "#4a3208";
@@ -467,7 +483,9 @@ export function drawEnemyTags(p: PanelCtx, e: EnemyView, x: number, cy: number):
     c.fillStyle = "#ffe08a";
     c.fillRect(tx + 4, cy - 2, 4, 4);
     txt(c, "ELITE", tx + 12, cy + 1, 11, "#ffe9a8", { w: 700, ls: 1, stroke: false });
+    tx += w + 1;
   }
+  return tx;
 }
 
 export interface EnemyBarState {
@@ -526,8 +544,18 @@ export function drawEnemyBars(
   );
   if (e.shieldMax > 0) shieldBadge(c, x - 58, y + 6, String(e.shield), broken, 13);
   const leak = leakBadgeLabel(e);
-  if (leak) drawLeakBadge(c, leak, x + 44, fy + 2);
-  if (enemyHasTags(e) && !e.isBoss) drawEnemyTags(p, e, x, fy + 1);
+  // P1-2: the tag row (healer / ELITE) is drawn first; the leak badge sits right of it, never under it
+  const tagsEnd = enemyHasTags(e) && !e.isBoss ? drawEnemyTags(p, e, x, fy + 1) : null;
+  if (leak) {
+    const bw = leakBadgeWidth(c, leak);
+    const right = tagsEnd === null ? x + 44 : Math.max(x + 44, tagsEnd + 6 + bw);
+    drawLeakBadge(c, leak, right, fy + 2);
+    p.chipRects?.push({
+      owner: String(e.id),
+      id: "leak",
+      rect: { x: right - bw - 1, y: fy + 2 - LEAK_BADGE_H / 2 - 1, w: bw + 2, h: LEAK_BADGE_H + 2 },
+    });
+  }
   e.weaknesses.forEach((wk, i) => {
     damageIcon(c, wk.type, x + 58 + i * 20, y + 6, 6, wk.revealed);
   });

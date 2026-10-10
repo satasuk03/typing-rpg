@@ -92,6 +92,21 @@ for (const scenario of ["forest", "boss", "cave"]) {
   });
 }
 
+test("elite/healer tags and the leak badge never overlap (leak=20, sweep)", async ({ page }) => {
+  test.setTimeout(120_000);
+  for (const scenario of ["forest", "cave"]) {
+    const errors = await open(page, `healer=1&elite=1&leak=20&scenario=${scenario}&wpm=40`, 6);
+    const s = await snap(page);
+    const ids = (s.chipRects ?? []).map((c) => c.id);
+    expect(ids).toContain("leak");
+    expect(ids).toContain("elite");
+    expect(checkSnapshot(s)).toEqual([]);
+    const res = await page.evaluate(() => window.__hudDebug?.sweep(40, 0.1));
+    expect(res?.violations, scenario).toEqual([]);
+    expect(errors).toEqual([]);
+  }
+});
+
 test("healer + elite: badge, ring and tag render, 0 violations over a sweep", async ({ page }) => {
   test.setTimeout(120_000);
   for (const scenario of ["forest", "cave"]) {

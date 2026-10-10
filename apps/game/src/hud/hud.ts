@@ -134,6 +134,8 @@ export interface HudDebugSnapshot {
   /** v2.0 gutter cues (shift key cap / leaf glyph, CSS px) and healer/elite tag rows: none may touch a plate letter. */
   cueRects?: Rect[];
   tagRects?: Rect[];
+  /** Per-enemy tag/badge rects (healer, ELITE, leak %; CSS px): chips of one enemy never overlap. */
+  chipRects?: { owner: string; id: string; rect: Rect }[];
   /** v2.0 per-plate cue flags: the ⇧ cue is drawn iff `shiftCue`; healer/elite tags per enemy. */
   cues?: {
     shiftCue: number[];
@@ -230,6 +232,7 @@ export class Hud {
   /** HUD time the riddle panel appeared (null while none): drives the 250 ms slide-in. */
   private riddleShownAt: number | null = null;
   private panelText: { id: string; rect: Rect }[] = [];
+  private chipRects: { owner: string; id: string; rect: Rect }[] = [];
   /** 0 during the boss intro, then 1 over 300 ms: panels, combo and skill orbs fade back in. */
   private introFade = 1;
   private keepOutProbe: (() => NonNullable<HudDebugSnapshot["fxKeepOut"]>) | null = null;
@@ -941,6 +944,8 @@ export class Hud {
     };
     this.panelText.length = 0;
     pc.textRects = this.panelText;
+    this.chipRects.length = 0;
+    pc.chipRects = this.chipRects;
     if (hudVisible && this.introFade > 0.01) {
       c.globalAlpha = this.panelAlpha * this.introFade;
       const atb = this.lerpPrev(view.hero.atbFrac, (p) => p.hero.atbFrac);
@@ -1042,7 +1047,6 @@ export class Hud {
         letterRects: en.letters,
         quality: this.quality,
         fadeT: en.fade,
-        fadeV2: view.chapter >= 2,
         nextAlphaOut: en.nextAlpha,
       });
     }
@@ -1536,10 +1540,7 @@ export class Hud {
         letters: en.letters.filter(Boolean).map((r) => this.toCss(r)),
         contrast,
         faded: p?.faded ?? false,
-        nextAlpha:
-          p?.faded && this.view?.chapter !== undefined && this.view.chapter >= 2
-            ? en.nextAlpha.v
-            : null,
+        nextAlpha: p?.faded ? en.nextAlpha.v : null,
       });
     }
     const sorted = [...this.frameMs].sort((a, b) => a - b);
@@ -1567,6 +1568,7 @@ export class Hud {
             h: 26,
           }),
         ),
+      chipRects: this.chipRects.map((t) => ({ ...t, rect: this.toCss(t.rect) })),
       tagRects: (this.view?.enemies ?? [])
         .filter((e) => e.alive && !e.isBoss && enemyHasTags(e))
         .map((e) => {
