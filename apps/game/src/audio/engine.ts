@@ -14,6 +14,7 @@ import { busFor, SFX_VOICES } from "./sfx";
 import { Synth } from "./synth";
 import { mulberry32 } from "./tiers";
 import type { BiomeName, MixerChannel, MusicState, Rng, Sfx, SfxParams } from "./types";
+import { WhisperLoop } from "./whisper";
 
 export interface AudioEngineOptions {
   /** Persistence for volume settings. Default: guarded localStorage (or none if unavailable). */
@@ -43,6 +44,7 @@ export class AudioEngine {
   private synth: Synth | null = null;
   private ambience: Ambience | null = null;
   private music: Music | null = null;
+  private whisper: WhisperLoop | null = null;
   private settings: AudioSettings;
   private readonly storage: StorageLike | null;
   private readonly rng: Rng;
@@ -151,6 +153,34 @@ export class AudioEngine {
     this.music?.setState(st);
   }
 
+  /** Willow boss phase 1..3 (Ch2 grove theme; inert elsewhere). */
+  setBossPhase(p: 1 | 2 | 3): void {
+    this.music?.setBossPhase(p);
+  }
+
+  /** Willow freed: the grove theme resolves to major (Ch2). */
+  setBossFreed(f: boolean): void {
+    this.music?.setFreed(f);
+  }
+
+  /** Hold / release the whisper loop while a Hush Spell is up (Ch2). */
+  setWhisper(on: boolean): void {
+    const synth = this.synth;
+    const mixer = this.mixer;
+    if (!synth || !mixer) return;
+    if (on && !mixer.isAudible("master")) return;
+    if (!this.whisper) {
+      if (!on) return;
+      this.whisper = new WhisperLoop(synth);
+    }
+    try {
+      if (on) this.whisper.start();
+      else this.whisper.stop();
+    } catch (err) {
+      console.warn("[audio] whisper failed", err);
+    }
+  }
+
   getBiome(): BiomeName {
     return this.biome;
   }
@@ -195,6 +225,7 @@ export class AudioEngine {
     const now = ctx.currentTime;
     this.ambience?.schedule(now, AMBIENCE_AHEAD);
     this.music?.schedule(now, MUSIC_AHEAD);
+    this.whisper?.update(now);
   }
 
   private drive(): void {
@@ -217,5 +248,6 @@ export class AudioEngine {
     this.synth = null;
     this.ambience = null;
     this.music = null;
+    this.whisper = null;
   }
 }
