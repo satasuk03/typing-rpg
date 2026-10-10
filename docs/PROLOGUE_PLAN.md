@@ -476,3 +476,9 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
 - **P1.3 feel:** the prologue is a power fantasy. Keep pace ≤ 50 and Nul's attack interval ≥ about 3 s, and keep hero HP ≥ 50% for most of the run. One heavy Nul strike early in the boss segment triggers Mending Light and the low-HP passives. Passive target: a union of ≥ 5 per persona. The first tune (pace 120, hero pinned at the 25% floor) was rejected.
 - **P3.5 idle handling:** the sim has no timeout and an idle player never leaves wave 1. After 8–10 s with no input, show a "type any word" nudge. After 20 s, show the "Hold Esc to skip" ring. After 75 s idle, auto-advance to the cutscene.
 - **P3.4 → P3.6 music cues:** the §14.4 `music` cue gets two optional client-only fields, `drone?: number | null` (a MIDI note, or null to release) and `swell?: true`. P3.6 adds them to `cutscene/types.ts` and routes them to `engine.musicDrone` / `engine.musicSwell`, so the arc stays data-driven. Timings: drone(38) at the start of Part C, swell at about C 9.6 s. P3.4's edits outside its ownership (`sfx.ts`, `ambience.ts`, `engine.ts`) are accepted. The final drone level and the §5.4 dB offsets are settled in the PO listen pass.
+- **P2.2 follow-ups (owners noted):**
+  - P3.2/P3.6: spawn `prop.prologue.sword` at the `sword` anchor for the fall beat.
+  - P3.6: cutscene prop lookups match the key `prop.prologue.wordgate`, because layout props have no `id`.
+  - P3.2: the sun Glow quads don't fade with the theft ramp, so the VFX layer or mood should dim them stepwise.
+  - P4.2 polish: the ruins ground still renders lush green; the backlit-stone tint is a workaround.
+  - Tech debt: `layout.ts` only accepts `chN-lNN` ids, so `prologue.json` carries the placeholder id `ch1-l00` and `loadLevel("prologue")` renames it. Fix the regex and add a prologue-layout load test (mood tweak equals `STORM_GOLD`).
