@@ -445,8 +445,9 @@ export class Ch2Fx {
     if (!this.freedDidLight && t >= 1.4) {
       this.freedDidLight = true;
       // "light returns": the grove-dawn mood crossfade is a biome-side change (T2.1); the world lights carry it here
-      kit.flash(x, 5, z + 2, [1.0, 0.85, 0.5], 1.4 * pk, 16, 1.8);
-      kit.flash(x - 6, 3, z + 2, [1.0, 0.85, 0.5], 0.8 * pk, 12, 1.6);
+      // the grove-dawn crossfade (LevelStage) carries the "light returns" now; these two stay modest so they never clip a plate band
+      kit.flash(x, 5, z + 2, [1.0, 0.85, 0.5], 0.5 * pk, 16, 1.8);
+      kit.flash(x - 6, 3, z + 2, [1.0, 0.85, 0.5], 0.3 * pk, 12, 1.6);
     }
     if (!this.freedDidBlossom && t >= 1.06 && sc.k > 0) {
       this.freedDidBlossom = true;

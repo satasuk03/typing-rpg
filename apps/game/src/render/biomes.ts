@@ -234,7 +234,7 @@ const grove: BiomeMood = {
   bloom: 0.66,
   thr: 0.88,
   vig: 0.56,
-  rangeFar: 13,
+  rangeFar: 22,
   tilt: 0.26,
   clear: [0.03, 0.055, 0.1],
   bars: 0.1,
@@ -242,6 +242,26 @@ const grove: BiomeMood = {
   rays: 1.2,
   fill: 0.6,
   ambient: "leaves",
+};
+
+/**
+ * Grove dawn (P2-3, brief 3.7 "freed"): the key turns warm [1.0, 0.85, 0.5] and the fog lifts to a pale gold once the Willow is
+ * freed. Not a `BiomeId`: the stage blends `grove` -> `GROVE_DAWN` over ~2 s (after a 1.3 s delay) with `blendMood`.
+ */
+export const GROVE_DAWN: BiomeMood = {
+  ...grove,
+  amb: [0.34, 0.3, 0.3],
+  gamb: [0.1, 0.08, 0.06],
+  sunCol: [1.3, 1.02, 0.6],
+  fogCol: [0.4, 0.3, 0.2],
+  fog: [0.017, 12, 0.32],
+  gain: [1.04, 1.0, 0.94],
+  sh: [0.01, 0.012, 0.03],
+  hi: [0.06, 0.04, 0.01],
+  bloom: 0.7,
+  clear: [0.4, 0.3, 0.2],
+  rays: 1.6,
+  exposure: 1.1,
 };
 
 export const BIOMES: Readonly<Record<BiomeId, BiomeMood>> = {
