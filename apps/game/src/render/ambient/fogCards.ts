@@ -30,6 +30,12 @@ export const FOG_CARDS: Readonly<Partial<Record<BiomeId, readonly FogCardDef[]>>
     { w: 60, h: 2.6, y: 0.9, z: -9.5, alpha: 0.5, color: [0.08, 0.11, 0.21] },
     { w: 40, h: 1.2, y: 0.35, z: 4.6, alpha: 0.28, color: [0.08, 0.11, 0.21], foreground: true },
   ],
+  fen: [
+    { w: 50, h: 1.4, y: 0.45, z: -1.6, alpha: 0.4, color: [0.42, 0.44, 0.28] },
+    { w: 70, h: 2.8, y: 0.8, z: -6.5, alpha: 0.6, color: [0.38, 0.4, 0.26] },
+    { w: 80, h: 4, y: 1.2, z: -13, alpha: 0.65, color: [0.36, 0.38, 0.25] },
+    { w: 44, h: 1.2, y: 0.35, z: 4.8, alpha: 0.32, color: [0.36, 0.38, 0.24], foreground: true },
+  ],
   grove: [
     { w: 50, h: 1.4, y: 0.5, z: -1, alpha: 0.34, color: [0.07, 0.11, 0.2] },
     { w: 70, h: 3, y: 1, z: -8, alpha: 0.5, color: [0.06, 0.1, 0.19] },

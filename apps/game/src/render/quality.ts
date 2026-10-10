@@ -22,6 +22,11 @@ export interface QualitySettings {
   readonly castShadows: boolean;
   /** Max pixel ratio the canvas uses. */
   readonly maxDpr: number;
+  /**
+   * Fen still-water reflection (render-side): 0 = mirrored twins for props AND actors, 1 = props only,
+   * 2 = no twins: the water is an opaque matte bog (glints and lily pads kept).
+   */
+  readonly waterReflect: 0 | 1 | 2;
 }
 
 /**
@@ -39,6 +44,7 @@ export const QUALITY_TIERS: readonly [QualitySettings, QualitySettings, QualityS
     ambientDensity: 1,
     castShadows: true,
     maxDpr: 2,
+    waterReflect: 0,
   },
   {
     scale: 0.8,
@@ -49,6 +55,7 @@ export const QUALITY_TIERS: readonly [QualitySettings, QualitySettings, QualityS
     ambientDensity: 0.7,
     castShadows: true,
     maxDpr: 1.5,
+    waterReflect: 1,
   },
   {
     scale: 0.64,
@@ -59,6 +66,7 @@ export const QUALITY_TIERS: readonly [QualitySettings, QualitySettings, QualityS
     ambientDensity: 0.35,
     castShadows: false,
     maxDpr: 1,
+    waterReflect: 2,
   },
 ];
 
