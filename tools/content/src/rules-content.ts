@@ -459,7 +459,15 @@ const KNOWN_PLACEHOLDERS = new Set(["dmg", "charge", "secs"]);
 
 export function ruleSkills(b: ContentBundle, sfxIds: readonly string[] | null): Issue[] {
   const out: Issue[] = [];
-  const A = ["slashWave", "piercingThrust", "fireball", "frostLock", "mendingLight", "aegis"];
+  const A = [
+    "slashWave",
+    "piercingThrust",
+    "fireball",
+    "frostLock",
+    "mendingLight",
+    "aegis",
+    "reveal",
+  ];
   const P = [
     "cleanCut",
     "bulwarkStreak",
@@ -469,6 +477,7 @@ export function ruleSkills(b: ContentBundle, sfxIds: readonly string[] | null): 
     "openingGambit",
     "lastStand",
     "comeback",
+    "calmMind",
   ];
   for (const id of A) {
     if (!b.actives.some((a) => a.id === id))

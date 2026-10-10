@@ -324,6 +324,29 @@ const GLYPHS: Record<string, Draw> = {
       "#ffb43a",
     );
   },
+  "skill.reveal": (p) => {
+    p.poly(
+      [
+        [1, 8],
+        [8, 3],
+        [15, 8],
+        [8, 13],
+      ],
+      "#fff0b8",
+    );
+    p.disc(8, 8, 3, GOLDC);
+    p.disc(8, 8, 1, "#2a1c06");
+  },
+  "passive.calmMind": (p) => {
+    for (let x = 2; x < 14; x++) {
+      const y0 = 6 + ((x - 8) * (x - 8)) / 12;
+      const y1 = 6 + ((x + 1 - 8) * (x + 1 - 8)) / 12;
+      p.line(x, y0, x + 1, y1, "#9fe8f0");
+    }
+    p.line(5, 9, 4, 12, "#9fe8f0");
+    p.line(8, 6, 8, 13, "#9fe8f0");
+    p.line(11, 9, 12, 12, "#9fe8f0");
+  },
   // ---- the cache
   cache: (p) => {
     p.rect(2, 7, 12, 7, "#8a5a2c");
