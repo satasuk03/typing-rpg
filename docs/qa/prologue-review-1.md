@@ -325,3 +325,93 @@ the §4 retime), P2-1, P2-2 (cue), P2-3 (card, bars), P2-7, P2-8 (camera), P2-12
   - **P2-3:** the card, bars and Nul lift.
   - **New regression from the re-grade (orchestrator):** in Part B the knight is a near-black silhouette and his face is unreadable (`docs/qa/prologue-p4.2a/p1-1-grade-boss-fight.jpg`, bottom-right). Add a prologue-gated warm hero fill or rim light (stage) so his face and cape read. Target: hero face luma ≥ 0.25 and silhouette ≥ 0.75.
   - **Still short:** mask:cloak 5.3 (target ≥ 6), fog vs knight 1.6 (target ≥ 2.5). R2 judges these.
+
+---
+
+## R2 (Art Director, 2026-10-11): final review on `main` after WP-A and WP-B
+
+**Build.** `main` at `0a52734` (WP-B merged, interfaces v2.2.3).
+**Capture.** My own run on real Metal (Apple M4 Pro, ANGLE Metal, channel `chromium`), port 5487, fresh profile, then Start game into the real
+prologue session, at **1920×1080 and 1280×720**. Settings: `bot-seed=7`, `bot-acc=0.97`, wpm-bot 45. A and C frames are parked with
+`__play.proSeek(t)` at the WP-B times; Part B is live, sampled every 0.7 s through the boss fight (30 frames per size), plus a 9 WPM run for
+the ×16 surge. 0 console errors in every session. The capture spec was temporary and is not committed; it is `prologueWpbStills.metal.ts`
+plus a per-frame probe of the projected Nul, knight and face points, the mask rect and the pop rects.
+**Re-run on this build:**
+- `prologueFullRun`: A **7.9 s**, B **53.3 s** (40 WPM), C **57.6 s**, 0 console errors, 0 in-app errors.
+- `prologue-fx` (Metal): **0 violations** at 40 and 90 WPM. Min next-letter ring/cell contrast is 4.19/6.50 at 40 WPM and 4.19/5.63 at
+  90 WPM. Dialogue contrast min is 9.08. 160 and 146 mask samples.
+- `pnpm bot --prologue`: BOT PASS.
+
+**Method for the numbers.** Same luma and WCAG contrast as R1. Because Nul and the knight move in live frames, the boxes come from the
+projected sprite anchors rather than fixed pixels:
+- **Mask:** the largest bone-grey blob (sat < 0.42) in Nul's head region.
+- **Cloak:** a 0.1 h box, 0.42 h below the mask centre.
+- **Knight face:** a 24×28 px box (at 1080p) on the projected face point.
+- **Fog:** the open fog to the knight's right, at body height. The knight's "body" is the p20 of his sprite box.
+
+### R2.1 Verdict: **ready for PO.** No P1 is open and there are no blockers.
+
+All 11 R1 P1s are closed, and so is the hero-dark regression. Of the two numbers that were still short after WP-A:
+- **Knight vs fog** now passes clearly (3.0 : 1).
+- **Mask : cloak** meets the R1 target the way R1 measured it, on the lit face (6.0–6.7). Over the whole mask it is 4.5–5.1, because the
+  mask is matte bone-grey and not luminous. That is a polish item (R2-P2-a), not a failure: the cloak is now true ink (luma 0.010, which was
+  0.050 in R1), and the silhouette reads at a glance in every boss frame.
+
+Against the bar:
+- **Part B:** about 70% → **about 90%.** The value structure is now low-key, every spell glows, Nul reads as ink, and the knight's face reads.
+- **Part C:** about 55% → **about 90%.** The theft, collapse, kneel, swirl and last spark are now real shots, it flows as one 57.6 s film with
+  no freeze-frames, and the gate stays dark.
+- **B2 intro vs `poc/v2-boss-intro.png`:** it matches the POC on silhouette, card and value: p50 0.024 vs 0.052, dark px 52% vs 41%. It is
+  below the POC on the tear, which is still a white/lilac column rather than a dark lens, and on ambient particles. See the pack's `02`.
+
+What's left are P2/P3 polish items for the backlog (R2.3). Per the PO's 2026-10-10 ruling, art does not block the milestone.
+
+### R2.2 R1 P1s and the regression: closed or open, with numbers
+
+| id | R1 target | R2 measurement (Metal, this build) | status |
+|---|---|---|---|
+| **P1-1** grade | Part B p50 ≤ 0.10, dark ≥ 25%, arch p95 ≥ 0.6, mask : cloak ≥ 6 | Boss fight (30 frames, 1920): **p50 0.064–0.102** (median 0.093). **Dark px 23–39%** (median 24.2%; first Fireball 26.8%). The arch opening is still the hottest area (frame p95 0.51–0.75). Mask : cloak: see the row below | **closed.** Dark px sits about 1 pt under the target in the boss framing, after the WP-B hero fill light. That is a P3 note, not visible as haze |
+| mask : cloak (still short after WP-A) | ≥ 6 | **Lit face (p80 of the mask blob): 6.43 unfrozen / 6.04 frozen at 1920, and 6.73 / 6.52 at 1280.** Whole-mask median: 4.64 / 4.51 at 1920, 4.89 / 5.11 at 1280. Cloak luma median **0.0104** (R1: 0.050) | **closed** on R1's method. The matte mask goes to the backlog as R2-P2-a |
+| **P1-2** Frost Lock wash | frozen cloak delta ≤ +10% | Cloak median **0.0103 frozen vs 0.0104 unfrozen** at 1920 (12 vs 17 frames), and 0.0094 vs 0.0104 at 1280: **−1% / −10%**. The ice is rim-only (`03`, `bp-23`) | **closed** |
+| **P1-3** Grimoire over actors | 0 px overlap | It shows only from 13.2 to 23.8 s, in the bottom lane. In every theft frame (16.4–22.5 s) it is clear of both actors at 1920 and 1280. WP-B probe: 0 px² | **closed** |
+| **P1-4** combat leftovers | bubble, rune circles, pops gone at the climax | C 0.3 and 1.2 s: no Aegis bubble, no rune circle, no pops or tags at either size | **closed** |
+| **P1-5** gate re-lights | glyph ≤ 1.1× carved after the sweep | The gate and runestones are dark at 34.0, 36.3, 41.5 and 54.0 s. No lit glyph after the sweep | **closed** |
+| **P1-6** power loss | knight ≥ 22% H, ring visible, smoke ≤ 15% | Push-in: the knight is about 38% of H at 23.3–24.5 s, and the ring is visible. Face and chest are clear of smoke at 23.6 and 24.0. A few white cube puffs remain at the sides | **closed.** The puffs are P3 (R2-P3-b) |
+| **P1-7** theft money shot | thick coloured ribbons, recoil, no mask glare | Each beat is a chest burst in the element colour, a thick ribbon to Nul, and a ring wash on him. Beat 1 (16.4 / 17.0 s) is an orange Fireball ribbon with an orange ring on Nul. The matching Grimoire icon empties on the beat, the knight recoils, and the eye slits stay visible. Beat 3 (18.9 s) has a green burst but a near-white ribbon: it is the Slash Wave colour, though R1 asked for sat ≥ 0.5 on beats 1–3 | **closed.** The beat-3 ribbon tint is P3 (R2-P3-c) |
+| **P1-8** ember / shards | ember ≤ 8 px from the palm, shards readable | Ember in the open palm at 46.5 s and at the closed hand at 48.5 s (WP-B: 1 px). The Fireball shard is readable falling at 44.8 s | **closed** |
+| **P1-9** pops on the mask | 0 | **0 pop/tag rects on the mask** in my 59 boss frames (1920 + 1280), plus `prologue-fx` 306 mask samples | **closed** |
+| **P1-10** pacing | C ≤ 58 s, no static span > 1.5 s | Re-run: A **7.9 s**, C **57.6 s**. WP-B film strip at 75 WPM: 0 static seconds, minimum diff 4.6%/s | **closed** |
+| **P1-11** knight vs fog (still short after WP-A) | ≥ 2.5 : 1 from the close-up | **2.93 at 40.5 s, 3.06 at 41.5 s ("My words... are gone."), 3.06 at 43.0 s, and 2.96 at 46.5 s.** The fog now peaks in the wide shots (1.6–2.0 at 36.3–37.5 s, where he is a small silhouette by design) | **closed** |
+| hero-dark regression | face luma ≥ 0.25 | **Median 0.29 (1920) / 0.285 (1280)** over the frames where the knight stands at his post (0.29–0.45). The low outliers are lunge frames where the sprite has left the projected point. Cape and face read in every boss frame | **closed** |
+
+### R2.3 New findings and the remaining backlog (no P1)
+
+New in R2:
+- **R2-P2-a: the mask is matte.** The mask body is luma about 0.22, bone-grey. Only its lower half and the eye slits glow. Lifting the mask
+  albedo or emissive by about 1.4× (prologue-gated) would put the whole-mask ratio above 6 and make him read as a light source. Files:
+  `render/sprites/prologueArt.ts` or the Nul material.
+- **R2-P2-b: Part A 6.0 s dialogue box over the knight.** Nul's "So. The last Ember Knight." box (y 894–1044 at 1080p) overlaps the
+  knight's legs and sword tip (feet at y 940, x 571; the box starts at x 576). By 7.0 s he has walked clear. Part C's keep-out holds; this is
+  Part A. Fix: side-swap or nudge the box at that line. Files: `hud/prologue/dialogue.ts` or the Part A cue.
+- **R2-P3-a:** the knight-flare colour at C 10.4 s depends on the Part B run's carried aura tier: yellow in one run, magenta in another. Both
+  read as a power-up, but stills of the same `t` differ between runs.
+- **R2-P3-b:** a few white cube puffs remain beside the knight in the collapse (23.3–23.6 s).
+- **R2-P3-c:** the theft-3 ribbon (Slash Wave, 18.9 s) is near-white. Tint it toward its green burst so the first three beats all read as
+  colour leaving.
+
+Still open from R1 (P2/P3, for the polish backlog):
+- **P2-2:** the sky over the gate doesn't visibly darken, and there are no upward ink streaks at A 6.6–7.0 s.
+- **P2-3 (tear part) and P2-8 (vortex part):** the tear is a bright white/lilac column, not a dark lens. The vortex glyphs read as white
+  blocks.
+- **P2-4:** the ×16 surge aura shows a violet ring and rays, but no gold under-pillar. It doesn't read as "max".
+- **P2-6:** the catch crumble isn't legible.
+- **P2-11:** deferred by ruling. The knight is never hurt in 14/20 Average and 19/20 Fast bot runs.
+- **P3-1, P3-2, P3-3, P3-6:** P3-6 is the knight's flat white face in the UNWRITTEN close-ups.
+- **P3-5 (height part):** one-line boxes are still 150 px tall.
+
+Closed by WP-A/WP-B and confirmed in R2: P2-1, P2-5, P2-7, P2-9, P2-10, P2-12, P2-13, P2-14, P3-4, P3-7. P2-3 is closed for the bars, card,
+lift and circle.
+
+### R2.4 Pack
+PO sign-off pack: `docs/qa/prologue-signoff/README.md`. It contains the 16-keyframe sheet, the POC side by side, Part B readability, the
+power-loss and last-spark strips, the 1920 singles, a 1280 sheet, timing, perf, the audio checklist pointer and the PO checklist.
