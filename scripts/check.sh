@@ -33,7 +33,7 @@ pnpm -s --filter @hd2d/sim test:parity
 
 failed="hud readability"; step "HUD readability sweep (readability + guard-leak specs, Chromium, ~15 s)"
 # Catches pop-over-letter / plate-overlap regressions that unit tests miss. Own dev-server port: set PW_PORT to override.
-(cd apps/game && PW_PORT="${PW_PORT:-5199}" ./node_modules/.bin/playwright test tests/hud/readability.spec.ts tests/hud/guardLeakHud.spec.ts)
+(cd apps/game && HUD_NO_SHOTS=1 PW_PORT="${PW_PORT:-5199}" ./node_modules/.bin/playwright test tests/hud/readability.spec.ts tests/hud/guardLeakHud.spec.ts)
 
 failed="bot quick"; step "headless bot gate (3 personas x 10 levels x 5 seeds, ~3 s)"
 pnpm -s bot --quick

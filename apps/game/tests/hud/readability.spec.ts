@@ -55,7 +55,9 @@ for (const c of CASES) {
       if (!d) throw new Error("no hook");
       return d.snapshot();
     });
-    await page.screenshot({ path: path.join(dir, "__shots__", `hud-${c.name}.png`) });
+    // review stills; scripts/check.sh sets HUD_NO_SHOTS so the gate leaves the tracked PNGs alone
+    if (!process.env.HUD_NO_SHOTS)
+      await page.screenshot({ path: path.join(dir, "__shots__", `hud-${c.name}.png`) });
 
     expect(snap.viewport.w).toBe(1280);
     expect(snap.plates.length).toBeGreaterThan(0);
@@ -134,7 +136,9 @@ for (const w of [
     test.setTimeout(90_000);
     const errors = await open(page, w, "&backdrop=world");
     const snap = await page.evaluate(() => window.__hudDebug?.snapshot());
-    await page.screenshot({ path: path.join(dir, "__shots__", `hud-${w.name}.png`) });
+    // review stills; scripts/check.sh sets HUD_NO_SHOTS so the gate leaves the tracked PNGs alone
+    if (!process.env.HUD_NO_SHOTS)
+      await page.screenshot({ path: path.join(dir, "__shots__", `hud-${w.name}.png`) });
     expect(snap?.plates.length).toBeGreaterThan(0);
     expect(snap ? checkSnapshot(snap) : ["no snapshot"]).toEqual([]);
     expect(errors).toEqual([]);
