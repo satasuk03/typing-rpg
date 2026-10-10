@@ -93,7 +93,10 @@ function plateFoldsFor(
   text: string,
   foldSentences: boolean,
   caseMode: "auto" | "strict",
+  caseAssist: boolean,
 ): boolean {
+  // v2.0 "Ignore capitals": every plate folds, beating caseMode (§2 Case rule 1). Absent = false (Ch1 byte-identical).
+  if (caseAssist) return true;
   if (foldSentences && caseMode !== "strict" && SENTENCE_KINDS.includes(kind)) return true;
   return plateFolds(text, caseMode);
 }
@@ -108,7 +111,13 @@ export function addPlate(state: LevelState, spec: PlateSpec, emit: Emit): PlateS
     kind: spec.kind,
     text: spec.text,
     display: spec.display ?? spec.text,
-    fold: plateFoldsFor(spec.kind, spec.text, run.def.foldSentences, run.options.caseMode),
+    fold: plateFoldsFor(
+      spec.kind,
+      spec.text,
+      run.def.foldSentences,
+      run.options.caseMode,
+      run.options.caseAssist === true,
+    ),
     typed: 0,
     perfect: true,
     typos: 0,

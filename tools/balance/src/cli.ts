@@ -1,4 +1,4 @@
-// pnpm balance [--seeds N] [--workers N] [--no-noise] [--persona id,id] [--level ch1-l05,...] [--json path] [--md path]
+// pnpm balance [--chapter N] [--seeds N] [--workers N] [--no-noise] [--persona id,id] [--level ch1-l05,...] [--json path] [--md path]
 //              [--kit starter|bare] [--whatif key=value,...] [--strict]
 // Runs the economy_sim personas through Chapter 1 on the real sim and prints the plan §9 verdicts, the parity with the
 // Python model, and per-level tables. Exit code 1 when a §9 or parity cell FAILs (PASS(±15%) passes; a documented
@@ -9,7 +9,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PERSONAS, type PersonaId } from "./personas.ts";
 import { buildReport, markdown } from "./report.ts";
-import { CH1_LEVELS, type Job, runJobs } from "./runner.ts";
+import { chapterLevels, type Job, runJobs } from "./runner.ts";
 import { parseWhatIf } from "./whatif.ts";
 
 const args = process.argv.slice(2);
@@ -21,9 +21,10 @@ const seeds = Number(opt("--seeds") ?? 200);
 const workers = Number(opt("--workers") ?? availableParallelism());
 const noise = !args.includes("--no-noise");
 const personas = (opt("--persona")?.split(",") ?? PERSONAS.map((p) => p.id)) as PersonaId[];
-const levels = opt("--level")?.split(",") ?? CH1_LEVELS;
+const chapter = Number(opt("--chapter") ?? 1);
+const levels = opt("--level")?.split(",") ?? chapterLevels(chapter);
 const here = dirname(fileURLToPath(import.meta.url));
-const jsonPath = resolve(opt("--json") ?? resolve(here, "../out/balance-ch1.json"));
+const jsonPath = resolve(opt("--json") ?? resolve(here, `../out/balance-ch${chapter}.json`));
 const mdPath = opt("--md");
 const whatif = parseWhatIf(opt("--whatif"));
 const kit = (opt("--kit") ?? "starter") as "starter" | "bare";
@@ -35,7 +36,14 @@ for (const persona of personas)
 const t0 = process.hrtime.bigint();
 const results = await runJobs(jobs, workers);
 const seconds = Number(process.hrtime.bigint() - t0) / 1e9;
-const rep = buildReport(results, { seeds, noise, workers, seconds, whatif });
+const rep = buildReport(results, {
+  seeds,
+  noise,
+  workers,
+  seconds,
+  whatif,
+  ...(chapter === 1 ? {} : { chapter }),
+});
 const md = markdown(rep);
 console.log(md);
 mkdirSync(dirname(jsonPath), { recursive: true });
@@ -50,5 +58,7 @@ if (bad.length > 0) {
   console.log(
     `\n${bad.length} failing cell(s): ${bad.map((c) => `${c.persona} ${c.metric}`).join("; ")}`,
   );
-  process.exitCode = 1;
+  // Chapters other than 1 run on placeholder targets and stub levels (T1.1): informational until T5.1.
+  if (chapter === 1) process.exitCode = 1;
+  else console.log("(chapter > 1 verdicts are informational until T5.1; exit code unaffected)");
 }

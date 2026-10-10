@@ -74,8 +74,10 @@ export class SaveStore {
       local = ops.newSave(now(), (o.seed ?? freshSeed)(), o.bundle);
       fresh = true;
     }
-    const store = new SaveStore(net, local, o);
-    if (fresh) await store.persist();
+    // Derived frontier on load: old saves with Ch1 cleared open Ch2 with no migration (interfaces §13.2).
+    const framed = ops.withFrontier(local, o.bundle);
+    const store = new SaveStore(net, framed, o);
+    if (fresh || framed !== local) await store.persist();
     await store.importLegacyTranslations();
     return store;
   }
@@ -120,8 +122,8 @@ export class SaveStore {
   async reloadFromLocal(): Promise<boolean> {
     const local = await this.net.sync.getLocal().catch(() => null);
     if (!local || local.updatedAtMs <= this.cur.updatedAtMs) return false;
-    this.cur = local;
-    for (const l of this.listeners) l(local);
+    this.cur = ops.withFrontier(local, this.bundle);
+    for (const l of this.listeners) l(this.cur);
     return true;
   }
 
@@ -150,6 +152,8 @@ export class SaveStore {
       goldMultBp,
       allowExternalRevive: false,
       tutorial: def.tutorial,
+      // v2.0 "Ignore capitals": the key is present only when the setting is on, so default runs hash as before (§13.1).
+      ...(s.settings.caseAssist === true ? { caseAssist: true } : {}),
     };
     return {
       def,

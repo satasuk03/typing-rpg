@@ -1,14 +1,16 @@
 // Headless sim playtest gate (plan T6.2 / §8 gate 3): all levels x 3 personas x N seeds through packages/sim, using
 // tools/balance's persona runner as a library.
 import {
+  bundleForLevel,
   CH1_LEVELS,
+  chapterLevels,
   type GimmickMode,
   type Job,
   type JobResult,
   MAIN_PERSONAS,
   PERSONAS,
   type PersonaId,
-  PLAN_TARGETS,
+  planTargetsFor,
   type RunRecord,
   runJob,
   runJobs,
@@ -26,6 +28,8 @@ export interface GateOptions {
   gimmicks: GimmickMode;
   personas?: readonly PersonaId[];
   levels?: readonly string[];
+  /** Chapter to gate (default 1). Ch2 runs the placeholder stub levels until T4.3 (the L10 stub has no boss). */
+  chapter?: number;
 }
 
 export interface Cell {
@@ -71,7 +75,12 @@ export function cellsOf(results: readonly JobResult[]): Cell[] {
 
 export async function runGate(o: GateOptions): Promise<GateResult> {
   const personas = o.personas ?? MAIN_PERSONAS;
-  const levels = o.levels ?? CH1_LEVELS;
+  const chapter = o.chapter ?? 1;
+  const levels = o.levels ?? chapterLevels(chapter);
+  const targets = planTargetsFor(chapter);
+  const isBossLevel = (id: string): boolean =>
+    bundleForLevel(id).levels.find((l) => l.id === id)?.kind === "boss";
+  const bossId = levels.find(isBossLevel);
   const jobs: Job[] = [];
   for (const persona of personas)
     for (const levelId of levels)
@@ -100,17 +109,17 @@ export async function runGate(o: GateOptions): Promise<GateResult> {
   // (--quick) cannot fail a target by luck: fail only when the whole interval misses the target.
   for (const persona of personas) {
     if (persona === "ref") continue;
-    const t = PLAN_TARGETS[persona];
+    const t = targets[persona];
     const mine = cells.filter((c) => c.persona === persona);
     for (const c of mine) {
-      const target = c.levelId === BOSS ? t.clearBoss : t.clearNormal;
+      const target = c.levelId === bossId ? t.clearBoss : t.clearNormal;
       const [, hi] = wilson(c.cleared, c.n);
       if (hi < target)
         failures.push(
           `clear target: ${persona} ${c.levelId} ${c.cleared}/${c.n} (upper 99% bound ${pct(hi)} < ${pct(target)})`,
         );
     }
-    const boss = mine.find((c) => c.levelId === BOSS);
+    const boss = mine.find((c) => c.levelId === bossId);
     if (boss !== undefined && t.clearBossWindow !== undefined) {
       const [lo, hi] = wilson(boss.cleared, boss.n);
       const [wlo, whi] = t.clearBossWindow;

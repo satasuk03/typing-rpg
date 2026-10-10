@@ -1,9 +1,8 @@
 // Aggregation, plan §9 verdicts and the markdown / JSON report.
-import { contentBundle } from "@hd2d/content";
 import type { RunRecord } from "./bot.ts";
 import { PERSONAS, type PersonaId } from "./personas.ts";
 import { pyActiveSeconds, pyEncounterHp } from "./pymodel.ts";
-import type { JobResult } from "./runner.ts";
+import { bundleForLevel, type JobResult } from "./runner.ts";
 import type { WhatIf } from "./whatif.ts";
 
 // ---------------------------------------------------------------- targets
@@ -48,6 +47,16 @@ export const PLAN_TARGETS: Record<
     skillShare: [0.15, 0.2],
   },
 };
+/** Per-chapter targets (T1.1). Ch2 = Ch1 PLACEHOLDERS until T5.1 sets the Ch2 numbers (plan §4). */
+export const PLAN_TARGETS_BY_CHAPTER: Record<number, typeof PLAN_TARGETS> = {
+  1: PLAN_TARGETS,
+  2: PLAN_TARGETS,
+};
+export function planTargetsFor(chapter: number): typeof PLAN_TARGETS {
+  const t = PLAN_TARGETS_BY_CHAPTER[chapter];
+  if (t === undefined) throw new Error(`planTargetsFor: no targets for chapter ${chapter}`);
+  return t;
+}
 /** Plan §9: auto-attacks per encounter for the 35 WPM reference typist. */
 export const REF_AUTO_ATTACKS = 11;
 /** economy_sim_output.md "S" table, chapter 1 row (2-encounter levels, boss included in the mean). */
@@ -100,14 +109,14 @@ export interface LevelRow {
  */
 export function pyLevelHp(levelId: string): { hp: number; encounters: number; boss: boolean } {
   const c = levelHp(levelId);
-  const lv = contentBundle.levels.find((l) => l.id === levelId);
+  const lv = bundleForLevel(levelId).levels.find((l) => l.id === levelId);
   if (c.boss || lv === undefined) return c;
   return { ...c, hp: c.encounters * pyEncounterHp(lv.index) };
 }
 
 /** Total HP the hero must remove in a content level (encounter pools + boss + boss adds), from the content bundle. */
 export function levelHp(levelId: string): { hp: number; encounters: number; boss: boolean } {
-  const lv = contentBundle.levels.find((l) => l.id === levelId);
+  const lv = bundleForLevel(levelId).levels.find((l) => l.id === levelId);
   if (lv === undefined) throw new Error(levelId);
   let hp = 0;
   let encounters = 0;
@@ -117,7 +126,7 @@ export function levelHp(levelId: string): { hp: number; encounters: number; boss
       hp += s.encounter.hp * s.encounter.waves.length; // the pool is per wave (sim: hpPoolM split by hpWeight per wave)
       encounters++;
     } else if (s.kind === "boss") {
-      const b = contentBundle.bosses.find((x) => x.id === s.bossId);
+      const b = bundleForLevel(levelId).bosses.find((x) => x.id === s.bossId);
       if (b === undefined) throw new Error(s.bossId);
       hp += b.hp * (1 + 0.5 / 3.2); // the adds' pool: BOSS_ADDS_HP_ENC / BOSS_HP_ENC of the boss HP
       encounters++;
@@ -309,6 +318,9 @@ export function verdicts(sums: readonly PersonaSummary[]): Cell[] {
         verdict: inRange(s.skillShare, t.skillShare[0], t.skillShare[1]),
       },
     );
+    // A chapter without a boss level (the Ch2 stubs, T1.1) has no boss cells: drop the NaN ones (Ch1 never has any).
+    for (let i = cells.length - 1; i >= at; i--)
+      if (Number.isNaN((cells[i] as Cell).value)) cells.splice(i, 1);
     for (const c of cells.slice(at))
       if (c.verdict === "FAIL" && KNOWN_MISSES.includes(`${c.persona}:${c.metric}`))
         c.verdict = "FAIL*";
@@ -393,7 +405,15 @@ const table = (head: string[], rows: string[][]): string =>
   ].join("\n");
 
 export interface Report {
-  config: { seeds: number; noise: boolean; workers: number; seconds: number; whatif: WhatIf };
+  config: {
+    seeds: number;
+    noise: boolean;
+    workers: number;
+    seconds: number;
+    whatif: WhatIf;
+    /** Absent = 1. Chapters other than 1 are informational until T5.1 (Ch1 targets, no Python parity). */
+    chapter?: number;
+  };
   rows: LevelRow[];
   summaries: PersonaSummary[];
   cells: Cell[];
@@ -414,7 +434,8 @@ export function buildReport(results: readonly JobResult[], config: Report["confi
     rows,
     summaries,
     cells: verdicts(summaries),
-    parity: parityCells(rows, summaries),
+    // The Python model is a Chapter 1 port: no parity cells for other chapters.
+    parity: (config.chapter ?? 1) === 1 ? parityCells(rows, summaries) : [],
   };
 }
 
@@ -422,7 +443,7 @@ export function markdown(rep: Report): string {
   const out: string[] = [];
   const label = (p: string): string => PERSONAS.find((x) => x.id === p)?.label ?? p;
   out.push(
-    `# Chapter 1 balance (${rep.config.seeds} seeds per level per persona, noise ${rep.config.noise ? "on" : "off"})`,
+    `# Chapter ${rep.config.chapter ?? 1} balance${(rep.config.chapter ?? 1) === 1 ? "" : " (PLACEHOLDER: Ch1 targets, stub levels until T4.3/T5.1)"} (${rep.config.seeds} seeds per level per persona, noise ${rep.config.noise ? "on" : "off"})`,
     ...(Object.keys(rep.config.whatif).length > 0
       ? ["", `**What-if:** ${JSON.stringify(rep.config.whatif)} (Py columns ignore it)`]
       : []),
