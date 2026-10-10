@@ -1,5 +1,14 @@
 # Chapter 2 Plan: "Chapter II: The Hushwood" (for PO approval)
 
+> **PO decisions (2026-10-10). The plan is approved with these answers:**
+> 1. **Boss signature:** the Riddle of Leaves. Leaf rain is the fallback only.
+> 2. **Capitals:** Shift and capitals start in Ch2, in boss sentences only. Show a ⇧ cue and offer an "Ignore capitals" assist; enemy words stay lowercase.
+> 3. **New mechanics:** only the healer and the elite tier. *(Default taken, per the recommendation.)*
+> 4. **Leagues and Survival:** not in Ch2. They become a separate milestone after the backend deploy.
+> 5. **Art:** keep the procedural pipeline, but **at production quality**. The procedural art must be good enough to ship as-is, not a placeholder for a later Aseprite pass. The art bar applies in full: match or beat `poc/v2-*.png` and Ch1, and Opus art reviews gate every M2 merge.
+> 6. **Beginner boss clear:** 75–90% at par and 55–70% with no upgrades. *(Default taken, per the recommendation.)*
+
+
 **Status:** draft for the PO. No building starts until the PO answers §7.
 **Mirrors:** `docs/IMPLEMENTATION_PLAN.md` (milestones, roles, gates, DoD). Locked decisions in `docs/brainstorm/00-overview.md` §6
 and the PO log in `docs/STATUS.md` still apply. Nothing here re-opens them.

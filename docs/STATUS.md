@@ -91,3 +91,5 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
 - 2026-10-09: Ch1 sentence plates fold case (capitals display, the lowercase key counts; punctuation still required). Exact case comes in a later chapter. Trial stays case-sensitive.
 - 2026-10-10: Typed guards should not always fully protect, so that gear and upgrades matter. The PO chose option G, a deterministic guard leak: leak = clamp(1 − G/P, 0, 50%), with no RNG (`docs/qa/block-chance-analysis.md`, interfaces v1.9). The PO rejected the literal 20–30% dice roll: in the sim the Beginner boss clear fell to 36%.
 - 2026-10-10: The game's name is "Typing Adventure" (pixel-art title logo). Skill icons are pixel art.
+- 2026-10-10: Ch2 plan (`docs/CH2_PLAN.md`) approved. The boss signature is the Riddle of Leaves, and capitals start in Ch2 boss sentences (with a ⇧ cue and an assist). Leagues and Survival are deferred to a separate milestone. Art stays procedural but at production quality. Beginner boss clear: 75–90% at par, 55–70% with no upgrades.
+- 2026-10-10: Frontend live on GitHub Pages (local-only).
