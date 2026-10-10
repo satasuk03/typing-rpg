@@ -19,8 +19,8 @@ import { introSeen, isFirstRun, type LevelCommit } from "../meta/ops";
 import type { SaveStore } from "../meta/save";
 import type { Net } from "../net";
 import type { QualityTier } from "../render";
-import { Backdrop } from "./backdrop";
-import { introChapterOf, needsWillowHint, WILLOW_HINT } from "./chapters";
+import { Backdrop, backdropLevelFor } from "./backdrop";
+import { defaultChapter, introChapterOf, needsWillowHint, WILLOW_HINT } from "./chapters";
 import { KeyNav, type NavScope } from "./nav";
 import { APP_CSS } from "./style";
 
@@ -137,6 +137,10 @@ export class App {
   private screen: Screen | null = null;
   private disposers: (() => void)[] = [];
   private backdrop: Backdrop | null = null;
+  /** Chapter the menu backdrop shows. Sticky across the hub screens (loadout, gear, shop...): map/intro set it, title/story/calibrate reset it. */
+  menuChapter = 1;
+  /** Duration of the last backdrop swap, ms (test/measure hook). */
+  lastBackdropSwapMs = 0;
   private toastTimer = 0;
   private readonly deps: AppDeps;
   private modalStack: { el: HTMLElement; scope: NavScope; prevFocus: HTMLElement | null }[] = [];
@@ -221,15 +225,52 @@ export class App {
   // ---------------------------------------------------------------------------------------- backdrop
 
   private ensureBackdrop(): void {
-    if (this.backdrop) return;
+    const want = backdropLevelFor(this.menuChapter);
+    if (this.backdrop && this.backdrop.levelId === want) return;
+    const swap = this.backdrop !== null;
+    const t0 = performance.now();
+    this.backdrop?.dispose();
+    this.backdrop = null;
     this.backdrop = new Backdrop({
       glCanvas: this.deps.glCanvas,
       tier: this.tier,
       reducedMotion: this.reducedMotion,
+      levelId: want,
     });
     this.backdrop.start();
     this.audio?.setBiome("forest");
     this.audio?.setMusicState("walk");
+    this.lastBackdropSwapMs = performance.now() - t0;
+    if (swap) this.fadeInGl();
+  }
+
+  /** Short fade-in of the GL canvas after a backdrop swap, so the chapter change dissolves instead of popping. */
+  private fadeInGl(): void {
+    const c = this.deps.glCanvas;
+    if (this.reducedMotion) return;
+    c.style.transition = "none";
+    c.style.opacity = "0.15";
+    void c.offsetWidth;
+    c.style.transition = "opacity 380ms ease-out";
+    c.style.opacity = "1";
+  }
+
+  /** The chapter a screen belongs to, or null to keep the current one (hub screens inherit the map's chapter). */
+  private chapterFor(name: ScreenName, arg: ScreenArg): number | null {
+    switch (name) {
+      case "title":
+      case "story":
+      case "calibrate":
+        return 1;
+      case "map":
+        return Number(arg.chapter) || defaultChapter(this.store.save, this.bundle, arg.focus);
+      case "intro":
+        return Number(arg.chapter) || 2;
+      case "complete":
+        return Number(arg.chapter) || 1;
+      default:
+        return null;
+    }
   }
 
   setBackdropMotion(reduced: boolean): void {
@@ -265,7 +306,10 @@ export class App {
     this.screen?.dispose?.();
     this.screen?.root.remove();
     this.route = name;
+    const mc = this.chapterFor(name, arg);
+    if (mc !== null) this.menuChapter = mc;
     this.ensureBackdrop();
+    this.root.dataset.chapter = String(this.menuChapter);
     const ho = HERO_OFFSET[name];
     this.backdrop?.setHeroOffset(ho ? ho[0] : 0, ho ? ho[1] : 0);
     this.root.style.display = "";
@@ -371,6 +415,12 @@ export class App {
     opt: { skipIntro?: boolean; skipHint?: boolean } = {},
   ): Promise<void> {
     if (this.session) return;
+    // the hint / intro modals open over the menus of the level's own chapter
+    const lv = this.bundle.levels.find((l) => l.id === levelId);
+    if (lv && lv.chapter !== this.menuChapter) {
+      this.menuChapter = lv.chapter;
+      if (this.backdrop) this.ensureBackdrop();
+    }
     // Q2: a short, skippable loadout hint before the Willow when Aegis is not equipped (once per run start)
     if (!opt.skipHint && !this.deps.bot && needsWillowHint(this.store.save, levelId)) {
       this.showWillowHint(levelId, opt);

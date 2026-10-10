@@ -6,6 +6,9 @@
 import { type QualityTier, RenderWorld } from "../render";
 import { buildWorld, loadLevel, toRenderBiome, type WorldHandle } from "../render/world";
 
+/** The level whose walk-pose diorama backs the menus of a chapter (Ch1 forest, Ch2 Hushwood). */
+export const backdropLevelFor = (chapter: number): string => (chapter >= 2 ? "ch2-l01" : "ch1-l01");
+
 export interface BackdropOptions {
   glCanvas: HTMLCanvasElement;
   levelId?: string;
@@ -15,6 +18,7 @@ export interface BackdropOptions {
 
 export class Backdrop {
   readonly world: RenderWorld;
+  readonly levelId: string;
   private readonly handle: WorldHandle;
   private raf = 0;
   private last = 0;
@@ -29,7 +33,8 @@ export class Backdrop {
   frames = 0;
 
   constructor(o: BackdropOptions) {
-    const layout = loadLevel(o.levelId ?? "ch1-l01");
+    this.levelId = o.levelId ?? "ch1-l01";
+    const layout = loadLevel(this.levelId);
     this.reducedMotion = o.reducedMotion ?? false;
     this.world = new RenderWorld({
       biome: toRenderBiome(layout.biome),
