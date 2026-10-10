@@ -31,7 +31,7 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
 ## Ch2 art backlog
 - **The single source is now `docs/qa/ch2-review-1.md`** (R2, 2026-10-10): 3 P1, 12 P2, 23 P3. It supersedes the per-task lists that used to be here.
 - **After the variety pass** (`docs/qa/ch2-variety/`):
-  - Hushwood L3 and L4 still read close to L1; give each its own identity.
+  - ~~Hushwood L3 and L4 read close to L1~~: done. L3 is now the heaviest Ch2 level (uncapped p95 14.0 ms vs the 16.8 budget), so include it in the perf re-measure. The L3 hero is dim at battle:2.
   - L6's shrine gate is cut by the top of the frame.
   - L7's reed wall looks coarse up close.
 - **Ch1 flipped-normal fix:** this proposal is tracked there too (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
