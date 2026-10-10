@@ -6,6 +6,7 @@
  */
 import type { PlateView } from "@hd2d/sim";
 import { FIXED_PRISM_HEX, PRISM_BUCKETS } from "../level/typingFxParams";
+import { drawLeafGlyph, drawShiftCue, SHIFT_CAP, SHIFT_GUTTER_W } from "./ch2Glyphs";
 import type { Ctx } from "./draw";
 import { frame, glowOnly, setFont, txt } from "./draw";
 import type { PlateFx } from "./fx";
@@ -45,7 +46,21 @@ export interface PlateGeom {
   label: string;
   hasTimer: boolean;
   isGuard: boolean;
+  /** v2.0: riddle leaf plate (teal-gold, leaf glyph in the left gutter). */
+  isLeaf: boolean;
 }
+
+/** v2.0 riddle leaf plate look: teal-gold, never green (green is reserved for healing). */
+const LEAF_PALETTE: PlatePalette = {
+  bg0: "#123436",
+  bg1: "#061416",
+  untyped: "#f4efd8",
+  typed: "#ffcf4a",
+  next: "#ffffff",
+  border: "#d8b84a",
+  label: "LEAF",
+  labelCol: "#8ae8d4",
+};
 
 const cwCache = new Map<string, number>();
 /** Glyph cell width for the plate font (works for any fallback font). */
@@ -68,8 +83,10 @@ export function gimmickLabel(p: PlateView): string {
   return "";
 }
 
-export function measurePlate(c: Ctx, p: PlateView): PlateGeom {
-  const palette = PLATE_PALETTES[p.kind] ?? (PLATE_PALETTES.word as PlatePalette);
+export function measurePlate(c: Ctx, p: PlateView, leaf = false): PlateGeom {
+  const palette = leaf
+    ? LEAF_PALETTE
+    : (PLATE_PALETTES[p.kind] ?? (PLATE_PALETTES.word as PlatePalette));
   const sentence = p.display.includes(" ");
   const sz = sentence ? SENTENCE_PX : SINGLE_WORD_PX;
   const cw = cellWidth(c, sz);
@@ -82,7 +99,7 @@ export function measurePlate(c: Ctx, p: PlateView): PlateGeom {
   const g = gimmickLabel(p);
   const label = [palette.label, g].filter(Boolean).join(" · ");
   const hasTimer = p.expiresAtTick !== null && p.totalTicks !== null;
-  const left = isGuard ? BADGE_W : 0;
+  const left = isGuard ? BADGE_W : p.exactCase || leaf ? SHIFT_GUTTER_W : 0;
   const right = isGuard ? 6 : 0;
   const bw = Math.max(fw + left + right, label ? label.length * 9 + 70 : 0);
   return {
@@ -101,6 +118,7 @@ export function measurePlate(c: Ctx, p: PlateView): PlateGeom {
     label,
     hasTimer,
     isGuard,
+    isLeaf: leaf,
   };
 }
 
@@ -357,6 +375,14 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
     c.strokeStyle = "#cfe0ff";
     c.stroke();
     txt(c, "!", bxc, byc + 1, 15, "#ffffff", { f: FONT_DISP, w: 900, align: "center", sw: 3 });
+  }
+
+  // ---- v2.0 left-gutter cues: the shift key cap (lit only when the next letter is uppercase) or the leaf glyph.
+  // They live outside the text frame, so the next letter is never touched and nothing here pulses.
+  if (!g.isGuard && p.exactCase) {
+    drawShiftCue(c, bx + 3, y + fh / 2, p.shiftNext === true);
+  } else if (g.isLeaf) {
+    drawLeafGlyph(c, bx + 7, y + fh / 2 - SHIFT_CAP / 2 + 4);
   }
 
   // ---- letters: two passes (R1). Every non-next letter first, then the next letter with its stroke,

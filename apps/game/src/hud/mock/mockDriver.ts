@@ -11,6 +11,7 @@ import type {
   LevelView,
   PlateKind,
   PlateView,
+  RiddleView,
   SimEvent,
   SkillView,
 } from "@hd2d/sim";
@@ -53,7 +54,26 @@ export interface MockOpts {
    * `FinisherCompleted` and the killing `Hit{finisher}` + `EnemyDeath{byKind: finisher}`.
    */
   script?: boolean;
+  /** v2.0 `?shift=1`: plates are capitalised exact-case words (`exactCase`, `shiftNext` filled from the typed index). */
+  shift?: boolean;
+  /** v2.0 `?riddle=1`: a Riddle of Leaves phase (3 leaf plates + `RiddleView`), cycling 5 riddles; use with the boss scenario. */
+  riddle?: boolean;
+  /** v2.0 `?healer=1`: one enemy is a healer (`EnemyView.healer` with a charge ring that fills and a heals-left count). */
+  healer?: boolean;
+  /** v2.0 `?elite=1`: the first enemy is an elite (`EnemyView.elite`). */
+  elite?: boolean;
 }
+
+const RIDDLES: { clue: string; leaves: [string, string, string]; answer: number }[] = [
+  { clue: "I shine at night and change my shape.", leaves: ["moon", "stone", "rain"], answer: 0 },
+  { clue: "I run to the sea but I never walk.", leaves: ["wind", "river", "ash"], answer: 1 },
+  { clue: "I am lit in the dark to show the way.", leaves: ["lantern", "thorn", "mud"], answer: 0 },
+  { clue: "I grow from a seed and I give you shade.", leaves: ["moss", "bell", "tree"], answer: 2 },
+  { clue: "I am the sound you hear in an empty hall.", leaves: ["echo", "fog", "root"], answer: 0 },
+];
+const RIDDLE_TICKS = 1500;
+const capWords = (t: string): string =>
+  t.replace(/(^| )([a-z])/g, (_m, a, b) => a + b.toUpperCase());
 
 /** Streak at the start of each 2 s cycle segment (crosses 10 / 25 / 50 / 100 about 0.4 s in). */
 export const CYCLE_SEEDS = [0, 7, 22, 47, 97] as const;
@@ -548,7 +568,8 @@ export class MockDriver {
       for (const e of this.enemies) {
         if (!e.alive) continue;
         if (e.plateId === null && t >= e.nextPlateAt) {
-          const text = e.words[e.wordIdx % e.words.length] ?? "word";
+          const text0 = e.words[e.wordIdx % e.words.length] ?? "word";
+          const text = this.opts.shift ? capWords(text0) : text0;
           const scripted = this.opts.script === true && e.isBoss;
           const kind: PlateKind = scripted ? (e.wordIdx % 3 === 2 ? "finisher" : "doom") : "word";
           e.wordIdx++;
@@ -1189,6 +1210,18 @@ export class MockDriver {
         guardResult: null,
         attackPowerBp: (this.opts.leakBp ?? 0) > 0 ? 12500 : 10000,
         leakBp: this.opts.leakBp ?? 0,
+        ...(this.opts.elite && e.slot === (this.enemies[0]?.slot ?? 0)
+          ? { elite: true as const }
+          : {}),
+        ...(this.opts.healer && e.id === (this.enemies[this.enemies.length > 1 ? 1 : 0]?.id ?? -1)
+          ? {
+              healer: {
+                ticksLeft: Math.floor(t / 900) % 4 === 3 ? null : 900 - (t % 900),
+                totalTicks: 900,
+                healsLeft: Math.floor(t / 900) % 4 === 3 ? 0 : 3 - (Math.floor(t / 900) % 4),
+              },
+            }
+          : {}),
         shield: e.shield,
         shieldMax: e.shieldMax,
         weaknesses: e.weak.map((w) => ({ ...w })),
@@ -1200,6 +1233,12 @@ export class MockDriver {
       };
     });
     const plates: PlateView[] = [...this.plates.values()].map((p) => ({
+      ...(this.opts.shift
+        ? {
+            exactCase: true as const,
+            ...(/^[A-Z]$/.test(p.text[p.typed] ?? "") ? { shiftNext: true as const } : {}),
+          }
+        : {}),
       id: p.id,
       ownerId: p.ownerId,
       kind: p.kind,
@@ -1215,6 +1254,47 @@ export class MockDriver {
       totalTicks: p.total,
     }));
     if (this.opts.scenario === "stress") plates.push(...this.stressPlates(t));
+    let riddle: RiddleView | null = null;
+    if (this.opts.riddle) {
+      plates.length = 0;
+      const idx = Math.floor(t / RIDDLE_TICKS);
+      const r = RIDDLES[idx % RIDDLES.length] as (typeof RIDDLES)[number];
+      const prev =
+        idx > 0 ? (RIDDLES[(idx - 1) % RIDDLES.length] as (typeof RIDDLES)[number]) : null;
+      const deadline = (idx + 1) * RIDDLE_TICKS;
+      const ids: [number, number, number] = [2001, 2002, 2003];
+      r.leaves.forEach((text, lane) => {
+        plates.push({
+          id: ids[lane] as number,
+          ownerId: null,
+          kind: "minigame",
+          text,
+          display: text,
+          typedIndex: lane === 1 ? 2 : 0,
+          isTarget: lane === 1,
+          faded: false,
+          hadTypo: false,
+          lastTypoTick: null,
+          lane,
+          expiresAtTick: deadline,
+          totalTicks: RIDDLE_TICKS,
+        });
+      });
+      riddle = {
+        riddleIndex: idx % RIDDLES.length,
+        riddleCount: 5,
+        clue: r.clue,
+        leafPlateIds: ids,
+        ticksLeft: deadline - t,
+        totalTicks: RIDDLE_TICKS,
+        last: prev
+          ? {
+              outcome: (["right", "wrong", "timeout"] as const)[(idx - 1) % 3] ?? "right",
+              answerText: prev.leaves[prev.answer] as string,
+            }
+          : null,
+      };
+    }
     const skills: SkillView[] = [0, 1].map((i) => ({
       slot: i as 0 | 1,
       id: i === 0 ? "fireball" : "aegis",
@@ -1272,7 +1352,9 @@ export class MockDriver {
           }
         : null,
       doom: null,
-      minigame: null,
+      minigame: this.opts.riddle
+        ? { lanes: 3, cleared: 0, missed: 0, kind: "riddle", riddle }
+        : null,
       secondWind: null,
       stats: {
         netWpm: wpm,

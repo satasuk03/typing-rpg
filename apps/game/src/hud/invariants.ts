@@ -45,6 +45,28 @@ export function checkSnapshot(s: HudDebugSnapshot): string[] {
         if (hit(r, l)) out.push(`banner ${i} covers a letter of plate ${p.id}`);
       });
     }
+  // v2.0 riddle panel: it never overlaps a plate (box, so labels and timers too) and no pop/tag/banner covers it
+  const rp = s.riddlePanelRect;
+  if (rp) {
+    for (const p of s.plates) if (hit(rp, p.rect)) out.push(`riddle panel overlaps plate ${p.id}`);
+    s.popRects.forEach((r, i) => {
+      if (hit(r, rp)) out.push(`pop/tag ${i} covers the riddle panel`);
+    });
+    s.bannerRects.forEach((r, i) => {
+      if (hit(r, rp)) out.push(`banner ${i} covers the riddle panel`);
+    });
+    if (s.heroRect && hit(rp, s.heroRect)) out.push("riddle panel covers the hero body");
+  }
+  // v2.0 cues (shift cap, leaf glyph) and healer/elite tag rows never sit on a plate letter
+  for (const p of s.plates)
+    for (const l of p.letters) {
+      (s.cueRects ?? []).forEach((r, i) => {
+        if (hit(r, l)) out.push(`cue ${i} covers a letter of plate ${p.id}`);
+      });
+      (s.tagRects ?? []).forEach((r, i) => {
+        if (hit(r, l)) out.push(`enemy tag ${i} covers a letter of plate ${p.id}`);
+      });
+    }
   // T6.3 #9: panel text rows never overlap (e.g. "2ND WIND" vs the HP numbers)
   const pt = s.panelTextRects ?? [];
   for (let i = 0; i < pt.length; i++)
