@@ -66,7 +66,7 @@ Always pass a unique port (`PW_PORT`, `LEVEL_PORT`, `PERF_PORT`, `APP_PORT`). Co
 | `tests/app/ch2Flow.spec.ts` | Ch2 map tabs, unlock moment, Ignore-capitals, intro card (typed with Shift, then skipped) | fast |
 | `tests/perf/full-run.spec.ts` | Ch1 L1-L10 in one page, 0 console errors, Metal | ~15 min, opt-in |
 | `tests/perf/ch2-levels.spec.ts` (T5.2) | wpm-bot on `ch2-l01`, `ch2-l05`, `ch2-l10` (the Willow: phases, Hush Spells, riddles, finisher), 0 console errors, Metal | ~5 min |
-| `tests/perf/full-ch1-ch2.spec.ts` (T5.2) | **Full Ch1 -> Ch2 run**: fresh profile + real save, Ch1 L1-L10, Chapter II unlock moment, Ch2 intro card (real Shift presses), Ch2 L1-L10, 0 console errors, Metal | long (see evidence in CH2 status), opt-in, not in check.sh |
+| `tests/perf/full-ch1-ch2.spec.ts` (T5.2) | **Full Ch1 -> Ch2 run**: fresh profile + real save, Ch1 L1-L10, Chapter II unlock moment, Ch2 intro card (real Shift presses), Ch2 L1-L10, 0 console errors, Metal | 32.4 min wall on Metal (all 20 levels cleared first try, 0 errors), opt-in, not in check.sh |
 | `tests/perf/frame-budget.spec.ts`, `soak.spec.ts`, `context-loss.spec.ts` | frame budget, soak, WebGL context loss | Metal |
 
 The wpm-bot (`src/level/bot.ts`) sends the sim's next character verbatim, capitals included: the sim reads `event.key`, so exact-case sentence plates (Hush Spells, finisher, Second Wind) need no Shift event. Only the DOM intro card (`#intro-line`) is typed by the specs with real Shift presses.
