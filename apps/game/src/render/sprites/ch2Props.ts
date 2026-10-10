@@ -547,6 +547,9 @@ export function makeWillowFronds(seed = 1, tint = 'silver', wd = 60, ht = 140) {
   return L.finish({ ax: wd / 2, ay: 0, hang: 1, bulge: 0.5 });
 }
 
+// ------------------------------------------------------------------ shared helpers (T2.3: ch2Monsters.ts reuses the same art kit)
+export { bayer, clamp, clump, flipC, flipN, hash, hex, Layer, lerp, limb, lock, mk, pal, pick, RNG, strand };
+
 // ------------------------------------------------------------------ FEN props
 /** Dead bald cypress with buttressed base, knees and Spanish-moss drapes. 120 x 250 px. */
 export function makeCypress(seed = 11) {

@@ -1,6 +1,6 @@
 /**
  * DEV-ONLY Chapter II biome diorama (T2.1, T2.2): `?scene=render-test&biome=hushwood|fen|grove[&tier=0|1|2][&freeze=1][&bars=1][&hero=0]`.
- * A hard-coded battle pose (hero vs Ch1 enemies as stand-ins: the Ch2 sprites are T2.3 and the layouts T2.4) that exercises
+ * A hard-coded battle pose (hero vs the T2.3 Ch2 enemies / the Whispering Willow; the layouts are T2.4) that exercises
  * the new moods, the five depth layers, the Ch2 props, the `leaf` / `roots` ground, fog cards and the ambient kinds.
  * Hard-coded coordinates are allowed here only (same rule as renderTestScene.ts).
  *
@@ -9,6 +9,7 @@
 import { type BiomeId, isQualityTier, percentile, type QualityTier, RenderWorld } from "../render";
 import type { SpriteActor } from "../render/materials/sprite";
 import { pathCenter } from "../render/materials/water";
+import { ELITE_FX, ELITE_SCALE } from "../render/sprites/ch2Monsters";
 import { makeRng } from "../render/util";
 
 type V3 = [number, number, number];
@@ -202,13 +203,26 @@ function build(world: RenderWorld, biome: "hushwood" | "fen" | "grove"): Built {
     P("prop.ch2.fern.1", camX - 8.2, 0, 6.3, { ...FG, scale: 1.25 });
     P("prop.ch2.fern.0", camX + 4.8, 0, 6.0, { ...FG, scale: 1.4, flip: true });
     lantern("prop.ch2.lantern.1", camX - 4.6, 8.4, 6.6, 1.0, true);
-    // cast: hero vs three Ch1 stand-ins (a flyer, a grunt and a heavy)
+    // cast (T2.3 sprites): hero vs a Wisp (flies, holds its own light), a Shade, a Moth Mender (flies, healer) and a Toad.
+    // `?cast=elite` swaps in the gold-rimmed Gloom Wolf elite (rim flash + ground sigil, as the brief's 3.6 elite read).
     const hero = actor("hero", 25.6, 0, 0.3, 1, "idle", true);
-    actor("monster.bat", 30.4, 1.45, -0.5, 1.2);
-    actor("monster.goblin", 33.6, 0, 0.55, 1.2);
-    actor("monster.slimeP", 36.9, 0, -0.15, 1.3);
-    light(30.4, 2.1, 0.0, [0.4, 1.2, 1.6], 0.7, 3.5, 0.015, false); // the wisp-stand-in's own light
-    addGlow(30.4, 2.25, -0.55, 1.5, [0.3, 0.9, 1.3], 0.5);
+    const cast = new URLSearchParams(location.search).get("cast");
+    if (cast === "elite") {
+      const wolf = actor("monster.wolf.elite", 31.0, 0, 0.3, 1.45 * ELITE_SCALE);
+      wolf.setRimFlash(ELITE_FX.rim.strength, ELITE_FX.rim.color);
+      world.addRuneCircle(31.0, 0.3, ELITE_FX.sigil.radius, ELITE_FX.sigil.strength, [
+        ...ELITE_FX.sigil.color,
+      ]);
+      actor("monster.moth", 35.6, 1.3, -0.6, 1.15);
+      actor("monster.wisp", 28.6, 1.5, -0.7, 1.2);
+    } else {
+      actor("monster.wisp", 29.0, 1.5, -0.6, 1.2);
+      actor("monster.shade", 31.4, 0.18, 0.55, 1.1);
+      actor("monster.moth", 33.8, 1.3, -0.7, 1.15);
+      actor("monster.toad", 36.3, 0, -0.05, 1.3);
+    }
+    light(29.0, 2.1, 0.0, [0.4, 1.2, 1.6], 0.7, 3.5, 0.015, false); // the wisp's own held light
+    addGlow(29.0, 2.2, -0.6, 1.5, [0.3, 0.9, 1.3], 0.5);
     return { camX, camY: 1.9, dist: 18.6, pitch: 16, fov: 32, hero, emit: () => undefined };
   }
 
@@ -269,12 +283,13 @@ function build(world: RenderWorld, biome: "hushwood" | "fen" | "grove"): Built {
     P("prop.ch2.reeds.0", 42.0, 0, 6.2, { ...FG, scale: 1.9 });
     P("prop.ch2.cypress.1", 47.5, 0, 7.4, { ...FG, dark: 0.55, scale: 1.2 });
     P("prop.ch2.moss.1", 15.5, 9.4, 6.8, { ...FG, dark: 0.5, tint: [0.75, 0.85, 0.7] });
-    // cast: hero on the boardwalk vs three Ch1 stand-ins (a heavy, a flyer, a grunt)
+    // cast (T2.3): hero on the boardwalk vs a Mire Toad (heavy), a Lantern Wisp (flyer) and the elite Gloom Wolf
     const hero = actor("hero", 25.4, 0, 0.25, 1, "idle", true);
-    actor("monster.slimeG", 30.8, 0, -0.35, 1.3);
-    actor("monster.bat", 33.8, 1.6, 0.4, 1.2);
-    actor("monster.goblin", 37.6, 0, 0.05, 1.3);
-    light(33.8, 2.3, 0.9, [0.4, 1.2, 1.6], 0.7, 3.5, 0.015, false); // the flyer stand-in's own light
+    actor("monster.toad", 30.8, 0, -0.35, 1.3);
+    actor("monster.wisp", 33.8, 1.6, 0.4, 1.2);
+    const fw = actor("monster.wolf.elite", 37.4, 0, 0.05, 1.45 * ELITE_SCALE);
+    fw.setRimFlash(ELITE_FX.rim.strength, ELITE_FX.rim.color);
+    light(33.8, 2.3, 0.9, [0.4, 1.2, 1.6], 0.7, 3.5, 0.015, false); // the wisp's own light
     addGlow(33.8, 2.4, 0.35, 1.5, [0.3, 0.9, 1.3], 0.5);
     return { camX, camY: 1.9, dist: 18.6, pitch: 16, fov: 32, hero, emit: () => undefined };
   }
@@ -302,8 +317,17 @@ function build(world: RenderWorld, biome: "hushwood" | "fen" | "grove"): Built {
         rim: 0.5,
         flip: rng() < 0.5,
       });
-  // the Willow stand-in (T2.3 owns the real one): trunk + front frond curtains + rune ring
-  P("prop.ch2.willowCore", wx, 0, wz, { scale: 1.0, rim: 1.2, emis: 2.4 });
+  // the Whispering Willow (T2.3): core (trunk + face + root beard, phase 1) + front / back frond curtains + lash roots + rune ring
+  const willow = world.addActor("monster.willow", "p1", {
+    scale: 1.0,
+    rim: 1.2,
+    emis: 2.4,
+    blobW: 0.1,
+  });
+  willow.place(wx, 0, wz);
+  // one coiled lash root toward the hero (the whip / recoil frames play in combat)
+  const lash = world.addActor("monster.willow.lash", "coil", { scale: 1.2, rim: 1.2, blobW: 0.1 });
+  lash.place(wx - 3.4, 0, wz + 1.1);
   for (const [dx, y, dz, i, s] of [
     [-4.6, 9.3, 0.35, 0, 1.25],
     [-3.7, 9.9, 0.5, 1, 1.15],
@@ -344,10 +368,10 @@ function build(world: RenderWorld, biome: "hushwood" | "fen" | "grove"): Built {
   P("prop.ch2.moss.0", 17.0, 9.6, 6.6, { ...FG, dark: 0.5 });
   P("prop.ch2.fronds.silver.2", 47.8, 9.8, 6.9, { ...FG, dark: 0.45, scale: 1.6 });
   P("prop.ch2.fern.0", 23.0, 0, 6.1, { ...FG, scale: 1.3 });
-  // cast: hero vs phase-1 adds (Ch1 stand-ins)
+  // cast: hero vs the phase-1 adds (a Fading Hush Shade and a Moth Mender)
   const hero = actor("hero", 26.4, 0, 0.35, 1, "idle", true);
-  actor("monster.goblinR", 30.8, 0, 1.6, 1.2);
-  actor("monster.bat", 40.0, 1.35, 1.2, 1.2);
+  actor("monster.shade", 30.8, 0.18, 1.6, 1.1);
+  actor("monster.moth", 40.0, 1.3, 1.2, 1.15);
   // hush motes rising off the rune ring
   emitters.push((dt) =>
     rate(10, dt, () => {
@@ -388,6 +412,12 @@ export function start(
   biome: "hushwood" | "fen" | "grove",
   q: URLSearchParams,
 ): void {
+  const sheet = q.get("sheet");
+  if (sheet) {
+    // T2.3 contact sheets (2D canvas, no WebGL): sheet=enemies | willow
+    void import("./ch2MonsterSheet").then((m) => m.startSheet(canvas, sheet));
+    return;
+  }
   const tierParam = Number(q.get("tier") ?? "0");
   const tier: QualityTier = isQualityTier(tierParam) ? tierParam : 0;
   const frozen = q.get("freeze") === "1";
