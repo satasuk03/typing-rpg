@@ -20,11 +20,18 @@ import {
 
 export type GearTarget = "armor" | "weapon" | "all";
 
+type Slot = "weapon" | "armor" | "charm";
+
 export interface GearSpec {
-  /** par: no offset. below: every slot N steps under par (floored at +0). above: `target` slot(s) N steps over par. */
-  kind: "par" | "below" | "above";
+  /**
+   * par: no offset. below: every slot N steps under par (floored at +0). above: `target` slot(s) N steps over par.
+   * slots (T5.1): a signed offset per slot from par, e.g. "weapon-2,armor+1,charm-2" (the Ch1 hint-path arrival in Ch2).
+   */
+  kind: "par" | "below" | "above" | "slots";
   target: GearTarget;
   steps: number;
+  /** kind "slots" only: signed steps per slot (absent slot = par). */
+  perSlot?: Partial<Record<Slot, number>>;
 }
 
 export const PAR_GEAR: GearSpec = { kind: "par", target: "all", steps: 0 };
@@ -36,11 +43,29 @@ export function parseGear(s: string | undefined): GearSpec {
   if (m) return { kind: "below", target: "all", steps: Number(m[1]) };
   m = /^(armor|weapon|all)\+(\d+)$/.exec(s);
   if (m) return { kind: "above", target: m[1] as GearTarget, steps: Number(m[2]) };
-  throw new Error(`--gear: expected par | par-N | armor+N | weapon+N | all+N, got "${s}"`);
+  if (/^(weapon|armor|charm)[+-]\d+(,(weapon|armor|charm)[+-]\d+)+$/.test(s)) {
+    const perSlot: Partial<Record<Slot, number>> = {};
+    for (const part of s.split(",")) {
+      const p = /^(weapon|armor|charm)([+-]\d+)$/.exec(part);
+      if (p) perSlot[p[1] as Slot] = Number(p[2]);
+    }
+    return { kind: "slots", target: "all", steps: 0, perSlot };
+  }
+  throw new Error(
+    `--gear: expected par | par-N | armor+N | weapon+N | all+N | slot±N,slot±N (e.g. weapon-2,armor+1,charm-2), got "${s}"`,
+  );
 }
 
 export const gearLabel = (g: GearSpec): string =>
-  g.kind === "par" ? "par" : g.kind === "below" ? `par-${g.steps}` : `${g.target}+${g.steps}`;
+  g.kind === "par"
+    ? "par"
+    : g.kind === "below"
+      ? `par-${g.steps}`
+      : g.kind === "slots"
+        ? Object.entries(g.perSlot ?? {})
+            .map(([k, v]) => `${k}${v >= 0 ? "+" : ""}${v}`)
+            .join(",")
+        : `${g.target}+${g.steps}`;
 
 export const isPar = (g: GearSpec): boolean => g.kind === "par" || g.steps === 0;
 
@@ -49,18 +74,24 @@ export function upgradeSteps<T extends GearStats>(g: T, steps: number): T {
   return { ...g, upgrade: Math.max(0, Math.min(upgradeCap(g.rarity), g.upgrade + steps)) };
 }
 
-const touches = (spec: GearSpec, slot: "weapon" | "armor" | "charm"): boolean =>
-  spec.kind === "below" || spec.target === "all" || spec.target === slot;
-const delta = (spec: GearSpec): number => (spec.kind === "below" ? -spec.steps : spec.steps);
+const touches = (spec: GearSpec, slot: Slot): boolean =>
+  spec.kind === "slots"
+    ? spec.perSlot?.[slot] !== undefined
+    : spec.kind === "below" || spec.target === "all" || spec.target === slot;
+const delta = (spec: GearSpec, slot: Slot): number =>
+  spec.kind === "slots"
+    ? (spec.perSlot?.[slot] ?? 0)
+    : spec.kind === "below"
+      ? -spec.steps
+      : spec.steps;
 
 /** Applies the offset to a loadout (returns a new one; skills and passives untouched). par-N moves all three slots. */
 export function applyGear(l: Loadout, spec: GearSpec): Loadout {
   if (spec.kind === "par") return l;
-  const d = delta(spec);
   const out: Loadout = { ...l };
-  if (touches(spec, "weapon")) out.weapon = upgradeSteps(l.weapon, d);
-  if (touches(spec, "armor")) out.armor = upgradeSteps(l.armor, d);
-  if (touches(spec, "charm")) out.charm = upgradeSteps(l.charm, d);
+  if (touches(spec, "weapon")) out.weapon = upgradeSteps(l.weapon, delta(spec, "weapon"));
+  if (touches(spec, "armor")) out.armor = upgradeSteps(l.armor, delta(spec, "armor"));
+  if (touches(spec, "charm")) out.charm = upgradeSteps(l.charm, delta(spec, "charm"));
   return out;
 }
 
@@ -92,8 +123,8 @@ export function describeGear(l: Loadout, spec: GearSpec, chapter: number): GearD
   });
   const notes: string[] = [];
   if (spec.kind !== "par") {
-    const d = delta(spec);
     for (const slot of ["weapon", "armor", "charm"] as const) {
+      const d = delta(spec, slot);
       if (touches(spec, slot) && l[slot].upgrade !== par[slot].upgrade + d)
         notes.push(
           `${slot}: ${d >= 0 ? "+" : ""}${d} steps clamped to +${l[slot].upgrade} (${d < 0 ? "floor +0" : `${l[slot].rarity} cap +${upgradeCap(l[slot].rarity)}`})`,

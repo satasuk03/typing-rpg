@@ -22,8 +22,16 @@ export interface WhatIf {
   spawnEveryS?: number;
   fallS?: number;
   missHit?: number;
+  /** Riddle of Leaves (T5.1): the timer at pace 35 (readS + answerS; the sim only uses the sum), seconds. */
+  riddleS?: number;
+  /** Riddle of Leaves: seconds between two riddles. */
+  riddleGapS?: number;
+  /** Riddle of Leaves: clearAtkMult (x hero ATK per right answer). */
+  riddleAtk?: number;
   /** x every persona's guard probability (bot attempt rate). */
   guard?: number;
+  /** Every persona reads riddle clues at this many words per minute (sensitivity of personas.ts readWpm). */
+  readWpm?: number;
 }
 
 export function parseWhatIf(s: string | undefined): WhatIf {
@@ -68,6 +76,16 @@ export function applyWhatIf(def: ResolvedLevel, w: WhatIf, pace: number): Resolv
     if (w.missHit !== undefined) mg.missHitM = r(w.missHit * 1000);
     b.phase2.doomEveryTicks = r(b.phase2.doomEveryTicks * pfDoom);
     // Falling Rubble only: the riddle timer (readTicks + answerTicks) is already scaled by the sim's boss-script pace factor
+    if (mg.kind === "riddle") {
+      if (w.riddleS !== undefined) {
+        // keep the read : answer split, only the sum matters to the sim
+        const tot = mg.readTicks + mg.answerTicks;
+        mg.readTicks = r((w.riddleS * 60 * mg.readTicks) / tot);
+        mg.answerTicks = r(w.riddleS * 60 - mg.readTicks);
+      }
+      if (w.riddleGapS !== undefined) mg.gapTicks = r(w.riddleGapS * 60);
+      if (w.riddleAtk !== undefined) mg.clearAtkMultBp = r(w.riddleAtk * 10_000);
+    }
     if (mg.kind === "fallingRubble") {
       if (w.spawnEveryS !== undefined) mg.spawnEveryTicks = r(w.spawnEveryS * 60);
       if (w.fallS !== undefined) mg.fallTicks = r(w.fallS * 60);

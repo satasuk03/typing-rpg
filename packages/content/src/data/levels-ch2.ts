@@ -8,9 +8,10 @@ import { knobsFor } from "./knobs.ts";
  *
  * Authored numbers (plan 4.1, docs/brainstorm/02 section 4 at the Ch2 par build T1/1/1 Common +2):
  *  - encounter hp = 244 at L1 .. 284 at L9, +5 per level (the same 36 s time-to-kill as Ch1: the par DPS is 1.22x higher).
- *  - gruntHit     = the Ch1 per-level authored hit (same encounter structure) x 1.6 (= the damage budget ratio
- *    DMG_FRAC 0.525 x par HP 121.7 / (0.40 x 100)), then x HIT_MULT of knobsFor(2). Placeholders: T5.1 re-solves them on the real
- *    sim WITH the guard leak on (plan 4.3).
+ *  - gruntHit     = the Ch1 per-level authored hit x 1.6 (= the damage budget ratio DMG_FRAC 0.525 x par HP 121.7 /
+ *    (0.40 x 100)) x HIT_SHAPE[n] x HIT_MULT of knobsFor(2). T5.1 solved shape and multiplier on the real sim WITH the guard
+ *    leak on (plan 4.3): the reference typist takes 1.00x the DMG_FRAC budget per level (docs/balance-ch2.md §4).
+ *  - encounter hp x ENC_HP_MULT of knobsFor(2) (T5.1: 1.1, the reference typist's ~11.6 auto-attacks per encounter).
  *  - parRefS      = sum of encounter HP / 6.78 HP/s (the Ch2 reference DPS) + 2 s per wave, HP part x ENC_HP_MULT of Ch2.
  *  - L10: two outer waves (3 slots each) then the Whispering Willow (boss arena slot 0, adds in slots 1-3).
  *  - grunts carry the encounter attackPower (P 1.07); Gloom Wolf refs are `elite` with attackPower P 1.25 (knobs.ts).
@@ -73,7 +74,15 @@ function chain(encounters: Segment[], tail?: Segment): Segment[] {
 const encHp = (n: number): number => 244 + 5 * (n - 1);
 /** Ch1 per-level authored grunt hit (levels-ch1.ts), the structural base of the Ch2 values. */
 const BASE_HIT = [7.6, 6.88, 3.95, 4.46, 4.48, 3.85, 4.46, 4.96, 4.18] as const;
-const H = (n: number): number => hit(BASE_HIT[n - 1] as number);
+/**
+ * T5.1 per-level hit shape (docs/balance-ch2.md §4): the Ch1 base fits Ch1's rosters, not Ch2's. Solved per level on the
+ * real sim (`solve-hits --chapter 2`, reference typist, bare kit, leak on, par gear) so each level's damage is its own
+ * DMG_FRAC budget; HIT_MULT carries the global part (budget-weighted mean shape = 1). Local causes: the Gloom Wolf
+ * levels (L4, L7, L9: an elite that leaks 20% at par and lives long) need ~0.75-0.85; the elite-free 3-encounter levels
+ * L3 / L6 and the 2-encounter L1 (no brute, no healer) were under budget.
+ */
+const HIT_SHAPE = [1.29, 0.98, 1.1, 0.81, 1.02, 1.25, 0.84, 0.97, 0.74] as const;
+const H = (n: number): number => hit((BASE_HIT[n - 1] as number) * (HIT_SHAPE[n - 1] as number));
 const E = (n: number): number => hp(encHp(n));
 const P = (n: number, encounters: number): number =>
   parRef(

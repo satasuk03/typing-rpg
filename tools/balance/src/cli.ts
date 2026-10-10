@@ -1,8 +1,8 @@
 // pnpm balance [--chapter N] [--seeds N] [--workers N] [--no-noise] [--persona id,id] [--level ch1-l05,...] [--json path] [--md path]
-//              [--gear par|par-N|armor+N|weapon+N|all+N] [--kit starter|bare|ch2] [--whatif key=value,...] [--strict]
-// Runs the economy_sim personas through Chapter 1 on the real sim and prints the plan §9 verdicts, the parity with the
-// Python model, and per-level tables. Exit code 1 when a §9 or parity cell FAILs (PASS(±15%) passes; a documented
-// structural miss, FAIL*, only fails with --strict).
+//              [--gear par|par-N|armor+N|weapon+N|all+N] [--kit starter|bare|ch2|ch2-reveal] [--whatif key=value,...] [--strict]
+// Runs the economy_sim personas through a chapter (default 1) on the real sim and prints the target verdicts (Ch1: plan §9;
+// Ch2: CH2_PLAN §4.2), the parity with the Python model, and per-level tables. Exit code 1 when a target or parity cell
+// FAILs (PASS(±15%) passes; a documented structural miss, FAIL*, only fails with --strict).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { gearLabel, parseGear } from "./gear.ts";
 import { PERSONAS, type PersonaId } from "./personas.ts";
 import { buildReport, markdown } from "./report.ts";
-import { chapterLevels, type Job, runJobs } from "./runner.ts";
+import { chapterLevels, type Job, KITS, type Kit, runJobs } from "./runner.ts";
 import { parseWhatIf } from "./whatif.ts";
 
 const args = process.argv.slice(2);
@@ -29,11 +29,24 @@ const jsonPath = resolve(opt("--json") ?? resolve(here, `../out/balance-ch${chap
 const mdPath = opt("--md");
 const whatif = parseWhatIf(opt("--whatif"));
 const gear = gearLabel(parseGear(opt("--gear")));
-const kit = (opt("--kit") ?? "starter") as "starter" | "bare" | "ch2";
+const kitArg = opt("--kit");
+if (kitArg !== undefined && !KITS.includes(kitArg as Kit))
+  throw new Error(`--kit: expected ${KITS.join(" | ")}, got "${kitArg}"`);
+// Absent = the chapter's default kit (runner.ts defaultKit: Ch1 starter, Ch2 "the Ch2 player").
+const kit = kitArg as Kit | undefined;
 
 const jobs: Job[] = [];
 for (const persona of personas)
-  for (const levelId of levels) jobs.push({ persona, levelId, seeds, noise, whatif, kit, gear });
+  for (const levelId of levels)
+    jobs.push({
+      persona,
+      levelId,
+      seeds,
+      noise,
+      whatif,
+      gear,
+      ...(kit === undefined ? {} : { kit }),
+    });
 
 const t0 = process.hrtime.bigint();
 const results = await runJobs(jobs, workers);
@@ -46,6 +59,7 @@ const rep = buildReport(results, {
   whatif,
   ...(gear === "par" ? {} : { gear }),
   ...(chapter === 1 ? {} : { chapter }),
+  ...(kit === undefined ? {} : { kit }),
 });
 const md = markdown(rep);
 console.log(md);
@@ -61,7 +75,8 @@ if (bad.length > 0) {
   console.log(
     `\n${bad.length} failing cell(s): ${bad.map((c) => `${c.persona} ${c.metric}`).join("; ")}`,
   );
-  // Chapters other than 1 run on placeholder targets (T1.1): informational until T5.1.
-  if (chapter === 1) process.exitCode = 1;
-  else console.log("(chapter > 1 verdicts are informational until T5.1; exit code unaffected)");
+  // Ch1 and Ch2 have real targets (Ch2: T5.1, CH2_PLAN §4.2). In Ch2 a gear offset or a non-default kit is a lever check,
+  // not the balance contract, so it reports but does not fail (Ch1 keeps its pre-T5.1 behaviour).
+  if (chapter === 1 || (gear === "par" && kit === undefined)) process.exitCode = 1;
+  else console.log("(gear offset / --kit runs are lever checks; exit code unaffected)");
 }

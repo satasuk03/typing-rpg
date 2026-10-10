@@ -28,8 +28,32 @@ import { type Attempt, COMBAT_TYPING_EFF } from "./personas.ts";
 import { LEVEL_END_S } from "./pymodel.ts";
 
 const STRAY = "qzxjkvw";
-/** Ticks the bot reads a riddle's clue before it commits to a leaf (2 s; a guess, T1.3). */
-const RIDDLE_READ_TICKS = 120;
+
+/**
+ * Riddle of Leaves reading (T5.1; replaces T1.3's flat 2 s, which is ~350 wpm on these clues). Before it commits to a
+ * leaf the bot reads the clue at the persona's `readWpm` (personas.ts; `wpm` here when absent), then scans the leaves:
+ * baseS + words x 60 / readWpm + leaves x perLeafS. Clues are 6-17 words (mean 11.7): 4.7 s on average at 150 wpm.
+ * Documented guesses (docs/balance-ch2.md §1).
+ */
+export const RIDDLE_READ = { baseS: 0.4, wpm: 150, perLeafS: 0.25 } as const;
+const riddleReadTicks = (clue: string, leaves: number, readWpm: number): number =>
+  Math.round(
+    60 *
+      (RIDDLE_READ.baseS +
+        (clue.trim().split(/\s+/).length * 60) / readWpm +
+        leaves * RIDDLE_READ.perLeafS),
+  );
+
+/**
+ * Shift cost for capitals (T5.1, docs/TODO.md tech debt). Only on exact-case plates (PlateView.shiftNext: Ch2+ sentence
+ * plates: Hush Spells, the finisher, Second Wind), so Ch1 (sentences fold case) never pays it and stays byte-identical.
+ *  - intervalMult: the key of a capital takes this many key intervals (Shift + letter is a chord: 2 keystrokes per
+ *    character in the KSPC sense);
+ *  - errMult: its typo rate is this many times the base (a forgotten or late Shift; the wrong key sent is the lowercase
+ *    letter). Documented guesses, not tuned.
+ * Shifted punctuation (? ! : ") is not modelled in either chapter.
+ */
+export const SHIFT_MODEL = { intervalMult: 2, errMult: 2 } as const;
 const ORIGINS: readonly HitOrigin[] = [
   "weapon",
   "chip",
@@ -74,6 +98,8 @@ export interface RunRecord {
   doomFailed: number;
   rubbleSpawned: number;
   rubbleMissed: number;
+  /** Riddle of Leaves outcomes (RiddleResolved), T5.1. */
+  riddles: { right: number; wrong: number; timeout: number };
   /** Boss level only: seconds of [pre-boss, phase 1, phase 2, phase 3 + finisher] (from the boss intro). */
   bossPhaseS: number[] | null;
   netWpm: number;
@@ -145,6 +171,7 @@ export function playLevel(a: PlayArgs): RunRecord {
     doomFailed: 0,
     rubbleSpawned: 0,
     rubbleMissed: 0,
+    riddles: { right: 0, wrong: 0, timeout: 0 },
     secondWind: false,
     attacks: { hit: 0, blocked: 0, parried: 0, barrier: 0 },
   };
@@ -184,6 +211,9 @@ export function playLevel(a: PlayArgs): RunRecord {
           break;
         case "MinigameWordMissed":
           rec.rubbleMissed++;
+          break;
+        case "RiddleResolved":
+          rec.riddles[e.outcome]++;
           break;
         case "SecondWindStarted":
           rec.secondWind = true;
@@ -255,7 +285,10 @@ export function playLevel(a: PlayArgs): RunRecord {
     } else if (riddle !== null) {
       // Riddle of Leaves: read the clue (RIDDLE_READ_TICKS), then pick the right leaf with the persona's accuracy
       // (seeded; the bot knows the answer from the level's clue table), else one of the two decoys.
-      if (riddle.totalTicks - riddle.ticksLeft < RIDDLE_READ_TICKS) {
+      if (
+        riddle.totalTicks - riddle.ticksLeft <
+        riddleReadTicks(riddle.clue, riddle.leafPlateIds.length, attempt.readWpm ?? RIDDLE_READ.wpm)
+      ) {
         nextKey = state.tick + 3;
         return;
       }
@@ -307,14 +340,23 @@ export function playLevel(a: PlayArgs): RunRecord {
       }
     }
     const want = pick.text.charAt(pick.typedIndex);
+    // Shift cost (SHIFT_MODEL): only when the sim says this key is an exact-case capital (never in Ch1).
+    const shift = pick.shiftNext === true;
+    if (shift) {
+      ivMult *= SHIFT_MODEL.intervalMult;
+      errMult *= SHIFT_MODEL.errMult;
+    }
     const iv = Math.max(1, Math.round(interval() * ivMult));
     const typoRate = realistic
       ? Math.min(GIMMICK_MODEL.maxTypoRate, (1 - attempt.acc) * errMult)
-      : 1 - attempt.acc;
+      : shift
+        ? (1 - attempt.acc) * errMult
+        : 1 - attempt.acc;
     if (below(rng, 10_000) >= Math.round((1 - typoRate) * 10_000)) {
       const first = new Set(plates.map((x) => x.text.charAt(0).toLowerCase()));
       let wrong = "";
-      if (target !== undefined) wrong = want === "e" ? "r" : "e";
+      if (target !== undefined && shift) wrong = want.toLowerCase();
+      else if (target !== undefined) wrong = want === "e" ? "r" : "e";
       else wrong = [...STRAY].find((c) => !first.has(c)) ?? "";
       if (wrong !== "") {
         press(wrong);
@@ -380,6 +422,7 @@ export function playLevel(a: PlayArgs): RunRecord {
     doomFailed: rec.doomFailed,
     rubbleSpawned: rec.rubbleSpawned,
     rubbleMissed: rec.rubbleMissed,
+    riddles: rec.riddles,
     bossPhaseS,
     netWpm: res.stats.netWpmX100 / 100,
     accuracy: res.stats.accuracyBp / 10_000,

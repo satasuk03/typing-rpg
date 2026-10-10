@@ -1,11 +1,18 @@
 // Aggregation, plan §9 verdicts and the markdown / JSON report.
 
+import { CHAPTER_KNOBS } from "@hd2d/content";
 import { computeHeroStats, resolveLevel } from "@hd2d/sim";
 import type { RunRecord } from "./bot.ts";
 import { describeGear, guardLeakBp, parseGear } from "./gear.ts";
 import { PERSONAS, type PersonaId } from "./personas.ts";
 import { pyActiveSeconds, pyEncounterHp } from "./pymodel.ts";
-import { bundleForLevel, chapterLevels, type JobResult, starterLoadout } from "./runner.ts";
+import {
+  bundleForLevel,
+  chapterLevels,
+  chapterOfLevel,
+  type JobResult,
+  starterLoadout,
+} from "./runner.ts";
 import type { WhatIf } from "./whatif.ts";
 
 // ---------------------------------------------------------------- targets
@@ -15,18 +22,25 @@ import type { WhatIf } from "./whatif.ts";
  * Boss times: PO decision 2026-10-09 (T6.1 follow-up): §9's 5.4 / 4.2 / 3.4 are 30-chapter averages, so Chapter 1 uses
  * economy_sim's own Chapter 1 model on this content (8.1 / 4.4 / 2.8 min, ±15%). Normal-level times keep §9's ranges.
  */
-export const PLAN_TARGETS: Record<
-  "beginner" | "average" | "fast",
-  {
-    normalMin: [number, number];
-    bossMin: number;
-    clearNormal: number;
-    clearBoss: number;
-    /** PO 2026-10-09 ("add some risk"): first-try boss clear window, checked as its own cell. */
-    clearBossWindow?: [number, number];
-    skillShare: [number, number];
-  }
-> = {
+export interface PersonaTargets {
+  normalMin: [number, number];
+  bossMin: number;
+  /** First-try clear, mean over L1-L9 (and the per-level floor the bot gate checks). */
+  clearNormal: number;
+  /** Ch2: the worst single normal level's first-try clear (CH2_PLAN §4.2 "worst level >= 85%"). */
+  clearNormalWorst?: number;
+  clearBoss: number;
+  /** PO 2026-10-09 ("add some risk"): first-try boss clear window, checked as its own cell. */
+  clearBossWindow?: [number, number];
+  /**
+   * Ch2 (PO 2026-10-10, CH2_PLAN §4.3): the boss window at a gear offset, keyed by the --gear label. Checked instead of
+   * clearBossWindow when the report runs at that offset (par-2 = no upgrades in Ch2: 55-70%; armor+5: >= 85%).
+   */
+  clearBossWindowByGear?: Readonly<Record<string, [number, number]>>;
+  skillShare: [number, number];
+}
+
+export const PLAN_TARGETS: Record<"beginner" | "average" | "fast", PersonaTargets> = {
   beginner: {
     normalMin: [3.0, 4.5],
     bossMin: 8.1,
@@ -50,10 +64,43 @@ export const PLAN_TARGETS: Record<
     skillShare: [0.15, 0.2],
   },
 };
-/** Per-chapter targets (T1.1). Ch2 = Ch1 PLACEHOLDERS until T5.1 sets the Ch2 numbers (plan §4). */
+/**
+ * Chapter 2 targets (T5.1, docs/CH2_PLAN.md §4.2 / §4.3, PO 2026-10-10). Times: plan §9 ranges for normal levels and the
+ * Ch1 boss times kept for Ch2 (the riddle replaces rubble at about equal time). Clears are at par gear (T1 Common +2).
+ * Beginner boss: the PO window 75-90% at par, 55-70% with no upgrades (C+0 = par-2 in Ch2), and >= 85% with armor +5
+ * (§4.3 "armor C+5: >= 85%"; armor+3 from par = C+5, the Common cap).
+ */
+export const PLAN_TARGETS_CH2: Record<"beginner" | "average" | "fast", PersonaTargets> = {
+  beginner: {
+    normalMin: [3.0, 4.5],
+    bossMin: 8.1,
+    clearNormal: 0.9,
+    clearNormalWorst: 0.85,
+    clearBoss: 0.75,
+    clearBossWindow: [0.75, 0.9],
+    // armor+3 and armor+5 are the same loadout in Ch2 (par C+2 + 3 = C+5, the Common cap; +5 clamps there).
+    clearBossWindowByGear: { "par-2": [0.55, 0.7], "armor+3": [0.85, 1], "armor+5": [0.85, 1] },
+    skillShare: [0.15, 0.2],
+  },
+  average: {
+    normalMin: [2.4, 3.0],
+    bossMin: 4.4,
+    clearNormal: 0.97,
+    clearBoss: 0.9,
+    skillShare: [0.15, 0.2],
+  },
+  fast: {
+    normalMin: [1.7, 2.2],
+    bossMin: 2.8,
+    clearNormal: 0.99,
+    clearBoss: 0.95,
+    skillShare: [0.15, 0.2],
+  },
+};
+/** Per-chapter targets (T1.1; Ch2 from T5.1). */
 export const PLAN_TARGETS_BY_CHAPTER: Record<number, typeof PLAN_TARGETS> = {
   1: PLAN_TARGETS,
-  2: PLAN_TARGETS,
+  2: PLAN_TARGETS_CH2,
 };
 export function planTargetsFor(chapter: number): typeof PLAN_TARGETS {
   const t = PLAN_TARGETS_BY_CHAPTER[chapter];
@@ -114,7 +161,7 @@ export function pyLevelHp(levelId: string): { hp: number; encounters: number; bo
   const c = levelHp(levelId);
   const lv = bundleForLevel(levelId).levels.find((l) => l.id === levelId);
   if (c.boss || lv === undefined) return c;
-  return { ...c, hp: c.encounters * pyEncounterHp(lv.index) };
+  return { ...c, hp: c.encounters * pyEncounterHp(lv.index, lv.chapter) };
 }
 
 /** Total HP the hero must remove in a content level (encounter pools + boss + boss adds), from the content bundle. */
@@ -169,7 +216,9 @@ export function levelRow(persona: PersonaId, rs: readonly RunRecord[]): LevelRow
     activeMin: mean(won.map((r) => r.activeS)) / 60,
     simMin: mean(won.map((r) => r.simS)) / 60,
     combatMin: mean(won.map((r) => r.combatS)) / 60,
-    pyActiveMin: pyActiveSeconds(lh.hp, lh.encounters, lh.boss, p.wpm, p.acc) / 60,
+    pyActiveMin:
+      pyActiveSeconds(lh.hp, lh.encounters, lh.boss, p.wpm, p.acc, chapterOfLevel(first.levelId)) /
+      60,
     autoPerEnc: sum(won.map((r) => r.autoAttacks)) / Math.max(1, sum(won.map((r) => r.encounters))),
     skillShare: dmgShare.skill ?? 0,
     dmgShare,
@@ -183,7 +232,10 @@ export function levelRow(persona: PersonaId, rs: readonly RunRecord[]): LevelRow
     parryRate: ok === 0 ? Number.NaN : sum(rs.map((r) => r.parried)) / ok,
     secondWind: rs.filter((r) => r.secondWind).length / rs.length,
     doomFail: `${sum(rs.map((r) => r.doomFailed))}/${sum(rs.map((r) => r.doomStarted))}`,
-    rubbleMiss: `${sum(rs.map((r) => r.rubbleMissed))}/${sum(rs.map((r) => r.rubbleSpawned))}`,
+    // A riddle boss (Ch2) has no rubble: the column shows riddle misses (wrong + timeout) / riddles. Ch1: rubble, unchanged.
+    rubbleMiss: rs.some((r) => r.riddles.right + r.riddles.wrong + r.riddles.timeout > 0)
+      ? `${sum(rs.map((r) => r.riddles.wrong + r.riddles.timeout))}/${sum(rs.map((r) => r.riddles.right + r.riddles.wrong + r.riddles.timeout))} (${sum(rs.map((r) => r.riddles.timeout))} t/o)`
+      : `${sum(rs.map((r) => r.rubbleMissed))}/${sum(rs.map((r) => r.rubbleSpawned))}`,
     bossPhaseMin:
       bossRuns.length === 0
         ? null
@@ -255,7 +307,7 @@ const inRange = (v: number, lo: number, hi: number): Verdict =>
   v >= lo && v <= hi ? "PASS" : v >= lo * (1 - TOL) && v <= hi * (1 + TOL) ? "PASS(±15%)" : "FAIL";
 const atLeast = (v: number, t: number): Verdict => (v >= t ? "PASS" : "FAIL");
 
-export function verdicts(sums: readonly PersonaSummary[]): Cell[] {
+export function verdicts(sums: readonly PersonaSummary[], chapter = 1, gear?: string): Cell[] {
   const cells: Cell[] = [];
   for (const s of sums) {
     if (s.persona === "ref") {
@@ -268,7 +320,18 @@ export function verdicts(sums: readonly PersonaSummary[]): Cell[] {
       });
       continue;
     }
-    const t = PLAN_TARGETS[s.persona];
+    const t = planTargetsFor(chapter)[s.persona];
+    // The boss window: at par the PO window; at a gear offset the chapter's per-gear window when it has one (Ch2), else
+    // none. Chapters without per-gear windows (Ch1) keep the par window at every gear (pre-T5.1 behaviour).
+    const g = gear ?? "par";
+    const win =
+      t.clearBossWindowByGear === undefined || g === "par"
+        ? t.clearBossWindow
+        : t.clearBossWindowByGear[g];
+    const winLabel =
+      t.clearBossWindowByGear === undefined || g === "par"
+        ? "first-try clear boss (PO window)"
+        : `first-try clear boss (PO window, ${g})`;
     const at = cells.length;
     cells.push(
       {
@@ -292,6 +355,17 @@ export function verdicts(sums: readonly PersonaSummary[]): Cell[] {
         target: `>=${t.clearNormal}`,
         verdict: atLeast(s.normalClear, t.clearNormal),
       },
+      ...(t.clearNormalWorst === undefined
+        ? []
+        : [
+            {
+              persona: s.persona,
+              metric: "first-try clear normal (worst level)",
+              value: s.normalClearMin,
+              target: `>=${t.clearNormalWorst}`,
+              verdict: atLeast(s.normalClearMin, t.clearNormalWorst),
+            },
+          ]),
       {
         persona: s.persona,
         metric: "first-try clear boss",
@@ -299,16 +373,16 @@ export function verdicts(sums: readonly PersonaSummary[]): Cell[] {
         target: `>=${t.clearBoss}`,
         verdict: atLeast(s.bossClear, t.clearBoss),
       },
-      ...(t.clearBossWindow === undefined
+      ...(win === undefined
         ? []
         : [
             {
               persona: s.persona,
-              metric: "first-try clear boss (PO window)",
+              metric: winLabel,
               value: s.bossClear,
-              target: `${t.clearBossWindow[0]}-${t.clearBossWindow[1]}`,
+              target: `${win[0]}-${win[1]}`,
               verdict:
-                s.bossClear >= t.clearBossWindow[0] && s.bossClear <= t.clearBossWindow[1]
+                s.bossClear >= win[0] && s.bossClear <= win[1]
                   ? ("PASS" as const)
                   : ("FAIL" as const),
             },
@@ -336,8 +410,36 @@ export function verdicts(sums: readonly PersonaSummary[]): Cell[] {
  * prediction (persona mean over L1-L9, the boss level, and the worst single level), and first-try clears within 15 points
  * of the Python's Chapter 1 row (100% for every persona, normal and boss).
  */
-export function parityCells(rows: readonly LevelRow[], sums: readonly PersonaSummary[]): Cell[] {
+export function parityCells(
+  rows: readonly LevelRow[],
+  sums: readonly PersonaSummary[],
+  chapter = 1,
+): Cell[] {
   const cells: Cell[] = [];
+  // Ch2 (T5.1, CH2_PLAN §4.2 "parity vs Py Ch2 model, ±15% per cell"): the time cells only. economy_sim has no Ch2 clear
+  // row on this content, and §4.2 sets the Ch2 clear targets directly (verdicts()).
+  if (chapter !== 1) {
+    const band = (r: number): Verdict => (Math.abs(r - 1) <= TOL ? "PASS" : "FAIL");
+    for (const s of sums) {
+      if (s.persona === "ref") continue;
+      const normal = rows.filter((r) => r.persona === s.persona && !r.isBoss);
+      const worst = normal.reduce(
+        (w, r) =>
+          Math.abs(r.activeMin / r.pyActiveMin - 1) > Math.abs(w - 1)
+            ? r.activeMin / r.pyActiveMin
+            : w,
+        1,
+      );
+      const add = (metric: string, value: number): void => {
+        if (!Number.isNaN(value))
+          cells.push({ persona: s.persona, metric, value, target: "1 ±15%", verdict: band(value) });
+      };
+      add("normal active / Py (L1-L9 mean)", s.normalActiveMin / s.pyNormalActiveMin);
+      add("normal active / Py (worst level)", worst);
+      add("boss active / Py", s.bossActiveMin / s.pyBossActiveMin);
+    }
+    return cells;
+  }
   const band = (r: number): Verdict => (Math.abs(r - 1) <= TOL ? "PASS" : "FAIL");
   for (const s of sums) {
     if (s.persona === "ref") continue;
@@ -414,10 +516,12 @@ export interface Report {
     workers: number;
     seconds: number;
     whatif: WhatIf;
-    /** Absent = 1. Chapters other than 1 are informational until T5.1 (Ch1 targets, no Python parity). */
+    /** Absent = 1. Ch2 has its own targets (T5.1, PLAN_TARGETS_CH2) and time-only Python parity. */
     chapter?: number;
     /** T1.5: the --gear value (absent = par). */
     gear?: string;
+    /** T5.1: the --kit value (absent = the chapter's default kit, runner.ts defaultKit). */
+    kit?: string;
   };
   rows: LevelRow[];
   summaries: PersonaSummary[];
@@ -438,9 +542,8 @@ export function buildReport(results: readonly JobResult[], config: Report["confi
     config,
     rows,
     summaries,
-    cells: verdicts(summaries),
-    // The Python model is a Chapter 1 port: no parity cells for other chapters.
-    parity: (config.chapter ?? 1) === 1 ? parityCells(rows, summaries) : [],
+    cells: verdicts(summaries, config.chapter ?? 1, config.gear),
+    parity: parityCells(rows, summaries, config.chapter ?? 1),
   };
 }
 
@@ -473,6 +576,18 @@ export function gearSection(rep: Report): string[] {
     `Boss (${bossName}) guard leak at this gear: ${pct1(leak)}. Budget = hero max HP (${hp.toFixed(0)}); a run that takes more than the budget needs Second Wind or fails.`,
     "",
   ];
+  // Ch2+ (T5.1, CH2_PLAN §4.3): the leak of every attacker class at this gear, from the chapter's knobs.
+  const k = CHAPTER_KNOBS[chapter];
+  if (chapter >= 2 && k !== undefined) {
+    const lk = (p: number): string =>
+      pct1(guardLeakBp(l, chapter, Math.round(p * 10_000)) / 10_000);
+    out.splice(
+      out.length - 1,
+      0,
+      "",
+      `Guard leak by attacker at this gear: grunt (P ${k.gruntAttackPower}) ${lk(k.gruntAttackPower)}, elite (P ${k.eliteAttackPower ?? "-"}) ${k.eliteAttackPower === null ? "-" : lk(k.eliteAttackPower)}, boss adds (P ${k.bossAddsAttackPower}) ${lk(k.bossAddsAttackPower)}, boss (P ${k.bossAttackPower}) ${lk(k.bossAttackPower)}.`,
+    );
+  }
   const rows = [...new Set(rep.rows.map((r) => r.persona))].flatMap((p) => {
     const r = rep.rows.find((x) => x.persona === p && x.levelId === bossId);
     if (r === undefined) return [];
@@ -512,8 +627,16 @@ export function gearSection(rep: Report): string[] {
 export function markdown(rep: Report): string {
   const out: string[] = [];
   const label = (p: string): string => PERSONAS.find((x) => x.id === p)?.label ?? p;
+  const ch = rep.config.chapter ?? 1;
+  // Ch1 strings are frozen (byte-identical report); Ch2+ get their own headings.
   out.push(
-    `# Chapter ${rep.config.chapter ?? 1} balance${(rep.config.chapter ?? 1) === 1 ? "" : " (PLACEHOLDER: Ch1 targets until T5.1)"} (${rep.config.seeds} seeds per level per persona, noise ${rep.config.noise ? "on" : "off"})`,
+    `# Chapter ${ch} balance (${rep.config.seeds} seeds per level per persona, noise ${rep.config.noise ? "on" : "off"})`,
+    ...(ch === 1
+      ? []
+      : [
+          "",
+          `**Kit:** ${rep.config.kit ?? "ch2 (default, the Ch2 player: Fireball + Aegis; Clean Cut + Steady Hands + Iron Will, Calm Mind for Steady Hands from L6)"}`,
+        ]),
     ...(Object.keys(rep.config.whatif).length > 0
       ? ["", `**What-if:** ${JSON.stringify(rep.config.whatif)} (Py columns ignore it)`]
       : []),
@@ -522,7 +645,9 @@ export function markdown(rep: Report): string {
     "Active time = sim time (intro, walks, wave intros, combat, rewards, boss breathers) + LEVEL_END_S 10 s, i.e.",
     "economy_sim's `win_secs - MENU_S - JOURNAL_S`. Means over cleared runs. Py = economy_sim's analytic model on this content.",
     "",
-    "## Plan §9 verdicts (boss times: economy_sim Ch1 model, PO 2026-10-09)",
+    ch === 1
+      ? "## Plan §9 verdicts (boss times: economy_sim Ch1 model, PO 2026-10-09)"
+      : `## CH2_PLAN §4.2 verdicts (Chapter ${ch}; Beginner boss window: PO 2026-10-10)`,
     "",
     table(
       ["Persona", "Metric", "Value", "Target", "Verdict"],
@@ -537,7 +662,7 @@ export function markdown(rep: Report): string {
     "",
     "FAIL* = known structural miss (no tuning knob can reach it without a rule change), see docs/balance-ch1.md.",
     "",
-    "## Parity with economy_sim's Chapter 1 model",
+    `## Parity with economy_sim's Chapter ${ch} model`,
     "",
     table(
       ["Persona", "Metric", "Value", "Target", "Verdict"],
@@ -565,14 +690,14 @@ export function markdown(rep: Report): string {
         "Clear boss",
         "Skill share",
         "Auto/enc",
-        "Ch1 gold",
+        `Ch${ch} gold`,
       ],
       rep.summaries.map((s) => [
         label(s.persona),
         f2(s.normalActiveMin),
         f2(s.normalActiveMin3Enc),
         f2(s.pyNormalActiveMin),
-        s.persona === "ref" ? "-" : f1(PY_CH1_ROW[s.persona].activeMin),
+        s.persona === "ref" || ch !== 1 ? "-" : f1(PY_CH1_ROW[s.persona].activeMin),
         f2(s.bossActiveMin),
         f2(s.pyBossActiveMin),
         `${pct(s.normalClear)} (${pct(s.normalClearMin)})`,
@@ -605,8 +730,8 @@ export function markdown(rep: Report): string {
           "Dmg taken",
           "Guard ok (try)",
           "SW",
-          "Doom fail",
-          "Rubble miss",
+          ch === 1 ? "Doom fail" : "Doom/Hush fail",
+          ch === 1 ? "Rubble miss" : "Riddle miss",
         ],
         rep.rows
           .filter((r) => r.persona === p)

@@ -1,6 +1,7 @@
 // A port of economy_sim.py's analytic Chapter 1 combat model (typing_combat + level overhead), so the runner can say what
 // the Python model predicts for OUR content (same encounter HP, same structure) next to what the real sim measures.
 // Chapter 1 only: word tier 1 (4.2 chars, speed factor 1 - 0.015 x 0.2, accuracy penalty 0.0025 x 0.2), par gear ATK 10.
+import { computeHeroStats, parLoadout } from "@hd2d/sim";
 import { COMBAT_TYPING_EFF } from "./personas.ts";
 
 const LN = 4.2;
@@ -85,6 +86,14 @@ export function typingCombat(wpm: number, acc: number): PyCombat {
   };
 }
 
+/**
+ * economy_sim's par ATK of a chapter (hero_stats at the par build). Ch1 is the literal 10 (byte-identical Ch1 report);
+ * later chapters read the sim's computeHeroStats(parLoadout(c)) (Ch2: T1 Common +2 = 12.2, CH2_PLAN §4.1). Word tier 1
+ * (LN 4.2) holds for Ch1-3 (doc 01 §5.1), so the rest of the model is unchanged.
+ */
+export const parAtk = (chapter = 1): number =>
+  chapter === 1 ? PAR_ATK_CH1 : computeHeroStats(parLoadout(chapter)).atk / 1000;
+
 /** Python-model active time (s) of a level with `hp` total HP to chew through and `encounters` fights. */
 export function pyActiveSeconds(
   hp: number,
@@ -92,8 +101,9 @@ export function pyActiveSeconds(
   boss: boolean,
   wpm: number,
   acc: number,
+  chapter = 1,
 ): number {
-  const dps = typingCombat(wpm, acc).dpsPerAtk * PAR_ATK_CH1;
+  const dps = typingCombat(wpm, acc).dpsPerAtk * parAtk(chapter);
   const overhead =
     LEVEL_INTRO_S +
     WALK_S * (encounters - 1) +
@@ -103,7 +113,10 @@ export function pyActiveSeconds(
   return hp / dps + overhead;
 }
 
-/** economy_sim level_spec enc_hp at chapter 1: ENC_TTK_S 36 s x reference DPS (35 WPM, 92%, ATK 10) x (1 + 0.02 (p-1)). */
-export function pyEncounterHp(index: number): number {
-  return 36 * typingCombat(35, 0.92).dpsPerAtk * PAR_ATK_CH1 * (1 + 0.02 * (index - 1));
+/**
+ * economy_sim level_spec enc_hp: ENC_TTK_S 36 s x reference DPS (35 WPM, 92%, par ATK of the chapter) x (1 + 0.02 (p-1)).
+ * Ch1: 199.4 at L1; Ch2 (ATK 12.2): 243 at L1 (the authored 244, CH2_PLAN §4.1).
+ */
+export function pyEncounterHp(index: number, chapter = 1): number {
+  return 36 * typingCombat(35, 0.92).dpsPerAtk * parAtk(chapter) * (1 + 0.02 * (index - 1));
 }
