@@ -22,7 +22,7 @@ export function showTouchBlock(): HTMLElement {
   root.className = "hd-root touch-block";
   root.setAttribute("role", "alert");
   root.innerHTML = `<div class="tb-card hd-panel">
-      <div class="hd-eyebrow">HD-2D Typing RPG</div>
+      <div class="hd-eyebrow">Typing Adventure</div>
       <h1 class="hd-title">KEYBOARD REQUIRED</h1>
       <div class="tb-keys" aria-hidden="true">${"QWERTYUIOP"
         .split("")

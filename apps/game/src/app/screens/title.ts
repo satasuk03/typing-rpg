@@ -3,6 +3,7 @@ import { hasProgress } from "../../meta/ops";
 import type { App, Screen, ScreenArg } from "../app";
 import { actions, el } from "../dom";
 import { openTrial } from "../trialLink";
+import { drawCrest, drawLogo } from "./titleLogo";
 
 export function titleScreen(app: App, _arg: ScreenArg): Screen {
   const root = el("app-screen title");
@@ -18,10 +19,9 @@ export function titleScreen(app: App, _arg: ScreenArg): Screen {
   root.innerHTML = `
     <div class="title-vig"></div>
     <div class="title-logo">
-      <div class="hd-eyebrow">A typing adventure</div>
-      <h1 class="logo-main">HD-2D</h1>
-      <div class="logo-sub">TYPING RPG</div>
-      <div class="logo-orn"><i></i><b></b><i></i></div>
+      <h1 class="logo-pix" aria-label="Typing Adventure"><span class="logo-art"></span></h1>
+      <div class="logo-tag">~ A Typing RPG ~</div>
+      <div class="logo-crest"></div>
       <div class="hd-sub">Chapter I &middot; The Ember Road</div>
     </div>
     <div class="title-press" id="press"><span>Press any key</span></div>
@@ -33,6 +33,7 @@ export function titleScreen(app: App, _arg: ScreenArg): Screen {
     </div>
     <div class="title-foot"><span>${status()}</span><span>Desktop only &middot; keyboard required</span></div>`;
 
+  mountLogo(root);
   const menu = root.querySelector<HTMLElement>("#menu") as HTMLElement;
   const press = root.querySelector<HTMLElement>("#press") as HTMLElement;
   let shown = false;
@@ -94,4 +95,43 @@ function confirmNew(app: App): void {
       if (!app.beginFirstRun()) app.go("map", {});
     },
   });
+}
+
+/** Integer-scaled pixel logo (base + glint-sweep overlay) and crest, plus a few stepped sparkles. */
+function mountLogo(root: HTMLElement): void {
+  const art = root.querySelector<HTMLElement>(".logo-art");
+  const crest = root.querySelector<HTMLElement>(".logo-crest");
+  if (!art || !crest) return;
+  const { base, glint } = drawLogo();
+  const scale = Math.max(
+    2,
+    Math.min(
+      8,
+      Math.floor(Math.min((innerWidth * 0.6) / base.width, (innerHeight * 0.3) / base.height)),
+    ),
+  );
+  for (const c of [base, glint]) {
+    c.style.width = `${c.width * scale}px`;
+    c.style.height = `${c.height * scale}px`;
+  }
+  glint.className = "logo-glint";
+  art.style.width = base.style.width;
+  art.style.height = base.style.height;
+  art.append(base, glint);
+  for (const [x, y, d] of [
+    [14, 30, 0],
+    [48, 18, 0.7],
+    [84, 40, 1.4],
+    [121, 22, 2.1],
+  ] as const) {
+    const sp = document.createElement("i");
+    sp.className = "logo-spark";
+    sp.style.cssText = `left:${x * scale}px;top:${y * scale}px;--px:${Math.max(2, scale - 2)}px;animation-delay:${d}s`;
+    art.append(sp);
+  }
+  const cr = drawCrest();
+  const cs = Math.max(2, Math.floor(scale / 2));
+  cr.style.width = `${cr.width * cs}px`;
+  cr.style.height = `${cr.height * cs}px`;
+  crest.append(cr);
 }
