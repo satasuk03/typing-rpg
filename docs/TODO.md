@@ -34,6 +34,13 @@ Done on 2026-10-10. Save v2 (journal notes, New Game `resetEpoch`), L10 hollow v
   - ~~Hushwood L3 and L4 read close to L1~~: done. L3 is now the heaviest Ch2 level (uncapped p95 14.0 ms vs the 16.8 budget), so include it in the perf re-measure. The L3 hero is dim at battle:2.
   - L6's shrine gate is cut by the top of the frame.
   - L7's reed wall looks coarse up close.
+- **After the Willow fix** (`docs/qa/ch2-willow-fix/`):
+  - The P1s are fixed. The boss-vs-background luma ratio is about 1.8 and holds on every frame, but the 3:1 goal isn't reached.
+  - Still open:
+    - the Willow face (and the freed "soft smile") is still dark;
+    - front frond curtains and breath/sway/lash animation (P3-11);
+    - visually confirm that the BREAK/WEAK pops anchor at the face;
+    - make the freed-finale keep-out probe deterministic. It's flaky on main too, with a margin of 2–29 against the 215 limit.
 - **Ch1 flipped-normal fix:** this proposal is tracked there too (`docs/qa/ch2-t2.1/proposal-ch1-flipped-normal.jpg`).
 
 ## Tech debt
