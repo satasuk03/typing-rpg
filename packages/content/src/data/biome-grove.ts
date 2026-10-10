@@ -80,9 +80,9 @@ orchard | I am a garden full of fruit trees.
 cherry | I am a small red fruit with a stone inside and a long thin stem.
 plum | I am a soft purple fruit and dried I become a prune.
 pear | I am a sweet fruit shaped like a bell, green or yellow.
-walnut | I am a nut with a wrinkled brain-like shape inside a hard shell.
+walnut | I am a hard-shelled snack with a wrinkled, brain-like inside.
 pumpkin | I am a big orange vegetable and people carve my face at Halloween.
-sunflower | I am a very tall yellow flower that follows the sun.
+sunflower | I am a very tall yellow bloom that turns its face to follow the light all day.
 dandelion | I am a yellow flower, and when I turn white you can blow my seeds away.
 ladybug | I am a small red beetle with black spots.
 cocoon | A caterpillar spins me around itself before it becomes a butterfly.

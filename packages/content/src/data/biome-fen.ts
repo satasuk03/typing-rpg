@@ -123,7 +123,7 @@ dock | Boats stop at me and people walk out on me to reach the water.
 anchor | A ship drops me to the bottom so that it does not drift away.
 net | A fisher throws me into the water to catch many fish at once.
 worm | I am long, soft, and pink, and I wriggle through the soil.
-kingfisher | I am a small blue bird that dives into rivers for fish.
+kingfisher | I am a small bright blue bird that dives into rivers to catch my food.
 peat | I am dark, wet soil from a bog that people can burn.
 hook | I am a bent piece of metal on a line, and a fish may bite me.
 waterfall | I am a river that falls over a high cliff.
