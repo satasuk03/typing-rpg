@@ -1,0 +1,5 @@
+run 0: with prologue 0.176 ms/frame, without 0.171 ms/frame, delta 0.005 ms
+run 1: with prologue 0.173 ms/frame, without 0.168 ms/frame, delta 0.005 ms
+run 2: with prologue 0.189 ms/frame, without 0.183 ms/frame, delta 0.007 ms
+run 3: with prologue 0.169 ms/frame, without 0.161 ms/frame, delta 0.008 ms
+run 4: with prologue 0.173 ms/frame, without 0.163 ms/frame, delta 0.011 ms

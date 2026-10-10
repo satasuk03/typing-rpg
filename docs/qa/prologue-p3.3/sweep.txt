@@ -1,0 +1,5 @@
+Part B at max FX on Metal (real world render each sample), wpm 90, tier-4 streak, quality 0, 24 s, sample every 0.5 s
+samples=48 (partB 32, Part C overlap 16) violations=0
+next-letter contrast checked=16 minRing=5.59 (>= 3) minCell=7.83 (>= 4.5)
+fxKeepOut max={"panel":0,"label":0,"next":0}  maxPops=6  popsNearMask=3
+events={"LevelStarted":1,"EnemySpawned":2,"EncounterStarted":1,"BossIntroStarted":2,"PassiveTriggered":37,"SkillCast":18,"PlateShown":10,"TargetAcquired":12,"CharCorrect":116,"SentenceWordDone":21,"EnemyAttackWindup":4,"GuardWordShown":4,"TargetDropped":2,"BurstWpm":4,"WordCompleted":9,"PlateRemoved":9,"GuardWordTyped":4,"DoomSpellCompleted":4,"Hit":13,"AtbFilled":4,"AutoAttack":4,"ShieldDamaged":5,"GuardParried":3,"EnemyAttack":3,"FinisherShown":2,"ComboTierChanged":1,"FinisherCompleted":1,"EnemyDeath":1,"GoldGained":1,"SkillCharged":1,"EncounterCleared":1,"WaveStarted":1}
