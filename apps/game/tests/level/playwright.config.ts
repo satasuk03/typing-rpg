@@ -7,6 +7,8 @@ import { defineConfig, devices } from "@playwright/test";
  * ANGLE/SwiftShader (software GL): frame times are indicative only.
  */
 const PORT = Number(process.env.LEVEL_PORT ?? 5183);
+/** `LEVEL_GL=metal`: real GPU (channel chromium + ANGLE Metal) instead of SwiftShader; the Ch2 sweep is far quicker. */
+const METAL = process.env.LEVEL_GL === "metal";
 
 export default defineConfig({
   testDir: ".",
@@ -22,11 +24,12 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 720 },
+        ...(METAL ? { channel: "chromium" as const } : {}),
         launchOptions: {
           args: [
-            "--use-gl=angle",
-            "--use-angle=swiftshader",
-            "--enable-unsafe-swiftshader",
+            ...(METAL
+              ? ["--use-angle=metal", "--enable-gpu"]
+              : ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]),
             "--ignore-gpu-blocklist",
             "--enable-webgl",
             "--autoplay-policy=no-user-gesture-required",

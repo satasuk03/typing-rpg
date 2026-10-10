@@ -11,8 +11,13 @@ export interface GlyphCell {
 export interface TextLayout {
   cells: GlyphCell[];
   lineCount: number;
-  /** Widest line in cells. */
+  /** Widest line in cells, counting visible glyphs only. */
   cols: number;
+  /**
+   * Widest extent in cells INCLUDING the space parked at the end of a wrapped line. That space is a real,
+   * typeable cell (it gets a letter rect and the next-letter marker), so the plate frame must span it.
+   */
+  spanCols: number;
 }
 
 /**
@@ -49,5 +54,7 @@ export function layoutText(text: string, maxCols: number): TextLayout {
   }
   cols = 1;
   for (const c of cells) if (!c.isSpace) cols = Math.max(cols, c.col + 1);
-  return { cells, lineCount: line + 1, cols };
+  let spanCols = cols;
+  for (const c of cells) spanCols = Math.max(spanCols, c.col + 1);
+  return { cells, lineCount: line + 1, cols, spanCols };
 }

@@ -95,7 +95,7 @@ export function measurePlate(c: Ctx, p: PlateView, leaf = false, elite = false):
   const maxCols = Math.max(6, Math.floor((SENTENCE_MAX_W - PLATE_PAD_X * 2) / cw));
   const layout = layoutText(p.display, sentence ? maxCols : 99);
   const lineH = sz + 8;
-  const fw = layout.cols * cw + PLATE_PAD_X * 2;
+  const fw = layout.spanCols * cw + PLATE_PAD_X * 2;
   const fh = layout.lineCount * lineH + PLATE_PAD_Y * 2;
   const isGuard = p.kind === "guard";
   const g = gimmickLabel(p);
