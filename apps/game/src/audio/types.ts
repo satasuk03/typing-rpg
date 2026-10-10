@@ -55,6 +55,8 @@ export interface SfxParams {
   count?: number;
   /** Boss variant for `enemyDeath`. */
   boss?: boolean;
+  /** v1.9: `guard` / `parry` that let damage through (cracked-shield accent). */
+  leak?: boolean;
 }
 
 /** Streak tiers (PO decision): 10 / 25 / 50 / 100 correct chars in a row. */

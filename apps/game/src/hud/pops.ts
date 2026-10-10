@@ -6,6 +6,7 @@ export type PopKind =
   | "crit"
   | "chip"
   | "hurt"
+  | "leak"
   | "heal"
   | "weak"
   | "break"
@@ -49,6 +50,7 @@ export const POP_LIFETIME: Record<PopKind, number> = {
   crit: 1.4,
   chip: 0.8,
   hurt: 1.2,
+  leak: 1.3,
   heal: 1.2,
   weak: 1.0,
   break: 0.9,
@@ -66,6 +68,7 @@ export const POP_STACK_STEP: Record<PopKind, number> = {
   crit: 80,
   chip: 28,
   hurt: 56,
+  leak: 48,
   heal: 40,
   weak: 34,
   break: 84,

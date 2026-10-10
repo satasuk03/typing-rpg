@@ -21,7 +21,7 @@ import { attachCombatFx, type SessionCombatFx } from "./combatFx";
 import { freshSeed, makeRunConfig, type PlayParams } from "./config";
 import { EventRouter } from "./eventBindings";
 import { LevelRunner, type LoggedInput, type PauseReason, type RunConfig } from "./runner";
-import { buildResultsModel, type ResultExtras, Screens } from "./screens";
+import { buildResultsModel, type ResultExtras, Screens, sumLeakDamage } from "./screens";
 import { LevelStage } from "./stage";
 import { attachTypingFx, type SessionTypingFx } from "./typingFx";
 
@@ -47,7 +47,7 @@ export interface SessionOptions extends PlayParams {
   hudSettings?: Partial<HudSettings>;
   /** App mode: the meta layer. `onFinished` runs once when the results open (the save writer commits there). */
   hooks?: {
-    onFinished?(result: LevelResult, cfg: RunConfig): ResultExtras | undefined;
+    onFinished?(result: LevelResult, cfg: RunConfig, leakDamage: number): ResultExtras | undefined;
     next(): void;
     exit(): void;
   };
@@ -118,6 +118,8 @@ export class PlaySession {
   private raf = 0;
   private disposed = false;
   private readonly seenCounts: Record<string, number> = {};
+  /** v1.9: HP lost through guarded hits this run (results-screen hint). */
+  private leakDamage = 0;
   private readonly perfByPhase = new Map<string, number[]>();
   private biome: BiomeName | null = null;
   private pace: number;
@@ -249,6 +251,7 @@ export class PlaySession {
 
   private onEvents(events: SimEvent[]): void {
     for (const e of events) this.seenCounts[e.type] = (this.seenCounts[e.type] ?? 0) + 1;
+    this.leakDamage += sumLeakDamage(events);
     this.router.dispatch(events);
     for (const e of events) {
       if (e.type === "LevelCleared") this.resultAt = performance.now() + 3600;
@@ -309,6 +312,7 @@ export class PlaySession {
     this.screens.secondWind(false);
     this.resultAt = null;
     this.resultsShown = false;
+    this.leakDamage = 0;
     this.pauseShown = false;
     this.lastView = getView(this.runner.state);
   }
@@ -389,9 +393,16 @@ export class PlaySession {
       if (res) {
         this.resultsShown = true;
         this.hud.banners.clear(); // the LEVEL CLEAR / DEFEATED banner must not ghost behind the panel
-        const extras = this.opts.hooks?.onFinished?.(res, r.config);
+        const extras = this.opts.hooks?.onFinished?.(res, r.config, this.leakDamage);
         this.screens.showResults(
-          buildResultsModel(res, r.config.def, this.pace, extras?.knownWordKeys, extras),
+          buildResultsModel(
+            res,
+            r.config.def,
+            this.pace,
+            extras?.knownWordKeys,
+            extras,
+            this.leakDamage,
+          ),
         );
       }
     }

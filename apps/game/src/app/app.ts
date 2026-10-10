@@ -76,6 +76,8 @@ export interface LastRun {
   levelId: string;
   result: LevelResult;
   summary: LevelCommit;
+  /** v1.9: HP lost through guarded hits in this run. */
+  leakDamage?: number;
 }
 
 /** Where Escape goes from each screen. */
@@ -350,7 +352,8 @@ export class App {
     const paceOverride = bot?.wpm;
     const build = (): RunConfig => this.store.runConfig(levelId, { pace: paceOverride });
     const s = this.store.save.settings;
-    const finish = (res: LevelResult, cfg: RunConfig): ResultExtras => this.onFinished(res, cfg);
+    const finish = (res: LevelResult, cfg: RunConfig, leak: number): ResultExtras =>
+      this.onFinished(res, cfg, leak);
     const done = (to: "next" | "exit"): void => {
       const sess = this.session;
       this.session = null;
@@ -390,10 +393,10 @@ export class App {
 
   consoleErrors: string[] = [];
 
-  private onFinished(result: LevelResult, cfg: RunConfig): ResultExtras {
+  private onFinished(result: LevelResult, cfg: RunConfig, leakDamage = 0): ResultExtras {
     const known = new Set(Object.keys(this.store.save.journal.firstSeen));
     const summary = this.store.applyResult(result, cfg);
-    this.lastRun = { levelId: result.levelId, result, summary };
+    this.lastRun = { levelId: result.levelId, result, summary, leakDamage };
     const b = this.bundle;
     const notes: string[] = [];
     if (result.outcome === "cleared") {

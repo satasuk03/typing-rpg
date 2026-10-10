@@ -169,8 +169,8 @@ export const AUDIO_BINDINGS: Readonly<Record<string, AudioHandler>> = {
 
   // defense
   EnemyAttackWindup: (e, a) => a.play("enemyWindup", { heavy: e.heavy === true }),
-  GuardBlocked: (_e, a) => a.play("guard"),
-  GuardParried: (_e, a) => a.play("parry"),
+  GuardBlocked: (e, a) => a.play("guard", { leak: num(e.leakDamage) > 0 }),
+  GuardParried: (e, a) => a.play("parry", { leak: num(e.leakDamage) > 0 }),
   HeroDamaged: (e, a) => {
     if (e.blocked !== true) a.play("heroHurt");
   },

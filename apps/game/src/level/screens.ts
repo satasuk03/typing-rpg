@@ -44,6 +44,22 @@ export interface ResultExtras {
   knownWordKeys?: ReadonlySet<string>;
 }
 
+/** v1.9 guard leak: total HP the hero lost through guarded hits (sum of `leakDamage` on guard events). */
+export function sumLeakDamage(events: readonly { type: string; leakDamage?: number }[]): number {
+  let n = 0;
+  for (const e of events)
+    if ((e.type === "GuardBlocked" || e.type === "GuardParried") && (e.leakDamage ?? 0) > 0)
+      n += e.leakDamage ?? 0;
+  return n;
+}
+
+/** One results-screen line when armor let damage through a guard; null when nothing leaked. */
+export function leakHintNote(leakDamage: number): string | null {
+  return leakDamage > 0
+    ? `Your armor let <b>${leakDamage}</b> damage through. Upgrade armor to stop leaks.`
+    : null;
+}
+
 /** "Level 1 · Sunlit Glade" for the results subtitle (the raw `ch1-l01` id is not for players). */
 export function levelTitle(def: ResolvedLevel): string {
   const l = contentBundle.levels.find((x) => x.id === def.levelId);
@@ -76,6 +92,7 @@ export function buildResultsModel(
   pace: number,
   knownWordKeys: ReadonlySet<string> = new Set(),
   extras: ResultExtras = {},
+  leakDamage = 0,
 ): ResultsModel {
   const typed = result.words.filter((w) => w.kind === "word");
   const seen = new Set<string>();
@@ -86,6 +103,7 @@ export function buildResultsModel(
     if (!knownWordKeys.has(w.wordKey)) newWords.push(w.text);
   }
   const cleared = result.outcome === "cleared";
+  const leakHint = leakHintNote(leakDamage);
   return {
     outcome: result.outcome,
     title: cleared ? "LEVEL CLEAR" : "DEFEATED",
@@ -107,7 +125,7 @@ export function buildResultsModel(
     maxCombo: result.stats.maxCombo,
     perfectWords: result.stats.perfectWords,
     secondWindUsed: result.stats.secondWindUsed,
-    notes: extras.notes ?? [],
+    notes: [...(extras.notes ?? []), ...(leakHint ? [leakHint] : [])],
   };
 }
 

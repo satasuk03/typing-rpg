@@ -22,6 +22,13 @@ const shieldVoice = (s: Synth, t: number): void => {
   s.noise(t, 0.5, 0.08, "highpass", 6000, 9000, { a: 0.1, wet: 0.5 });
 };
 
+/** v1.9 guard leak accent: a dry glass crack under the guard chime ("guarded, but some got through"). */
+const crackVoice = (s: Synth, t: number): void => {
+  s.noise(t + 0.02, 0.16, 0.16, "bandpass", 3200, 1400, { wet: 0.15 });
+  s.osc("square", 190, 90, t + 0.02, 0.14, 0.08, { lp: 1600, wet: 0.1 });
+  s.osc("sine", 3100, 2300, t + 0.05, 0.08, 0.04, { wet: 0.3 });
+};
+
 const shatterVoice = (s: Synth, t: number): void => {
   s.noise(t, 0.5, 0.5, "highpass", 3000, 1800, { wet: 0.4 });
   for (let i = 0; i < 14; i++) {
@@ -173,16 +180,18 @@ export const SFX_VOICES: Record<Sfx, SfxVoice> = {
   },
 
   /** PORTED `shield`. */
-  guard(s, t) {
+  guard(s, t, p) {
     shieldVoice(s, t);
+    if (p.leak) crackVoice(s, t);
   },
 
   /** PORTED `parry`. */
-  parry(s, t) {
+  parry(s, t, p) {
     s.bell(1560, t, 0.7, 0.16, 0.5, [1, 2.4, 3.9, 6.1]);
     s.osc("square", 2200, 1200, t, 0.06, 0.08, { lp: 5000, wet: 0.2 });
     s.noise(t, 0.08, 0.3, "highpass", 2500, 2500, { wet: 0.3 });
     shieldVoice(s, t);
+    if (p.leak) crackVoice(s, t);
   },
 
   /** PORTED `monAtk` (heavy variant NEW: lower and longer). */

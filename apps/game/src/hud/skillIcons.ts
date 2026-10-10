@@ -184,7 +184,39 @@ const FALLBACK: IconDef = {
   ],
 };
 
+/** v1.9 guard leak: a steel shield split by a crimson crack. Used by the leak badge and the leak pop (not a skill). */
+const CRACKED_SHIELD: IconDef = {
+  pal: {
+    k: "#0a0c1c",
+    w: "#ffffff",
+    l: "#b8d0ff",
+    b: "#5a82d8",
+    d: "#2a3c90",
+    r: "#ff3a3a",
+    c: "#a00c24",
+  },
+  rows: [
+    "..kkkkkkkkkkkk..",
+    ".klllllllllllbk.",
+    "kwlllllcrlbbbbdk",
+    "kllllllrckbbbbdk",
+    "klllllcrckbbbbdk",
+    "kllllrcrkkbbbbdk",
+    "klllllkrcrbbbbdk",
+    "kllllkkcrckbbbdk",
+    "klllllcrkrcbbbdk",
+    ".klllllkcrcbbdk.",
+    ".klllllbbrcbbdk.",
+    "..klllbbbcrbdk..",
+    "...kllbbbbbdk...",
+    "....kllbbbdk....",
+    ".....kkbbdk.....",
+    ".......kk.......",
+  ],
+};
+
 const DEFS: Record<string, IconDef> = {
+  crackedShield: CRACKED_SHIELD,
   fireball: FIREBALL,
   aegis: AEGIS,
   slashWave: SLASH,
