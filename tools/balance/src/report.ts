@@ -1,8 +1,11 @@
 // Aggregation, plan §9 verdicts and the markdown / JSON report.
+
+import { computeHeroStats, resolveLevel } from "@hd2d/sim";
 import type { RunRecord } from "./bot.ts";
+import { describeGear, guardLeakBp, parseGear } from "./gear.ts";
 import { PERSONAS, type PersonaId } from "./personas.ts";
 import { pyActiveSeconds, pyEncounterHp } from "./pymodel.ts";
-import { bundleForLevel, type JobResult } from "./runner.ts";
+import { bundleForLevel, chapterLevels, type JobResult, starterLoadout } from "./runner.ts";
 import type { WhatIf } from "./whatif.ts";
 
 // ---------------------------------------------------------------- targets
@@ -413,6 +416,8 @@ export interface Report {
     whatif: WhatIf;
     /** Absent = 1. Chapters other than 1 are informational until T5.1 (Ch1 targets, no Python parity). */
     chapter?: number;
+    /** T1.5: the --gear value (absent = par). */
+    gear?: string;
   };
   rows: LevelRow[];
   summaries: PersonaSummary[];
@@ -439,6 +444,71 @@ export function buildReport(results: readonly JobResult[], config: Report["confi
   };
 }
 
+/**
+ * Gear header + per-persona boss guard leak and damage-taken-vs-budget (T1.5). Empty without --gear (or with --gear par) in Chapter 1, so the default
+ * report stays byte-identical to before the option existed; shown for any offset and for later chapters.
+ */
+export function gearSection(rep: Report): string[] {
+  const chapter = rep.config.chapter ?? 1;
+  const spec = parseGear(rep.config.gear);
+  if (rep.config.gear === undefined && chapter === 1) return [];
+  const l = starterLoadout("starter", chapter, rep.config.gear);
+  const d = describeGear(l, spec, chapter);
+  const bossId = chapterLevels(chapter)[9] as string;
+  const lv = resolveLevel(bundleForLevel(bossId), bossId, { dueWeakWords: [] });
+  const boss = lv.boss;
+  // Stub levels (Ch2 until T4.3) have no boss: fall back to the strongest encounter Attack Power of the level.
+  const apBp =
+    boss?.attackPowerBp ??
+    Math.max(0, ...lv.segments.map((s) => (s as { attackPowerBp?: number }).attackPowerBp ?? 0));
+  const bossName =
+    boss === null ? `${bossId}, no boss: strongest encounter` : `${bossId} ${boss.name}`;
+  const leak = apBp === 0 ? Number.NaN : guardLeakBp(l, chapter, apBp) / 10_000;
+  const hp = computeHeroStats(l).maxHp / 1000;
+  const out = [
+    "",
+    `**Gear:** ${d.label} | ${d.slots.map((x) => `${x.slot} ${x.text}`).join("; ")}; hero max HP ${hp.toFixed(0)}`,
+    ...d.notes.map((n) => `- clamped: ${n}`),
+    "",
+    `Boss (${bossName}) guard leak at this gear: ${pct1(leak)}. Budget = hero max HP (${hp.toFixed(0)}); a run that takes more than the budget needs Second Wind or fails.`,
+    "",
+  ];
+  const rows = [...new Set(rep.rows.map((r) => r.persona))].flatMap((p) => {
+    const r = rep.rows.find((x) => x.persona === p && x.levelId === bossId);
+    if (r === undefined) return [];
+    const normal = rep.rows.filter((x) => x.persona === p && !x.isBoss);
+    const nmax = Math.max(0, ...normal.map((x) => x.dmgTaken));
+    return [
+      [
+        PERSONAS.find((x) => x.id === p)?.label ?? p,
+        pct1(leak),
+        pct(r.clear),
+        f1(r.dmgTaken),
+        pct(r.dmgTaken / hp),
+        f1(nmax),
+        pct(nmax / hp),
+        pct(r.secondWind),
+      ],
+    ];
+  });
+  out.push(
+    table(
+      [
+        "Persona",
+        "Boss guard leak",
+        "Boss clear",
+        "Boss dmg taken",
+        "vs budget",
+        "Worst normal-level dmg",
+        "vs budget",
+        "Boss Second Wind",
+      ],
+      rows,
+    ),
+  );
+  return out;
+}
+
 export function markdown(rep: Report): string {
   const out: string[] = [];
   const label = (p: string): string => PERSONAS.find((x) => x.id === p)?.label ?? p;
@@ -447,6 +517,7 @@ export function markdown(rep: Report): string {
     ...(Object.keys(rep.config.whatif).length > 0
       ? ["", `**What-if:** ${JSON.stringify(rep.config.whatif)} (Py columns ignore it)`]
       : []),
+    ...gearSection(rep),
     "",
     "Active time = sim time (intro, walks, wave intros, combat, rewards, boss breathers) + LEVEL_END_S 10 s, i.e.",
     "economy_sim's `win_secs - MENU_S - JOURNAL_S`. Means over cleared runs. Py = economy_sim's analytic model on this content.",

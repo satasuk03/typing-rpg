@@ -12,6 +12,7 @@ import {
   resolveLevel,
 } from "@hd2d/sim";
 import { type GimmickMode, playLevel, type RunRecord } from "./bot.ts";
+import { applyGear, parseGear } from "./gear.ts";
 import { drawAttempt, PERSONAS, type PersonaId } from "./personas.ts";
 import { applyWhatIf, type WhatIf } from "./whatif.ts";
 
@@ -45,11 +46,17 @@ export interface Job {
   kit?: "starter" | "bare";
   /** free (default): scrambled/faded words are decoded for free. realistic: the T6.2 reading model (bot.ts). */
   gimmicks?: GimmickMode;
+  /** T1.5 gear offset (the --gear value): par (default) | par-N | armor+N | weapon+N | all+N. See gear.ts. */
+  gear?: string;
 }
 
 /** Ch1 starter kit (content skills.ts, no unlockLevel): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will, par gear. */
-export function starterLoadout(kit: "starter" | "bare" = "starter", chapter = 1): Loadout {
-  const l = parLoadout(chapter);
+export function starterLoadout(
+  kit: "starter" | "bare" = "starter",
+  chapter = 1,
+  gear?: string,
+): Loadout {
+  const l = applyGear(parLoadout(chapter), parseGear(gear));
   l.actives = kit === "bare" ? ["fireball", null] : ["fireball", "aegis"];
   l.passives =
     kit === "bare" ? ["cleanCut", "steadyHands", null] : ["cleanCut", "steadyHands", "ironWill"];
@@ -101,7 +108,7 @@ export function runJob(job: Job): RunRecord[] {
     out.push(
       playLevel({
         def: level,
-        loadout: starterLoadout(job.kit, chapterOfLevel(job.levelId)),
+        loadout: starterLoadout(job.kit, chapterOfLevel(job.levelId), job.gear),
         seed,
         attempt,
         options,
