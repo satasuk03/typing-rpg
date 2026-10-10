@@ -27,16 +27,25 @@ export const APP_CSS = `
 .title-logo .hd-sub{display:inline-block;color:#fff6d8;font-size:15px;letter-spacing:.14em;padding:7px 22px;
   background:rgba(8,6,11,.82);border:1px solid #8a6f3e;box-shadow:0 0 0 2px rgba(0,0,0,.6),0 4px 18px rgba(0,0,0,.6);text-shadow:0 1px 0 #000}
 .title-logo .hd-eyebrow{text-shadow:0 2px 0 #000,0 0 8px #000}
-.logo-main{font:900 148px/1 var(--f-disp);letter-spacing:.12em;margin:6px 0 0 .12em;color:#ffe9a8;
-  background:linear-gradient(180deg,#fff6d0 0%,#f2c866 48%,#b9791f 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
-  filter:drop-shadow(0 4px 0 #3a2208) drop-shadow(0 0 28px rgba(255,170,70,.45))}
-.logo-sub{font:20px var(--f-pix);letter-spacing:.7em;margin:6px 0 0 .7em;color:#ffd9b0;-webkit-text-stroke:2px #1a0c04;paint-order:stroke fill;text-shadow:0 2px 0 #2a1406,0 0 14px rgba(255,140,60,.6)}
-.logo-orn{display:flex;align-items:center;justify-content:center;gap:10px;margin:16px 0 12px}
-.logo-orn i{display:block;width:220px;height:2px;background:linear-gradient(90deg,transparent,var(--edge))}
-.logo-orn i:last-child{background:linear-gradient(270deg,transparent,var(--edge))}
-.logo-orn b{width:10px;height:10px;background:var(--gold);transform:rotate(45deg);box-shadow:0 0 0 2px #2a1406,0 0 12px rgba(255,200,90,.7)}
-.title-press{position:absolute;left:0;right:0;bottom:21%;text-align:center;font:15px var(--f-pix);letter-spacing:.3em;color:var(--gold-hi);text-shadow:0 2px 0 #000}
-.title-press span{animation:blink 1.3s steps(2,jump-none) infinite}
+.logo-pix{margin:0;display:flex;justify-content:center;animation:logobob 2.4s steps(1,end) infinite}
+.logo-art{position:relative;display:block}
+.logo-art canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;image-rendering:-webkit-optimize-contrast;image-rendering:pixelated}
+.logo-art .logo-glint{position:absolute;left:0;top:0;mix-blend-mode:plus-lighter;
+  -webkit-mask-image:linear-gradient(105deg,transparent 42%,#000 42%,#000 50%,transparent 50%,transparent 54%,#000 54%,#000 57%,transparent 57%);
+  mask-image:linear-gradient(105deg,transparent 42%,#000 42%,#000 50%,transparent 50%,transparent 54%,#000 54%,#000 57%,transparent 57%);
+  -webkit-mask-size:400% 100%;mask-size:400% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  animation:logoglint 3.6s steps(18,end) infinite}
+.logo-spark{position:absolute;width:var(--px);height:var(--px);margin:calc(var(--px) * -.5);background:#fffbe0;opacity:0;
+  box-shadow:var(--px) 0 #ffe070,calc(var(--px) * -1) 0 #ffe070,0 var(--px) #ffe070,0 calc(var(--px) * -1) #ffe070;animation:logospark 2.8s steps(1,end) infinite}
+.logo-tag{margin:10px 0 0;font:16px var(--f-pix);letter-spacing:.35em;padding-left:.35em;color:#ffd9b0;-webkit-text-stroke:4px #1a0b10;paint-order:stroke fill;text-shadow:3px 3px 0 #0a0408}
+.logo-crest{display:flex;justify-content:center;margin:14px 0 12px;animation:logobob 2.4s steps(1,end) infinite;animation-delay:-.6s}
+.logo-crest canvas{image-rendering:pixelated;display:block}
+.title-press{position:absolute;left:0;right:0;bottom:21%;text-align:center;font:15px var(--f-pix);letter-spacing:.3em;color:var(--gold-hi);-webkit-text-stroke:4px #000;paint-order:stroke fill;text-shadow:0 2px 0 #000}
+.title-press span{display:inline-block;animation:pressblink 1.3s steps(2,jump-none) infinite}
+@keyframes pressblink{0%{opacity:1}50%{opacity:.55}100%{opacity:1}}
+@keyframes logobob{0%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes logoglint{0%{-webkit-mask-position:-30% 0;mask-position:-30% 0}45%,100%{-webkit-mask-position:130% 0;mask-position:130% 0}}
+@keyframes logospark{0%,60%{opacity:0}65%{opacity:1}80%{opacity:.7}90%,100%{opacity:0}}
 .title-menu{position:absolute;left:50%;bottom:13%;transform:translateX(-50%);width:300px;display:flex;flex-direction:column;gap:14px;padding-left:14px}
 .title-menu[hidden],.title-press[hidden]{display:none}
 .title-foot{position:absolute;left:40px;right:40px;bottom:16px;display:flex;justify-content:space-between;color:var(--dim);font-size:12px;letter-spacing:.1em}
@@ -256,5 +265,5 @@ input[type=checkbox]:focus{box-shadow:0 0 0 2px #05060a,0 0 0 4px #ffcf4a}
 .tb-keys i{display:block;width:34px;height:34px;line-height:32px;font:13px var(--f-pix);font-style:normal;color:var(--gold);background:linear-gradient(180deg,#2c2238,#0d0a13);
   border:2px solid #6e5a38;border-bottom-width:5px;border-radius:3px}
 .tb-keys i.wide{width:230px;flex-basis:100%;margin:2px auto 0;max-width:260px}
-@media (prefers-reduced-motion:reduce){.node.new .gem,.title-press span{animation:none}}
+@media (prefers-reduced-motion:reduce){.node.new .gem,.title-press span,.logo-pix,.logo-crest,.logo-glint,.logo-spark{animation:none}}
 `;
