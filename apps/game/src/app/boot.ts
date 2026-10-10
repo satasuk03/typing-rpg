@@ -1,10 +1,9 @@
 /**
  * Real-game boot (the default route): fonts, net layer, save store, audio, then the title screen.
  * Query flags (all optional, mainly for tests): `api=off|<url>`, `wpm-bot=75[&bot-acc=..&bot-seed=..]`, `tier=0|1|2`,
- * `audio=0`, `fonts=0`, `onboard=0` (no first-run flow), `dev=1` (exposes `__grant`), `screen=<name>` (start on a screen),
- * `ch2stub=1` (dev/test: the bundle plus the placeholder Ch2 levels, until T4.3 ships the real ones).
+ * `audio=0`, `fonts=0`, `onboard=0` (no first-run flow), `dev=1` (exposes `__grant`), `screen=<name>` (start on a screen).
  */
-import { contentBundle, withCh2Stubs } from "@hd2d/content";
+import { contentBundle } from "@hd2d/content";
 import { AudioEngine } from "../audio";
 import { loadHudFonts } from "../hud/fonts";
 import type { Save } from "../meta/ops";
@@ -73,7 +72,7 @@ export async function start(
   if (fonts) await loadHudFonts();
   const api = apiBase(q);
   const net = makeNet(api);
-  const bundle = q.get("ch2stub") === "1" ? withCh2Stubs(contentBundle) : contentBundle;
+  const bundle = contentBundle;
   const store = await SaveStore.open(net, { syncWaitMs: api === null ? 0 : 2500, bundle });
   const audio = q.get("audio") === "0" ? null : new AudioEngine();
   const tierParam = num(q.get("tier"));

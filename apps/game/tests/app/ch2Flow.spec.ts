@@ -1,5 +1,5 @@
 /**
- * T3.4, keyboard only: map chapter tabs (locked then unlocked, via the dev `ch2stub=1` bundle), the Ch1-complete unlock
+ * T3.4, keyboard only: map chapter tabs (locked then unlocked), the Ch1-complete unlock
  * moment, the "Ignore capitals" setting, and the Ch2 intro card (typed on the first visit, skipped on the second).
  * Stills go to docs/qa/ch2-t3.4/ (JPEG). Setup that is not the feature under test (clearing Ch1 in the save) uses the
  * dev hooks; every interaction under test is a key press.
@@ -47,7 +47,7 @@ const pressUntil = async (page: Page, key: string, key2: string, max = 14): Prom
 };
 
 test("Ch2 flow, keyboard only", async ({ page }) => {
-  const run = await openApp(page, "api=off&audio=0&dev=1&ch2stub=1");
+  const run = await openApp(page, "api=off&audio=0&dev=1");
   await toMap(page);
 
   // ---- map tabs: locked
@@ -175,5 +175,5 @@ test("Ch2 flow, keyboard only", async ({ page }) => {
   await page.waitForFunction(() => window.__app?.route() === "play", undefined, {
     timeout: 15_000,
   });
-  expect(run.errors.filter((e) => !/ch2|stub|WebGL/i.test(e))).toEqual([]);
+  expect(run.errors.filter((e) => !/WebGL/i.test(e))).toEqual([]);
 });

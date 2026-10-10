@@ -18,7 +18,7 @@ test("Chapter 1 from the title screen to chapter complete (bot, 75 WPM, real tim
   await page.screenshot({ path: shot("20-fresh-title-menu") });
   await page.keyboard.press("Enter"); // Start game
   await waitRoute(page, "map");
-  const ids = contentBundle.levels.map((l) => l.id);
+  const ids = contentBundle.levels.filter((l) => l.chapter === 1).map((l) => l.id);
   const log: string[] = [];
 
   for (const [i, id] of ids.entries()) {

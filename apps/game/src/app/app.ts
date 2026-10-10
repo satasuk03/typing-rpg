@@ -70,7 +70,7 @@ export interface AppDeps {
   bot?: BotParams;
   fonts?: boolean;
   tier: QualityTier;
-  /** Content bundle (default: the shipped one). Tests pass `withCh2Stubs(contentBundle)`; it must match the SaveStore's. */
+  /** Content bundle (default: the shipped one). It must match the SaveStore's. */
   bundle?: ContentBundle;
   /** First-run flow (story, calibration, tutorial level) for a fresh profile. Default true; `?onboard=0` turns it off. */
   onboarding?: boolean;

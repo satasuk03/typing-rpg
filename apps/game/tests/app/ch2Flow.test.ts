@@ -1,6 +1,6 @@
 // T3.4: chapter tabs state, the Ch2 intro lines, the "intro seen" flag (existing save field), caseAssist; with the
-// tools' Ch2 stub bundle so it keeps working the moment T4.3 ships real Ch2 levels.
-import { contentBundle, withCh2Stubs } from "@hd2d/content";
+// tools' Ch2 real bundle so it keeps working the moment T4.3 ships real Ch2 levels.
+import { type ContentBundle, contentBundle } from "@hd2d/content";
 import { mergeSaves } from "@hd2d/shared";
 import { describe, expect, it } from "vitest";
 import { chapterState, defaultChapter, introChapterOf, introLines } from "../../src/app/chapters";
@@ -16,7 +16,12 @@ import { SaveStore } from "../../src/meta/save";
 import { ApiClient, AuthManager, MemoryStore, SaveSync } from "../../src/net/index.ts";
 import { FakeServer } from "../net/fakeServer";
 
-const two = withCh2Stubs(contentBundle);
+const two = contentBundle;
+/** A bundle with no Ch2 levels: the "coming soon" path for a chapter that ships empty. */
+const ch1Only: ContentBundle = {
+  ...contentBundle,
+  levels: contentBundle.levels.filter((l) => l.chapter === 1),
+};
 const ch1Ids = Array.from({ length: 10 }, (_, i) => `ch1-l${String(i + 1).padStart(2, "0")}`);
 
 function withCleared(ids: string[]): Save {
@@ -47,13 +52,15 @@ const open = (n: ReturnType<typeof net>) =>
   SaveStore.open(n, { syncWaitMs: 0, now: () => 1000, seed: () => 7, bundle: two });
 
 describe("chapter tabs", () => {
-  it("the shipped Ch1-only bundle shows Ch2 as coming soon", () => {
+  it("a chapter with no levels in the bundle shows as coming soon", () => {
     const s = withCleared(ch1Ids);
-    if (contentBundle.levels.some((l) => l.chapter === 2)) return; // T4.3 landed: covered by the stub cases below
-    expect(chapterState(s, contentBundle, 1)).toBe("open");
-    expect(chapterState(s, contentBundle, 2)).toBe("soon");
+    expect(chapterState(s, ch1Only, 1)).toBe("open");
+    expect(chapterState(s, ch1Only, 2)).toBe("soon");
   });
-  it("with the stub bundle Ch2 is locked until ch1-l10 is cleared, then open", () => {
+  it("the shipped bundle lists the 10 real Ch2 levels", () => {
+    expect(two.levels.filter((l) => l.chapter === 2)).toHaveLength(10);
+  });
+  it("Ch2 is locked until ch1-l10 is cleared, then open", () => {
     expect(chapterState(withCleared([]), two, 1)).toBe("open");
     expect(chapterState(withCleared([]), two, 2)).toBe("locked");
     expect(chapterState(withCleared(ch1Ids.slice(0, 9)), two, 2)).toBe("locked");
