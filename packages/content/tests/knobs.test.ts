@@ -7,13 +7,12 @@ import {
   HIT_MULT,
 } from "../src/data/levels.ts";
 import {
-  CH2_STUB_LEVELS,
   CHAPTER_KNOBS,
   contentBundle,
   knobsFor,
   LEVELS,
+  LEVELS_CH2,
   RUIN_GOLEM,
-  withCh2Stubs,
 } from "../src/index.ts";
 
 describe("CHAPTER_KNOBS", () => {
@@ -42,7 +41,7 @@ describe("CHAPTER_KNOBS", () => {
     expect(k.eliteAttackPower).toBe(1.25);
     expect(k.bossAttackPower).toBe(1.3);
     expect(k.bossAddsAttackPower).toBe(1.25);
-    expect([k.encHpMult, k.hitMult, k.bossLevelHitMult]).toEqual([1.2, 1.34, 1.15]);
+    expect([k.encHpMult, k.hitMult, k.bossLevelHitMult]).toEqual([1.2, 1.25, 0.9]);
   });
   test("knobsFor throws on a chapter with no row (no silent fallback)", () => {
     expect(() => knobsFor(3)).toThrow(/chapter 3/);
@@ -50,23 +49,23 @@ describe("CHAPTER_KNOBS", () => {
   });
 });
 
-describe("Ch2 stub levels", () => {
-  test("ch2-l01..l10, chapter 2, contiguous, layoutId = id, no boss segment (riddle boss is T1.3/T4.3)", () => {
-    expect(CH2_STUB_LEVELS.map((l) => l.id)).toEqual(
+describe("Ch2 levels", () => {
+  test("ch2-l01..l10, chapter 2, contiguous, layoutId = id, the boss is last", () => {
+    expect(LEVELS_CH2.map((l) => l.id)).toEqual(
       Array.from({ length: 10 }, (_, i) => `ch2-l${String(i + 1).padStart(2, "0")}`),
     );
-    for (const l of CH2_STUB_LEVELS) {
+    for (const l of LEVELS_CH2) {
       expect(l.chapter).toBe(2);
       expect(l.layoutId).toBe(l.id);
-      expect(l.kind).toBe("normal");
-      expect(l.segments.some((s) => s.kind === "boss")).toBe(false);
+      expect(l.kind).toBe(l.index === 10 ? "boss" : "normal");
+      expect(l.segments.some((s) => s.kind === "boss")).toBe(l.index === 10);
     }
   });
-  test("the shipped bundle stays Ch1-only; withCh2Stubs is tool-only and idempotent", () => {
-    expect(LEVELS.every((l) => l.chapter === 1)).toBe(true);
-    expect(contentBundle.levels).toHaveLength(10);
-    const two = withCh2Stubs(contentBundle);
-    expect(two.levels).toHaveLength(20);
-    expect(withCh2Stubs(two)).toBe(two);
+  test("the shipped bundle holds Ch1 then Ch2", () => {
+    expect(LEVELS.filter((l) => l.chapter === 1)).toHaveLength(10);
+    expect(contentBundle.levels).toHaveLength(20);
+    expect(contentBundle.levels.map((l) => l.chapter)).toEqual(
+      [...contentBundle.levels.map((l) => l.chapter)].sort(),
+    );
   });
 });

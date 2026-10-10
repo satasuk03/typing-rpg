@@ -218,7 +218,7 @@ describe("clue = clue ?? definition (resolveLevel)", () => {
     ...contentBundle,
     words,
     bosses: [...contentBundle.bosses, boss],
-    levels: [...contentBundle.levels, level],
+    levels: [...contentBundle.levels.filter((l) => l.id !== level.id), level],
   };
 
   test("a word's own clue wins; without one the definition is the clue", () => {

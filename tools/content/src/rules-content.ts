@@ -93,7 +93,32 @@ export function ruleIdsAndRefs(b: ContentBundle): Issue[] {
     if (x.phase2.minDoomSpells < 2) {
       out.push(issue("boss", "error", `boss ${x.id}: minDoomSpells must be >= 2 (D16)`));
     }
-    // Falling Rubble only: a riddle minigame has its own pool rule (T4.x validator, not written yet).
+    // Riddle of Leaves: the sim (resolveRiddles) needs count + 2 riddle words inside lengthRange with >= 3 distinct first letters
+    // for every riddle-boss level (words with chapter <= the level's chapter). Mirror that here so a bad pool fails the validator,
+    // not resolveLevel at game start.
+    const mg = x.phase3.minigame;
+    if (mg.kind === "riddle") {
+      for (const l of b.levels) {
+        if (!l.segments.some((sg) => sg.kind === "boss" && sg.bossId === x.id)) continue;
+        const seen = new Set<string>();
+        for (const w of usePool(b.words, "riddle")) {
+          if (w.kind !== "word" || (w.chapter ?? 1) > l.chapter) continue;
+          if (w.text.length < mg.lengthRange[0] || w.text.length > mg.lengthRange[1]) continue;
+          seen.add(w.text);
+        }
+        const initials = new Set([...seen].map((t) => t.charAt(0).toLowerCase()));
+        if (seen.size < mg.count + 2 || initials.size < 3) {
+          out.push(
+            issue(
+              "boss",
+              "error",
+              `boss ${x.id} (${l.id}): riddle pool has ${seen.size} words / ${initials.size} first letters in ${mg.lengthRange.join("-")} letters (need ${mg.count + 2} / 3)`,
+            ),
+          );
+        }
+      }
+    }
+    // Falling Rubble only: the riddle pool rule is above.
     if (
       x.phase3.minigame.kind === "fallingRubble" &&
       usePool(b.words, "minigame").length < x.phase3.minigame.lanes * 2

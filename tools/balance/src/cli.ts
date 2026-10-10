@@ -61,7 +61,7 @@ if (bad.length > 0) {
   console.log(
     `\n${bad.length} failing cell(s): ${bad.map((c) => `${c.persona} ${c.metric}`).join("; ")}`,
   );
-  // Chapters other than 1 run on placeholder targets and stub levels (T1.1): informational until T5.1.
+  // Chapters other than 1 run on placeholder targets (T1.1): informational until T5.1.
   if (chapter === 1) process.exitCode = 1;
   else console.log("(chapter > 1 verdicts are informational until T5.1; exit code unaffected)");
 }

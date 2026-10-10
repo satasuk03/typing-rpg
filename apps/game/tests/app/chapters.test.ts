@@ -1,12 +1,13 @@
 // T1.1 client plumbing: levelUnlocked by id, frontier chapter on load and after a result, caseAssist -> LevelOptions.
-import { contentBundle, withCh2Stubs } from "@hd2d/content";
+import { contentBundle } from "@hd2d/content";
 import { describe, expect, it } from "vitest";
 import { levelUnlocked, newSave, type Save, withFrontier } from "../../src/meta/ops";
 import { SaveStore } from "../../src/meta/save";
 import { ApiClient, AuthManager, MemoryStore, SaveSync } from "../../src/net/index.ts";
 import { FakeServer } from "../net/fakeServer";
 
-const two = withCh2Stubs(contentBundle);
+const two = contentBundle;
+const ch1Only = { ...contentBundle, levels: contentBundle.levels.filter((l) => l.chapter === 1) };
 const ch1Ids = Array.from({ length: 10 }, (_, i) => `ch1-l${String(i + 1).padStart(2, "0")}`);
 
 function savedWithCleared(ids: string[], bundle = two): Save {
@@ -57,7 +58,7 @@ describe("withFrontier / SaveStore.open (old saves open Ch2 with no migration)",
     const fresh = savedWithCleared([]);
     expect(withFrontier(fresh, two)).toBe(fresh);
     // the shipped Ch1-only bundle has nothing to open yet
-    expect(withFrontier(old, contentBundle)).toBe(old);
+    expect(withFrontier(old, ch1Only)).toBe(old);
   });
   it("applies on load", async () => {
     const n = net(new FakeServer());
