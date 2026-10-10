@@ -1,0 +1,60 @@
+# Deploy the game frontend to GitHub Pages on every push to main (and on demand).
+# Frontend only: no VITE_API_URL, so the deployed game runs local-only (IndexedDB save, no API requests).
+name: Deploy frontend (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version comes from package.json "packageManager"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fast gate (the full scripts/check.sh also needs Playwright browsers and runs locally).
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      # Project site lives at https://<owner>.github.io/<repo>/, so assets need that base path.
+      - name: Build
+        run: pnpm --filter game build
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/game/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
