@@ -288,6 +288,8 @@ export function start(glCanvas: HTMLCanvasElement): void {
     shift: q.get("shift") === "1",
     healer: q.get("healer") === "1",
     elite: q.get("elite") === "1",
+    fading: q.get("fading") === "1",
+    heals: q.get("heals") === "1",
   });
   const DT = 1 / 60;
   const stepOnce = (renderFrame: boolean): void => {

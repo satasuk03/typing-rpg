@@ -473,6 +473,29 @@ export interface EnemyBarState {
   hpFrac: number;
   hpTrail: number;
   atbFrac: number;
+  /** v2.0: 0..1 green fill flash on the HP bar after an EnemyHealed (absent / 0 = none). */
+  healFlash?: number;
+}
+
+/** The heal read (brief 5.1): the filled part of an HP bar floods green `#5cf08a` and settles. */
+export function healFlashOverlay(
+  c: Ctx,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  frac: number,
+  k: number,
+): void {
+  if (!(k > 0.01)) return;
+  const fw = w * clamp(frac, 0, 1);
+  c.save();
+  c.globalAlpha *= Math.min(1, k) * 0.85;
+  c.fillStyle = "#5cf08a";
+  c.fillRect(x, y, fw, h);
+  c.fillStyle = "#d8ffe4";
+  c.fillRect(x, y, fw, Math.max(1, h * 0.3));
+  c.restore();
 }
 
 export function drawEnemyBars(
@@ -487,6 +510,7 @@ export function drawEnemyBars(
   const y = fy + 14;
   const broken = e.brokenTicksLeft > 0;
   bar(c, x - 44, y, ENEMY_BAR_W, 7, st.hpFrac, "#ff8a7a", "#b42838", st.hpTrail);
+  if (st.healFlash) healFlashOverlay(c, x - 44, y, ENEMY_BAR_W, 7, st.hpFrac, st.healFlash);
   bar(
     c,
     x - 44,
@@ -559,6 +583,7 @@ export function drawBossPlate(p: PanelCtx, v: LevelView, e: EnemyView, st: Enemy
     trailCol: "#fff0d0",
     ticks: 3,
   });
+  if (st.healFlash) healFlashOverlay(c, bx, r.y + 40, bw, 11, st.hpFrac, st.healFlash);
   if (boss.gateHpFrac !== null) {
     const gx = bx + bw * clamp(boss.gateHpFrac, 0, 1);
     c.fillStyle = "#ffffff";

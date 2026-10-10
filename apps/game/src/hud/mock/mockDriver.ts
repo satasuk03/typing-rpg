@@ -62,6 +62,10 @@ export interface MockOpts {
   healer?: boolean;
   /** v2.0 `?elite=1`: the first enemy is an elite (`EnemyView.elite`). */
   elite?: boolean;
+  /** v2.0 `?fading=1`: every word plate fades 0.7 s after it is shown (`faded` + `WordFaded`), the Hush Shade gimmick. */
+  fading?: boolean;
+  /** v2.0 `?heals=1`: the healer heals the first enemy every 1.5 s (`EnemyHealed`), needs `healer=1` for the badge. */
+  heals?: boolean;
 }
 
 const RIDDLES: { clue: string; leaves: [string, string, string]; answer: number }[] = [
@@ -580,6 +584,32 @@ export class MockDriver {
         }
         this.enemyCycle(e);
       }
+      if (this.opts.fading) {
+        for (const p of this.plates.values()) {
+          if (p.faded || t - p.shownTick < 42 || p.ownerId === null) continue;
+          p.faded = true;
+          this.emit({ type: "WordFaded", tick: t, plateId: p.id, enemyId: p.ownerId });
+        }
+      }
+      if (this.opts.heals && t > 30 && t % 90 === 0) {
+        const alive = this.enemies.filter((x) => x.alive);
+        const src = alive[alive.length > 1 ? 1 : 0];
+        const dst = alive[0];
+        if (src && dst && dst.hp < dst.maxHp) {
+          const amount = Math.max(1, Math.min(Math.round(dst.maxHp * 0.12), dst.maxHp - dst.hp));
+          dst.hp += amount;
+          this.emit({
+            type: "EnemyHealed",
+            tick: t,
+            sourceId: src.id,
+            targetId: dst.id,
+            amount,
+            amountM: amount * 1000,
+            hpAfter: dst.hp,
+            maxHp: dst.maxHp,
+          });
+        }
+      }
       // tier=cycle: pre-seed the streak at each 2 s segment start (no tier change by construction)
       if (this.opts.tier === "cycle" && t % 120 === 0 && t / 120 < 5 && t / 120 !== this.cycleSeg) {
         this.cycleSeg = t / 120;
@@ -855,6 +885,7 @@ export class MockDriver {
       keyStreak: this.keyStreak,
       keyStreakTier: newTier,
       atbGainM: Math.round(gain * 1000),
+      ...(this.opts.shift && /^[A-Z]$/.test(expected) ? { shifted: true as const } : {}),
     });
     if (newTier !== oldTier)
       this.emit({
@@ -1312,7 +1343,7 @@ export class MockDriver {
       phaseProgress:
         this.phase === "combat" ? 1 : Math.min(1, Math.max(0, 1 - (this.phaseEnd - t) / 150)),
       levelId: `mock-${this.opts.scenario}`,
-      chapter: 1,
+      chapter: this.opts.fading || this.opts.heals ? 2 : 1,
       isBossLevel: this.opts.scenario === "boss",
       encounterIndex: this.opts.scenario === "cave" ? 1 : this.opts.scenario === "boss" ? 2 : 0,
       encounterCount: 3,

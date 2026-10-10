@@ -104,6 +104,8 @@ export interface LetterFxState {
   split: number;
   /** Zen typo: amber instead of red. */
   amber: boolean;
+  /** v2.0: the pop belongs to a capital (shifted) letter: the flash mixes gold instead of white. */
+  gold: boolean;
 }
 
 export interface PlateTint {
@@ -138,6 +140,7 @@ function newLetterState(): LetterFxState {
     glitchDx: 0,
     split: 0,
     amber: false,
+    gold: false,
   };
 }
 function resetLetter(o: LetterFxState): LetterFxState {
@@ -150,6 +153,7 @@ function resetLetter(o: LetterFxState): LetterFxState {
   o.glitchDx = 0;
   o.split = 0;
   o.amber = false;
+  o.gold = false;
   return o;
 }
 
@@ -159,6 +163,8 @@ interface PlateAnim {
   /** Seconds since the typo glitch of each letter; NONE = idle. */
   glitch: Float32Array;
   glitchAmber: Uint8Array;
+  /** 1 = the letter's pop is a capital's (gold flash). */
+  popGold: Uint8Array;
   pressAge: number;
   pressAmp: number;
   shakeAge: number;
@@ -195,6 +201,7 @@ export class PlateFx {
         pop: new Float32Array(32).fill(NONE),
         glitch: new Float32Array(32).fill(NONE),
         glitchAmber: new Uint8Array(32),
+        popGold: new Uint8Array(32),
         pressAge: 99,
         pressAmp: 0,
         shakeAge: 99,
@@ -227,13 +234,17 @@ export class PlateFx {
     const ga = new Uint8Array(n);
     ga.set(p.glitchAmber);
     p.glitchAmber = ga;
+    const pg = new Uint8Array(n);
+    pg.set(p.popGold);
+    p.popGold = pg;
   }
 
   /** Letter pop (T2.6 §2.1). The curve itself lives in `letterPopCurve`. */
-  pop(plateId: number, index: number): void {
+  pop(plateId: number, index: number, gold = false): void {
     const p = this.get(plateId);
     this.ensure(p, index);
     p.pop[index] = 0;
+    p.popGold[index] = gold ? 1 : 0;
   }
   /** Legacy entry point kept for the fallback path and older callers. */
   popLetter(
@@ -339,7 +350,10 @@ export class PlateFx {
     for (let i = 0; i < TYPO.maxCracks; i++) if (p.crackIdx[i] === index) o.crack = true;
     if (index >= p.pop.length) return o;
     const pa = p.pop[index] as number;
-    if (pa !== NONE) letterPopCurve(pa * 1000, isSentence, this.settings, o);
+    if (pa !== NONE) {
+      letterPopCurve(pa * 1000, isSentence, this.settings, o);
+      o.gold = p.popGold[index] === 1;
+    }
     const ga = p.glitch[index] as number;
     if (ga !== NONE) {
       const ms = ga * 1000;

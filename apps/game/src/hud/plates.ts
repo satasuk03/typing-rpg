@@ -48,6 +48,8 @@ export interface PlateGeom {
   isGuard: boolean;
   /** v2.0: riddle leaf plate (teal-gold, leaf glyph in the left gutter). */
   isLeaf: boolean;
+  /** v2.0: the plate belongs to an elite enemy (gold border trim, brief 5.2). */
+  elite: boolean;
 }
 
 /** v2.0 riddle leaf plate look: teal-gold, never green (green is reserved for healing). */
@@ -83,7 +85,7 @@ export function gimmickLabel(p: PlateView): string {
   return "";
 }
 
-export function measurePlate(c: Ctx, p: PlateView, leaf = false): PlateGeom {
+export function measurePlate(c: Ctx, p: PlateView, leaf = false, elite = false): PlateGeom {
   const palette = leaf
     ? LEAF_PALETTE
     : (PLATE_PALETTES[p.kind] ?? (PLATE_PALETTES.word as PlatePalette));
@@ -119,6 +121,7 @@ export function measurePlate(c: Ctx, p: PlateView, leaf = false): PlateGeom {
     hasTimer,
     isGuard,
     isLeaf: leaf,
+    elite,
   };
 }
 
@@ -133,6 +136,29 @@ export interface PlateDrawCtx {
   letterRects: Rect[];
   /** Quality tier 0..2 (2 drops the conic border and the border glow). */
   quality?: number;
+  /** Fading-word level 0 (fully visible) .. 1 (faded); default = `view.faded ? 1 : 0`. */
+  fadeT?: number;
+  /** Chapter 2+ fading look (dimmed letters + violet underline); chapter 1 keeps its blank-dash look. */
+  fadeV2?: boolean;
+  /** Receives the alpha the next letter was drawn with (readability invariant: >= NEXT_LETTER_MIN_ALPHA). */
+  nextAlphaOut?: { v: number };
+}
+
+/** Brief 5.3: untyped letters of a fading word dim to this alpha... */
+export const FADE_FLOOR_ALPHA = 0.3;
+/** ...but the next letter never goes below this (the invariant), and is drawn at NEXT_LETTER_ALPHA. */
+export const NEXT_LETTER_MIN_ALPHA = 0.85;
+export const NEXT_LETTER_ALPHA = 0.92;
+/** The violet "still here" underline of a fading word. */
+export const FADE_UNDERLINE = "#ac90ff";
+/** Elite plate trim (brief 5.2): gold, kept outside the text area. */
+export const ELITE_TRIM = "#ffd25a";
+
+/** Alpha of one letter: typed letters stay normal; untyped ones lerp to the floor; the next never drops below 0.92. */
+export function fadedLetterAlpha(fadeT: number, isNext: boolean, typed: boolean): number {
+  if (typed) return 1;
+  const a = 1 - (1 - FADE_FLOOR_ALPHA) * Math.min(1, Math.max(0, fadeT));
+  return isNext ? Math.max(NEXT_LETTER_ALPHA, a) : a;
 }
 
 const PERIM = { x: 0, y: 0 };
@@ -353,6 +379,23 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
     }
   }
 
+  // ---- elite trim (brief 5.2): a thin gold inner border plus corner ticks, drawn in the frame padding only
+  if (g.elite) {
+    c.save();
+    c.lineWidth = 1.5;
+    c.strokeStyle = "rgba(255,210,90,0.7)";
+    c.strokeRect(x + 1.75, y + 1.75, fw - 3.5, fh - 3.5);
+    c.fillStyle = ELITE_TRIM;
+    for (const [cx0, cy0] of [
+      [x + 1, y + 1],
+      [x + fw - 7, y + 1],
+      [x + 1, y + fh - 4],
+      [x + fw - 7, y + fh - 4],
+    ] as const)
+      c.fillRect(cx0, cy0, 6, 3);
+    c.restore();
+  }
+
   // ---- guard shield badge (non-colour cue)
   if (g.isGuard) {
     const bxc = x - 16;
@@ -443,12 +486,24 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
         glow = tinted?.glow ?? "rgba(255,190,60,0.6)";
         gb = tinted?.typedGlowPx ?? 6;
       }
-      if (p.faded && !typed) {
-        // fading gimmick: untyped chars become blanks; the gimmick overrides the next-letter rule
+      if (p.faded && !typed && !d.fadeV2) {
+        // Chapter 1 fading gimmick: untyped chars become blanks; the gimmick overrides the next-letter rule
         c.fillStyle = "rgba(235,225,205,0.7)";
         c.fillRect(cx - g.cw * 0.28, cy + g.sz * 0.28, g.cw * 0.56, 3);
         if (isNext && d.isTarget) underline(c, d, g, cx, ly, true);
         continue;
+      }
+      if (d.fadeV2 && p.faded && !typed) {
+        // Chapter 2 fading word (brief 5.3): untyped letters dim to the floor, the next one stays >= 0.85;
+        // a violet underline marks the word as fading
+        const la = fadedLetterAlpha(d.fadeT ?? 1, isNext, typed);
+        if (isNext && d.nextAlphaOut) d.nextAlphaOut.v = la;
+        c.globalAlpha = d.alpha * la;
+        c.save();
+        c.globalAlpha = d.alpha;
+        c.fillStyle = FADE_UNDERLINE;
+        c.fillRect(cx - g.cw * 0.42, ly + g.lineH - (isNext ? 0 : 2), g.cw * 0.84, 2);
+        c.restore();
       }
       const emphasize = isNext && !scrambled && d.isTarget;
       if (emphasize) {
@@ -462,13 +517,15 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
       // R2: the next letter is never animated by typing VFX (only the typo glitch tints it).
       if (!isNext) {
         if (lf.scale !== 1) size *= lf.scale;
-        if (lf.flash > 0) col = mix(col, "#ffffff", lf.flash);
+        if (lf.flash > 0) col = mix(col, lf.gold ? "#ffd24a" : "#ffffff", lf.flash);
         if (lf.glowPx > 0) {
-          glow = tinted
-            ? tinted.prism && !rm
-              ? (PRISM_BUCKETS[hueBucket(d.time, 24 * i)] as string)
-              : (tinted.accent as string)
-            : pal.typed;
+          glow = lf.gold
+            ? "#ffd24a"
+            : tinted
+              ? tinted.prism && !rm
+                ? (PRISM_BUCKETS[hueBucket(d.time, 24 * i)] as string)
+                : (tinted.accent as string)
+              : pal.typed;
           gb = Math.max(gb, lf.glowPx);
         }
         cy -= lf.liftPx;
@@ -513,6 +570,7 @@ export function drawPlate(c: Ctx, g: PlateGeom, box: Rect, d: PlateDrawCtx): voi
         glow: inten > 0 ? glow : null,
         gb: gb * inten,
       });
+      if (d.fadeV2) c.globalAlpha = d.alpha;
       if (isNext && !scrambled) underline(c, d, g, cx, ly, d.isTarget);
     }
   }

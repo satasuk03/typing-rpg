@@ -1,6 +1,7 @@
 /** Readability invariants checked by the Playwright readability test and by unit tests. */
 import type { HudDebugSnapshot } from "./hud";
 import { rectInside, rectsOverlap } from "./layout";
+import { NEXT_LETTER_MIN_ALPHA } from "./plates";
 
 export const MIN_FONT_PX = 14;
 export const MIN_CONTRAST = 4.5;
@@ -15,6 +16,11 @@ export function checkSnapshot(s: HudDebugSnapshot): string[] {
       out.push(`plate ${p.id} font ${p.fontPx.toFixed(1)}px < ${MIN_FONT_PX}`);
     if (p.contrast < MIN_CONTRAST)
       out.push(`plate ${p.id} contrast ${p.contrast.toFixed(2)} < ${MIN_CONTRAST}`);
+    // brief 5.3: a fading word never dims its next letter below 85% opacity
+    if (p.faded && p.nextAlpha != null && p.nextAlpha < NEXT_LETTER_MIN_ALPHA)
+      out.push(
+        `plate ${p.id} next letter alpha ${p.nextAlpha.toFixed(2)} < ${NEXT_LETTER_MIN_ALPHA}`,
+      );
     for (const l of p.letters) {
       const t = 8; // tolerance for shake / bounce offsets
       if (
