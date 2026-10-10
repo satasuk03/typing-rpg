@@ -22,7 +22,8 @@ describe("newSave", () => {
     const s = migrateSave(fresh());
     expect(s.equipped).toEqual({ weapon: 1, armor: 2, charm: 3 });
     expect(ops.loadoutOf(s).weapon.archetype).toBe("sword");
-    expect(s.unlocks.actives.length).toBe(2);
+    expect(s.unlocks.actives).toEqual(["fireball"]);
+    expect(s.unlocks.passives).toEqual(["cleanCut"]);
     expect(s.cachePity).toEqual({ sinceRare: 0, sinceEpic: 0, sinceLegendary: 0 });
   });
 });
