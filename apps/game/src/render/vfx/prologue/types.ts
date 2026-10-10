@@ -48,6 +48,8 @@ export interface CueInstance {
   params?: Readonly<Record<string, number | string>>;
   from?: ActorRef;
   to?: ActorRef;
+  /** True for a cue the cutscene timeline plays (false: a live Part B cue the sim events trigger). */
+  scripted?: boolean;
 }
 
 /** What the cues ask of the rest of the render stack for this frame (the host applies it). */

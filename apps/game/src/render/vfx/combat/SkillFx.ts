@@ -57,10 +57,15 @@ export class SkillFx {
   private colPeak = 0.7;
   private readonly ice: FxQuad[] = [];
   private readonly marks: Mark[] = [];
+  /** P4.2 (prologue only): a cutscene is playing, so the Aegis bubble goes (set by `CombatFx.setCutscene`). */
+  private cutscene = false;
+  /** P4.2: the ground frost ring a frozen tall boss (Nul) gets instead of the lattice quad; built on first use only. */
+  private frostRing: FxQuad | null = null;
+  private frostAcc = 0;
   /** Thrust beam parameters live in the QuadPool; the tip flare is spawned with the hit. */
 
   constructor(
-    world: RenderWorld,
+    private readonly world: RenderWorld,
     private readonly kit: FxKit,
     private readonly proj: Projectiles,
     private readonly rim: (who: "hero" | number, amount: number, rgb: Rgb, dur: number) => void,
@@ -619,8 +624,8 @@ export class SkillFx {
     const sc = kit.scale;
     // ---- aegis bubble
     const charges = view?.hero.barrierCharges ?? 0;
-    const want = charges > 0 ? 1 : 0;
-    this.bubbleLevel += (want - this.bubbleLevel) * Math.min(1, dt * 8);
+    const want = charges > 0 && !this.cutscene ? 1 : 0;
+    this.bubbleLevel += (want - this.bubbleLevel) * Math.min(1, dt * (this.cutscene ? 16 : 8));
     this.bubbleFlare = Math.max(0, this.bubbleFlare - dt * 4);
     let scale = 1;
     if (this.bubblePop >= 0) {
@@ -691,10 +696,48 @@ export class SkillFx {
     }
     // frozen lattices
     let li = 0;
+    let ringUsed = false;
     for (const m of this.marks) {
       if (m.id < 0 || m.freeze < 0.03 || li >= this.ice.length) continue;
       if (!kit.deps.anchors.enemy(m.id, EN)) continue;
       kit.deps.enemyInfo(m.id, INFO);
+      if (INFO.sprite === "nul") {
+        // P4.2 P1-2 (prologue boss only): NO fill quad over the body (the 5.7 m lattice lifted his cloak +49..116%, P3 allows +10%):
+        // a ground frost ring, a rim-only ice outline that follows the sprite edge, and ice motes along it
+        ringUsed = true;
+        if (this.frostRing === null) this.frostRing = new FxQuad(this.world, FxKind.Line, 9);
+        const fr = this.frostRing;
+        fr.color(1.1, 2.2, 3.2)
+          .color2(0.4, 1.0, 2.0)
+          .progress(0.35)
+          .at(EN.x, 0.06, EN.z + 0.2)
+          .size(5.4, 5.4)
+          .intensity(0.9 * m.freeze * (sc.k <= 0 ? 0.6 : 0.6 + 0.4 * sc.k));
+        fr.mesh.rotation.x = -Math.PI / 2;
+        this.rim(m.id, 0.6 * m.freeze, ICE, 0.05);
+        if (sc.k > 0) {
+          this.frostAcc += dt * 16 * sc.k * sc.q * m.freeze;
+          while (this.frostAcc >= 1) {
+            this.frostAcc -= 1;
+            const side = kit.rnd() < 0.5 ? -1 : 1;
+            const sp = kit.p(
+              EN.x + side * (0.5 + kit.rnd() * 0.6),
+              0.2 + kit.rnd() * 3.4,
+              EN.z + 0.3,
+              side * 0.15,
+              0.3 + kit.rnd() * 0.5,
+              0,
+              0.9,
+              0.06,
+              PK_PIXEL,
+              ICE,
+              0.8,
+            );
+            kit.emitA(sp);
+          }
+        }
+        continue;
+      }
       const q = this.ice[li++] as FxQuad;
       const w = Math.max(2.4, INFO.height * 1.25);
       q.color(0.45, 1.0, 1.5)
@@ -705,6 +748,7 @@ export class SkillFx {
       this.rim(m.id, 0.45 * m.freeze, ICE, 0.05);
     }
     for (; li < this.ice.length; li++) (this.ice[li] as FxQuad).intensity(0);
+    if (!ringUsed) this.frostRing?.intensity(0);
   }
 
   private stillMarked(id: number, view: LevelView): boolean {
@@ -772,6 +816,11 @@ export class SkillFx {
     }
   }
 
+  /** Prologue cutscene on / off (P4.2: the Aegis bubble fades out in ~300 ms while a cutscene plays). */
+  setCutscene(on: boolean): void {
+    this.cutscene = on;
+  }
+
   clear(): void {
     this.bubbleLevel = 0;
     this.bubblePop = -1;
@@ -779,6 +828,7 @@ export class SkillFx {
     this.column.alpha(0);
     this.bubble.intensity(0);
     for (const q of this.ice) q.intensity(0);
+    this.frostRing?.intensity(0);
     for (const m of this.marks) m.id = -1;
   }
 
@@ -786,5 +836,6 @@ export class SkillFx {
     this.bubble.dispose();
     this.column.dispose();
     for (const q of this.ice) q.dispose();
+    this.frostRing?.dispose();
   }
 }

@@ -24,6 +24,8 @@ const RUNE_COL: Rgb = [0.25, 1.4, 1.5];
 const DOOM_COL: Rgb = [1.5, 0.35, 1.7];
 /** T3.2: the Willow's rune ring is violet-teal, not the Golem's cyan (brief 3.7 / 5.7). */
 const RUNE_WILLOW: Rgb = [0.55, 0.5, 1.7];
+/** P4.2 (prologue): Nul's circle is his violet (#8a6cff), not the Golem's cyan. */
+const RUNE_NUL: Rgb = [0.6, 0.4, 2.0];
 const DUST: Rgb = [0.42, 0.36, 0.3];
 const LIT_AT = 0.35;
 
@@ -49,6 +51,8 @@ export class BossFx {
   private doomEnding = false;
   private doomAcc = 0;
   private pulseT = 0;
+  /** P4.2 (prologue only): a cutscene is playing; the intro rune circle fades out (gone by ~1 s). */
+  private cutscene = false;
 
   constructor(
     world: RenderWorld,
@@ -270,11 +274,16 @@ export class BossFx {
         }
       }
     } else if (bossAlive) target = 0.6;
-    this.runeLevel += (target - this.runeLevel) * Math.min(1, dt * 2);
+    if (this.cutscene) {
+      target = 0;
+      this.surge = 0;
+    }
+    this.runeLevel += (target - this.runeLevel) * Math.min(1, dt * (this.cutscene ? 6 : 2));
     this.surge = Math.max(0, this.surge - dt * 1.6);
     if (this.runeLevel > 0.02 && kit.deps.enemyInfo(this.bossId, INFO)) {
       const g = sc.k <= 0 ? 0.4 : 0.6 + 0.4 * sc.k;
-      const rc = INFO.sprite === "willow" ? RUNE_WILLOW : RUNE_COL;
+      const rc =
+        INFO.sprite === "willow" ? RUNE_WILLOW : INFO.sprite === "nul" ? RUNE_NUL : RUNE_COL;
       this.rune
         .color(rc[0], rc[1], rc[2])
         .at(INFO.x, 0.05, INFO.z)
@@ -371,6 +380,11 @@ export class BossFx {
         }
       }
     }
+  }
+
+  /** Prologue cutscene on / off (P4.2). */
+  setCutscene(on: boolean): void {
+    this.cutscene = on;
   }
 
   clear(): void {

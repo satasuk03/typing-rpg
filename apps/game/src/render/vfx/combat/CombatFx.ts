@@ -373,6 +373,15 @@ export class CombatFx implements CombatFxSink {
     return this.tier;
   }
 
+  /**
+   * P4.2 (prologue only; story levels never call it): a cutscene plays, so the persistent combat state goes: the Aegis bubble
+   * fades in ~300 ms and the boss's intro rune circle in ~1 s.
+   */
+  setCutscene(on: boolean): void {
+    this.skillFx.setCutscene(on);
+    this.bossFx.setCutscene(on);
+  }
+
   /** A new attempt: drop everything in flight. */
   clear(): void {
     this.kit.clear();

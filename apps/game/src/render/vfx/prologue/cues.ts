@@ -93,6 +93,11 @@ const P2: V3 = { x: 0, y: 0, z: 0 };
 
 // ================================================================================================ inkRise
 
+/** The pool x of an `inkRise` cue (a param), for the sky streaks to lean toward it. */
+function x0Fix(i: CueInstance): number {
+  return num(i, "x", 0);
+}
+
 /** An add rises out of an ink pool: a dark disc on the ground, a violet rim ring, upward ink drips and violet sparks. */
 const inkRise: CueRenderer = (c, i) => {
   const age = i.ageMs;
@@ -120,6 +125,35 @@ const inkRise: CueRenderer = (c, i) => {
       1.8 * (1 - u * 0.4),
       true,
     );
+  }
+  // P4.2 (P2-2, Part A only): the sky above the gate darkens and ink streaks rise into it
+  if (i.scripted) {
+    const env = smoothstep(0, 500, age) * (1 - smoothstep(900, 1300, age));
+    const g = c.gate;
+    c.card(
+      CardShape.Fog,
+      g.x,
+      11.5,
+      g.z - 1.2,
+      46,
+      15,
+      INK_POOL,
+      0.22 * env,
+      false,
+      rnd(i.seed, 0, 5) * 20,
+    );
+    c.out.vignette = Math.max(c.out.vignette, 0.15 * env * c.k);
+    const nk = c.n(10);
+    for (let j = 0; j < nk; j++) {
+      const t0 = 80 + rnd(i.seed, j, 21) * 700;
+      const tau = (age - t0) / 1000;
+      if (tau < 0 || tau > 1.1) continue;
+      const th = (rnd(i.seed, j, 22) - 0.5) * 2;
+      const x = g.x + th * 7 + (x0Fix(i) - g.x) * 0.2;
+      const y = 5.5 + rnd(i.seed, j, 23) * 3 + 6.5 * tau;
+      const a = Math.min(1, (1 - tau / 1.1) * 2.2);
+      c.pn(x, y, g.z - 0.9, INK_DRIP, 0.9 * a, 0.2, 2, 0, 6.5, 0, 1.2);
+    }
   }
   // 18 upward ink drips (normal blend, vy +1.6..2.6 m/s, life 0.5-0.8 s)
   const nd = c.n(18);
@@ -175,7 +209,7 @@ const skyTear: CueRenderer = (c, i) => {
   if (age < 0) return;
   const w = skyTearWidth(age, closeAt);
   const tx = c.tear.x;
-  const ty = c.tear.y;
+  const ty = num(i, "ty", c.tear.y);
   const tz = c.tear.z;
   const closing = closeAt !== null && age >= closeAt;
   const lineAge = closeAt !== null ? age - closeAt - SKY_TEAR.closeMs : -1;
@@ -309,7 +343,7 @@ const hushBolt: CueRenderer = (c, i) => {
       (head[2] + back[2]) / 2,
       [0.05, 0.03, 0.1],
       0.97,
-      0.5,
+      0.75,
       2,
       (vx / vl) * 11,
       (vy / vl) * 11,
@@ -331,8 +365,8 @@ const hushBolt: CueRenderer = (c, i) => {
       1.0,
     );
     // the violet head: a glow 0.5 m and a ring 0.3 m (<= 1.4 HDR near plates)
-    c.glow(head[0], head[1], head[2], 1.5, VIOLET_HEAD, cap);
-    c.star(head[0], head[1], head[2] + 0.03, 0.7, VIOLET_HEAD, 0.8 * k);
+    c.glow(head[0], head[1], head[2], 2.2, VIOLET_HEAD, cap);
+    c.star(head[0], head[1], head[2] + 0.03, 1.1, VIOLET_HEAD, 0.9 * k);
     c.line(
       head[0],
       head[1],
@@ -491,6 +525,9 @@ const ward: CueRenderer = (c, i) => {
 const surgeAura: CueRenderer = (c, i) => {
   if (i.ageMs < 0) return;
   c.out.auraSurge = num(i, "mult", 1);
+  // P4.2 (P2-5): the knight's flare at the raise: a 0.15 capped flash
+  if (i.scripted && num(i, "mult", 1) >= 16 && i.ageMs < 160)
+    c.out.flash = Math.max(c.out.flash, 0.15 * (1 - i.ageMs / 160) * c.flashK * c.k);
 };
 
 // ================================================================================================ catchFireball
@@ -511,16 +548,16 @@ const catchFireball: CueRenderer = (c, i) => {
       lerp(FIRE_HOT[1], FIRE_GREY[1], u),
       lerp(FIRE_HOT[2], FIRE_GREY[2], u),
     ];
-    c.glow(x, y, z, 2.4 * flick * shrink, col, 0.7 * (1 - 0.35 * u));
+    c.glow(x, y, z, 3.4 * flick * shrink, col, 0.7 * (1 - 0.35 * u));
     c.glow(
       x,
       y,
       z + 0.05,
-      1.1 * flick * shrink,
+      1.6 * flick * shrink,
       [col[0] * 1.2, col[1] * 1.1, col[2]],
       0.9 * (1 - 0.6 * u),
     );
-    c.star(x, y, z + 0.08, 1.5 * shrink, col, 0.9 * (1 - u));
+    c.star(x, y, z + 0.08, 2.1 * shrink, col, 0.9 * (1 - u));
     // flame pixels licking the frozen ball (die out as it greys)
     const nf = c.n(10);
     for (let j = 0; j < nf; j++) {
@@ -550,13 +587,13 @@ const catchFireball: CueRenderer = (c, i) => {
         y + Math.sin(th) * r0,
         z + 0.12,
         [1.6, 1.6, 1.7],
-        0.9,
-        0.05,
+        0.95,
+        0.09,
         2,
         Math.cos(th) * 6,
         Math.sin(th) * 6,
         0,
-        1.4,
+        2.2,
       );
     }
   }
@@ -575,7 +612,7 @@ const catchFireball: CueRenderer = (c, i) => {
         z + 0.1,
         FIRE_ASH,
         0.95 * a,
-        0.06 + rnd(i.seed, j, 57) * 0.04,
+        0.1 + rnd(i.seed, j, 57) * 0.06,
         1,
       );
     }
@@ -659,96 +696,171 @@ const inkWrite: CueRenderer = (c, i) => {
 
 // ================================================================================================ theftStream
 
-/** One stolen skill: a bezier ribbon of 40 motes in the skill's colour from the hero's chest to Nul's mask, with a bright head. */
+/** The point of Nul's cloak the ribbons are absorbed into (his mask is the last thing a theft should flare). */
+const NUL_CLOAK = { dx: -0.1, y: 2.3, dz: 0.3 } as const;
+
+/**
+ * One stolen skill, the cutscene's money shot (P4.2 P1-7). DEPARTURE: a chest burst in the element colour (12 motes and a 0.6 m
+ * ring). FLIGHT: a thick twisted two-strand ribbon (36 motes a strand) whose tail spans 66% of the bezier, with a 1.2 m glow head.
+ * ARRIVAL: a coloured ring around Nul's silhouette (an outline, never a fill over the body: P3) and a small eye-slit glint
+ * (capped well under 1.2 HDR on the mask); the ribbon dies into the cloak, not onto the mask.
+ */
 const theftStream: CueRenderer = (c, i) => {
   const age = i.ageMs;
-  if (age < 0 || age > THEFT.drainEnd + 360) return;
+  if (age < 0 || age > THEFT.drainEnd + 520) return;
   const kIdx = Math.min(6, Math.max(1, Math.round(num(i, "k", 1))));
   const col = THEFT_RGB[kIdx - 1] as Rgb;
   const p0: V3 = { x: c.hero.x + 0.15, y: HERO_CHEST_Y, z: c.hero.z + 0.2 };
-  bossAt(c, NUL_MASK, P1);
+  bossAt(c, NUL_CLOAK, P1);
   const p3: V3 = P1;
   const sgn = kIdx % 2 === 1 ? 1 : -1;
   const A: [number, number, number] = [
     lerp(p0.x, p3.x, 0.33),
-    lerp(p0.y, p3.y, 0.33) + (sgn > 0 ? 2.2 : 1.1),
+    lerp(p0.y, p3.y, 0.33) + (sgn > 0 ? 2.4 : 1.2),
     lerp(p0.z, p3.z, 0.33) + sgn * 1.0,
   ];
   const B: [number, number, number] = [
     lerp(p0.x, p3.x, 0.66) + (sgn > 0 ? 0 : 1.6),
-    lerp(p0.y, p3.y, 0.66) + (sgn > 0 ? 1.8 : 2.2),
+    lerp(p0.y, p3.y, 0.66) + (sgn > 0 ? 2.0 : 2.4),
     lerp(p0.z, p3.z, 0.66) - sgn * 1.0,
   ];
   const p0t: [number, number, number] = [p0.x, p0.y, p0.z];
   const p3t: [number, number, number] = [p3.x, p3.y, p3.z];
-  // 0-120: the icon cracks (HUD); a small charge flash at the chest
-  if (age < THEFT.crackMs + 100) {
-    const u = age / THEFT.crackMs;
-    c.glow(
+  // ---- departure: the icon cracks (HUD) and the colour bursts out of the chest
+  if (age < THEFT.crackMs + 380) {
+    const u = clamp01(age / (THEFT.crackMs + 380));
+    const k = c.keepK(p0.x, p0.y, p0.z);
+    c.glow(p0.x, p0.y, p0.z + 0.1, 0.6 + 0.6 * u, col, 0.55 * (1 - u) * k);
+    c.line(
       p0.x,
       p0.y,
-      p0.z + 0.1,
-      0.45 + 0.4 * u,
+      p0.z + 0.12,
+      0.6 + 1.6 * easeOutCubic(u),
+      0.6 + 1.6 * easeOutCubic(u),
+      u,
       col,
-      0.6 * Math.min(1, u * 1.5) * (1 - clamp01((age - THEFT.crackMs) / 100)),
+      col,
+      1.1 * (1 - u) * k,
+      false,
     );
+    const nb = c.n(12);
+    for (let j = 0; j < nb; j++) {
+      const th = (j / nb) * TAU + rnd(i.seed, j, 131) * 0.5;
+      const sp = 1.6 + rnd(i.seed, j, 132) * 1.6;
+      const t = (age / 1000) * 0.9;
+      c.pa(
+        p0.x + Math.cos(th) * sp * t,
+        p0.y + Math.sin(th) * sp * t,
+        p0.z + 0.15,
+        col,
+        0.9 * (1 - u) * k,
+        0.2,
+        0,
+      );
+    }
   }
   const fu = easeInOutSine((age - THEFT.crackMs) / (THEFT.flyEnd - THEFT.crackMs));
   const drain = clamp01((age - THEFT.flyEnd) / (THEFT.drainEnd - THEFT.flyEnd));
   if (age >= THEFT.crackMs && age < THEFT.drainEnd) {
     const nm = c.n(THEFT.motes);
-    const tail = 0.36;
-    for (let j = nm - 1; j >= 0; j--) {
-      const f = j / nm;
-      const s = clamp01(fu - f * tail * (1 - drain));
-      const pt = bezier3(SCRATCH_A, s, p0t, A, B, p3t);
-      const wob = 0.1 * (1 - f) * Math.sin((age / 1000) * 11 + j * 1.9);
-      const a =
-        (1 - f) ** 1.3 * (1 - drain) * (age < THEFT.crackMs + 60 ? (age - THEFT.crackMs) / 60 : 1);
-      c.pa(pt[0], pt[1] + wob, pt[2] + wob * 0.6, col, 1.0 * a, 0.3 + 0.45 * (1 - f), 0);
-      if (j % 2 === 0) {
-        const ahead = bezier3(SCRATCH_B, clamp01(s + 0.02), p0t, A, B, p3t);
-        c.pa(
-          pt[0],
-          pt[1] + wob,
-          pt[2] + wob * 0.6,
-          col,
-          1.0 * a,
-          0.12,
-          2,
-          (ahead[0] - pt[0]) * 60,
-          (ahead[1] - pt[1]) * 60,
-          (ahead[2] - pt[2]) * 60,
-          0.5,
-        );
+    const tail = THEFT.tail;
+    const fade = age < THEFT.crackMs + 60 ? (age - THEFT.crackMs) / 60 : 1;
+    for (let sd = 0; sd < THEFT.strands; sd++) {
+      for (let j = nm - 1; j >= 0; j--) {
+        const f = j / nm;
+        const s = clamp01(fu - f * tail * (1 - drain));
+        const pt = bezier3(SCRATCH_A, s, p0t, A, B, p3t);
+        // a two-strand twist around the bezier (the ribbon travels mostly along x, so the twist is in y / z)
+        const ph = f * 8 + (age / 1000) * 9 + sd * Math.PI;
+        const rad = 0.24 * (1 - f * 0.55) * (1 - drain);
+        const oy = Math.cos(ph) * rad;
+        const oz = Math.sin(ph) * rad;
+        const a = (1 - f) ** 1.1 * (1 - drain) * fade;
+        const sz = 0.42 + 0.55 * (1 - f);
+        c.pa(pt[0], pt[1] + oy, pt[2] + oz, col, 0.95 * a, sz, 0);
+        if (j % 2 === 0) {
+          const ahead = bezier3(SCRATCH_B, clamp01(s + 0.02), p0t, A, B, p3t);
+          c.pa(
+            pt[0],
+            pt[1] + oy,
+            pt[2] + oz,
+            col,
+            1.0 * a,
+            0.14,
+            2,
+            (ahead[0] - pt[0]) * 60,
+            (ahead[1] - pt[1]) * 60,
+            (ahead[2] - pt[2]) * 60,
+            0.6,
+          );
+        }
+        if (sd === 0 && j % 3 === 0) c.pa(pt[0] + oz, pt[1] - oy, pt[2], col, 1.0 * a, 0.1, 1);
       }
-      if (j % 3 === 0) c.pa(pt[0] + wob * 2, pt[1] - wob, pt[2], col, 1.0 * a, 0.09, 1);
     }
     const head = bezier3(SCRATCH_B, clamp01(fu), p0t, A, B, p3t);
     const k = c.keepK(head[0], head[1], head[2]);
-    c.glow(head[0], head[1], head[2], 1.9, col, 1.6 * (1 - drain) * k);
-    c.star(head[0], head[1], head[2] + 0.05, 1.3, col, 1.0 * (1 - drain) * k);
-    c.light(1, head[0], head[1], head[2] + 0.6, col, 0.8 * (1 - drain) * k, 3.2);
+    c.glow(head[0], head[1], head[2], 1.2, col, 1.5 * (1 - drain) * k);
+    c.star(head[0], head[1], head[2] + 0.05, 1.0, col, 1.0 * (1 - drain) * k);
+    c.light(1, head[0], head[1], head[2] + 0.6, col, 0.9 * (1 - drain) * k, 3.4);
   }
-  // 820: arrival: the mask flares (the eye slits go to #f2d8ff for 120 ms)
-  if (age >= THEFT.flyEnd && age < THEFT.flyEnd + 280) {
-    const u = (age - THEFT.flyEnd) / 280;
+  // ---- arrival: a coloured ring around Nul's silhouette and a capped glint in the eye slits
+  if (age >= THEFT.flyEnd && age < THEFT.flyEnd + 520) {
+    const u = (age - THEFT.flyEnd) / 520;
+    const e = easeOutCubic(u);
     const k = c.keepK(p3.x, p3.y, p3.z);
-    c.glow(p3.x, p3.y, p3.z + 0.1, 0.9 + 0.5 * u, MASK_FLASH, 1.2 * (1 - u) * c.flashK * k);
-    c.star(
+    c.line(
       p3.x,
       p3.y,
-      p3.z + 0.12,
-      0.9,
-      [col[0] * 0.8 + 0.6, col[1] * 0.8 + 0.6, col[2] * 0.8 + 0.6],
-      0.9 * (1 - u) * c.flashK * k,
+      p3.z + 0.35,
+      3.0 + 2.2 * e,
+      5.2 + 2.2 * e,
+      0.25 + 0.5 * e,
+      col,
+      [col[0] * 0.5, col[1] * 0.5, col[2] * 0.5],
+      1.15 * (1 - u) * k,
+      false,
     );
+    c.line(
+      p3.x,
+      0.06,
+      p3.z + 0.2,
+      2.6 + 3.2 * e,
+      2.6 + 3.2 * e,
+      0.3 + 0.5 * e,
+      col,
+      [col[0] * 0.5, col[1] * 0.5, col[2] * 0.5],
+      1.0 * (1 - u) * k,
+      true,
+    );
+    if (age < THEFT.flyEnd + 280) {
+      const g = 1 - (age - THEFT.flyEnd) / 280;
+      bossAt(c, NUL_MASK, P2);
+      c.glow(P2.x, P2.y, P2.z + 0.1, 0.55, MASK_FLASH, 0.5 * g * c.flashK * k);
+    }
+    const nr = c.n(14);
+    for (let j = 0; j < nr; j++) {
+      const th = (j / nr) * TAU + rnd(i.seed, j, 133);
+      const rr = (1.2 + 1.6 * e) * (0.7 + 0.5 * rnd(i.seed, j, 134));
+      c.pa(
+        p3.x + Math.cos(th) * rr,
+        p3.y + 0.4 + Math.sin(th) * rr * 1.1,
+        p3.z + 0.3,
+        col,
+        0.8 * (1 - u) * k,
+        0.14,
+        0,
+      );
+    }
   }
 };
 
 // ================================================================================================ auraCollapse
 
-/** Part C 20.0: the aura's rings and pillar are `HeroAura.setCollapse`; this adds the grey smoke puff and the last sparks falling. */
+/**
+ * Part C 20.0: the aura's rings and pillar are `HeroAura.setCollapse`; this adds the grey smoke and the last sparks falling.
+ * P4.2 (P1-6): the smoke spawns BEHIND the sprite (z -0.4), is at most 0.35 alpha and is gone by 1.2 s (it veiled the kneeling
+ * knight's face and chest and read as a smeared kneel); a 2-frame white flash lands with the pillar snap.
+ */
 const auraCollapse: CueRenderer = (c, i) => {
   const age = i.ageMs;
   if (age < 0) return;
@@ -757,16 +869,16 @@ const auraCollapse: CueRenderer = (c, i) => {
   const hz = c.hero.z;
   const nsm = c.n(14);
   for (let j = 0; j < nsm; j++) {
-    const tau = (age - 760 - j * 30) / 1000;
-    if (tau < 0 || tau > 1.0) continue;
+    const tau = (age - 760 - j * 20) / 1000;
+    if (tau < 0 || tau > 0.44) continue;
     const th = rnd(i.seed, j, 71) * TAU;
-    const a = Math.min(1, (1 - tau) * 2.2);
+    const a = Math.min(1, (1 - tau / 0.44) * 2.2);
     c.pn(
-      hx + Math.cos(th) * 0.45 * (0.4 + tau),
-      0.5 + (j % 4) * 0.22 + 0.7 * tau,
-      hz + 0.2 + Math.sin(th) * 0.25,
+      hx + Math.cos(th) * 0.6 * (0.4 + tau),
+      0.4 + (j % 4) * 0.22 + 0.7 * tau,
+      hz - 0.4 + Math.sin(th) * 0.2,
       [0.18, 0.18, 0.2],
-      0.8 * a,
+      0.35 * a,
       0.5 + 0.7 * tau,
       0,
     );
@@ -786,6 +898,12 @@ const auraCollapse: CueRenderer = (c, i) => {
       0.05,
       0,
     );
+  }
+  // the snap: a short capped flash and a vignette dip (the hero's pillar line is `HeroAura`'s)
+  if (age >= 700 && age < 800) {
+    const u = (age - 700) / 100;
+    c.out.flash = Math.max(c.out.flash, 0.12 * (1 - u) * c.flashK * c.k);
+    c.out.vignette = Math.max(c.out.vignette, 0.25 * (1 - u) * c.k);
   }
 };
 
@@ -919,13 +1037,13 @@ const letterVortex: CueRenderer = (c, i) => {
     const y = Math.max(1.5, 1.5 + bossY + u * 5 + (rnd(i.seed, n, 92) - 0.5) * 1.2);
     const x = bx + Math.cos(th) * r;
     const z = bz + Math.sin(th) * r * 0.7;
-    const onCloak = Math.abs(x - bx) < 1.35 ? 0.12 : 1;
+    const onCloak = Math.abs(x - bx) < 1.35 ? 0 : 1;
     const a = smoothstep(0, 0.1, u) * (1 - smoothstep(0.7, 1, u)) * onCloak;
     const ch = VORTEX_TEXT[
       (n * 7 + Math.floor(rnd(i.seed, n, 93) * 5)) % VORTEX_TEXT.length
     ] as string;
-    c.glyph(x, y, z, 0.72, glyphIndex(ch), Math.sin(th) * 0.25, BONE, a);
-    if (n % 3 === 0) c.pa(x, y, z - 0.02, [0.8, 0.4, 2.0], 0.22 * a, 0.55, 0);
+    c.glyph(x, y, z, 1.0, glyphIndex(ch), Math.sin(th) * 0.25, BONE, a);
+    c.pa(x, y, z - 0.02, [0.8, 0.4, 2.0], 0.34 * a, 0.8, 0);
     live++;
   }
 };
@@ -950,6 +1068,10 @@ const silenceFog: CueRenderer = (c, i) => {
     const x = c.hero.x + 4 + (j - (nc - 1) / 2) * 3.2 + (rnd(i.seed, j, 101) - 0.5) * 1.5;
     // keep the hero's silhouette: a card passing the hero's depth thins out in front of him
     const nearHero = Math.abs(x - c.hero.x) < 3.2 && Math.abs(zz - c.hero.z) < 1.6 ? 0.4 : 1;
+    // P4.2: a card within 6 m of the lens fades out (it veiled the knight's close-up), and the whole bank thins after the peak
+    const cam = c.world.camera.camera.position;
+    const camD = Math.hypot(x - cam.x, 1.7 - cam.y, zz - cam.z);
+    const thin = 1 - 0.6 * smoothstep(S.peakMs, S.backMs, age);
     c.card(
       CardShape.Fog,
       x,
@@ -958,7 +1080,7 @@ const silenceFog: CueRenderer = (c, i) => {
       7,
       3.6,
       FOG_GREY,
-      0.55 * f * nearHero,
+      0.55 * f * nearHero * smoothstep(3, 6, camD) * thin,
       false,
       j * 3.1 + rnd(i.seed, j, 102) * 10,
     );
@@ -991,21 +1113,14 @@ const ember: CueRenderer = (c, i) => {
   const age = i.ageMs;
   if (age < 0) return;
   const hx = num(i, "x", c.hero.x + 0.5);
-  const hy = num(i, "y", 0.8);
+  const hy = num(i, "y", 1.2);
   const hz = num(i, "z", c.hero.z + 0.25);
   const lvl = emberLevel(age);
   const shrink = age > num(i, "closeAt", 1e9) ? 0.55 : 1;
-  c.light(
-    0,
-    hx,
-    hy + 0.15,
-    hz + 0.4,
-    EMBER_LIGHT,
-    EMBER.intensity * 1.5 * lvl * shrink,
-    EMBER.radius * 1.3,
-  );
-  c.glow(hx, hy, hz, 0.34 * shrink, [1.0, 0.55, 0.2], 1.6 * Math.min(1, lvl));
-  c.glow(hx, hy, hz - 0.02, 1.1 * shrink, [1.0, 0.45, 0.15], 0.45 * Math.min(1, lvl));
+  // P4.2: 2.4 intensity, 3 m radius at the palm, so the light reads on the hand and the face (the only warm light on screen)
+  c.light(0, hx, hy + 0.1, hz + 0.45, EMBER_LIGHT, EMBER.intensity * lvl * shrink, EMBER.radius);
+  c.glow(hx, hy, hz, 0.5 * shrink, [1.0, 0.55, 0.2], 1.8 * Math.min(1, lvl));
+  c.glow(hx, hy, hz - 0.02, 1.5 * shrink, [1.0, 0.45, 0.15], 0.55 * Math.min(1, lvl));
   for (let j = 0; j < 3; j++) {
     const life = 1.4;
     const ph = (((age / 1000 + j * 0.47) % life) + life) % life;

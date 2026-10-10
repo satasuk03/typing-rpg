@@ -31,6 +31,8 @@ export interface PrologueFxDeps {
   heroRim?(amount: number, rgb: readonly [number, number, number]): void;
   /** The sim's defId of an enemy (to tell Nul from his adds). */
   defOf?(enemyId: number): string | null;
+  /** P4.2: the combat library's persistent state (Aegis bubble, the boss intro rune circle) that a cutscene switches off. */
+  combat?: { setCutscene(on: boolean): void } | null;
 }
 
 /** How long a live cue is kept after it starts (ms): longer than its picture, shorter than a leak. */
@@ -49,6 +51,31 @@ const LIVE_LIFETIME: Readonly<Record<PrologueVfxId, number>> = {
   silenceFog: 1e9,
   ember: 1e9,
 };
+
+/** The prewarm set: one mid-life instance of every cue (auraCollapse before its snap, so the streak is untouched). */
+const WARM_CUES: readonly {
+  id: PrologueVfxId;
+  age: number;
+  params?: Record<string, number | string>;
+}[] = [
+  { id: "inkRise", age: 500 },
+  { id: "skyTear", age: 900, params: { closeAt: 3400 } },
+  { id: "hushBolt", age: 330 },
+  { id: "hushBolt", age: 520 },
+  { id: "ward", age: 900 },
+  { id: "surgeAura", age: 300, params: { mult: 16 } },
+  { id: "catchFireball", age: 700 },
+  { id: "inkWrite", age: 400 },
+  { id: "theftStream", age: 500, params: { k: 1 } },
+  { id: "theftStream", age: 900, params: { k: 3 } },
+  { id: "gateDarken", age: 800 },
+  { id: "letterVortex", age: 1500 },
+  { id: "silenceFog", age: 1500 },
+  { id: "ember", age: 800 },
+];
+
+/** Intensity of the Part B mask glint. */
+const MASK_GLINT = 0.42;
 
 interface LiveCue {
   id: PrologueVfxId;
@@ -89,6 +116,10 @@ export class PrologueFx implements PrologueFxSink {
   private readonly ko = new Float32Array(16 * 4);
   private disposed = false;
   private enabled = true;
+  /** P4.2: Part C (the cutscene) has begun: combat leftovers are being cleared. */
+  private cutscene = false;
+  /** P4.2: frames left of the hidden prewarm (every cue kind drawn once under Part A's opening black). */
+  private warmFrames = 0;
   /** Probe hook: false keeps the aura driving but skips every cue's drawing (a with / without comparison of the cues alone). */
   private cuesVisible = true;
   /** Dev / test hook: cues forced by `trigger` that never expire (the dev scene seeks by age instead). */
@@ -129,10 +160,42 @@ export class PrologueFx implements PrologueFxSink {
     this.live.push({ id, ageMs: 0, seed: this.seedN, params });
     if (this.live.length > 24) this.live.shift();
   }
+  /**
+   * P4.2: draw every cue kind for `frames` frames so the shaders compile, the buffers upload and the lazy quads are built BEFORE
+   * Part B (the P4.1 first-frame hitch). Call it while the screen is black (Part A's opening fade).
+   */
+  prewarm(frames = 3): void {
+    this.warmFrames = frames;
+    // the servants' and Nul's sprites (geometry + textures upload on their first draw): a visible actor each, in the hero's spot,
+    // freed after the warm frames
+    if (this.warmActors.length === 0) {
+      const h = { x: 0, y: 0, z: 0 };
+      this.deps.anchors.hero(h);
+      for (const key of ["monster.shade", "monster.wisp", "monster.nul"]) {
+        try {
+          const a = this.deps.world.addActor(key, "idle", { scale: 1, rim: 1, blobW: 1 });
+          a.place(h.x, 0, h.z);
+          this.warmActors.push(a);
+        } catch {
+          /* a key the sprite source does not have: nothing to warm */
+        }
+      }
+    }
+  }
+  private readonly warmActors: { dispose(): void; place(x: number, y: number, z: number): void }[] =
+    [];
+
   /** Drop every live cue (a new attempt, the climax). */
   clear(): void {
     this.live.length = 0;
     this.wardAge = this.wardOut = this.wardHit = -1;
+  }
+  /** A new attempt: the cutscene state is left (re-arms `enterCutscene`). */
+  leaveCutscene(): void {
+    if (!this.cutscene) return;
+    this.cutscene = false;
+    this.deps.combat?.setCutscene(false);
+    this.aura?.setCutscene(false);
   }
 
   // ---- sink (event bindings)
@@ -145,7 +208,8 @@ export class PrologueFx implements PrologueFxSink {
   bossIntro(_e: EventOf<"BossIntroStarted">): void {
     if (!this.view?.prologue) return;
     // B2: open, hold to the end of the boss intro (3.4 s, art direction §4.2), then close; Part C's exit tear is a scripted cue
-    this.trigger("skyTear", { closeAt: 3400 });
+    // P4.2 (P2-3): the mouth of the tear sits just above Nul's crown, in the boss-intro frame (the layout marker is 7 m up, off frame)
+    this.trigger("skyTear", { closeAt: 3400, ty: 5.3 });
   }
   enemyAttack(e: EventOf<"EnemyAttack">): void {
     if (!this.view?.prologue) return;
@@ -159,6 +223,18 @@ export class PrologueFx implements PrologueFxSink {
   climax(_e: EventOf<"PrologueClimax">): void {
     this.clear();
     this.aura?.setPrologue(null);
+    this.enterCutscene();
+  }
+
+  /**
+   * P4.2 (P1-4): Part C begins. The combat state that leaked into the cutscene goes: the Aegis bubble (about 300 ms), the
+   * hero's combo rune circle and Nul's cyan boss-intro circle (both gone by 1.5 s). Idempotent; `reset()` re-arms it.
+   */
+  enterCutscene(): void {
+    if (this.cutscene) return;
+    this.cutscene = true;
+    this.deps.combat?.setCutscene(true);
+    this.aura?.setCutscene(true);
   }
 
   // ------------------------------------------------------------------------------------------ frame
@@ -205,6 +281,27 @@ export class PrologueFx implements PrologueFxSink {
       this.inst.id = s.id;
       this.draw(s.id, s.ageMs, s.seed, s.params, s);
     }
+    // P4.2 (P1-1): the low-key grade lowers the whole frame, so Nul's pale mask gets a small cool glint (mask : cloak >= 6);
+    // a tiny glow on the mask only (the cloak stays ink: P3), dimmed near plates
+    if (this.view?.prologue && !this.cutscene && c.bossOk) {
+      const k = c.keepK(c.boss.x - 0.1, c.boss.y + 3.3, c.boss.z + 0.3);
+      c.glow(
+        c.boss.x - 0.1,
+        c.boss.y + 3.3,
+        c.boss.z + 0.45,
+        0.6,
+        [0.95, 0.85, 1.25],
+        MASK_GLINT * k,
+      );
+    }
+    if (this.warmFrames === 0 && this.warmActors.length > 0) {
+      for (const a of this.warmActors) a.dispose();
+      this.warmActors.length = 0;
+    }
+    if (this.warmFrames > 0) {
+      this.warmFrames--;
+      for (const w of WARM_CUES) this.draw(w.id, w.age, 0x77a1, w.params);
+    }
     c.end();
     this.driveAura();
     this.dimSun(moodBlend);
@@ -226,6 +323,7 @@ export class PrologueFx implements PrologueFxSink {
     inst.params = params;
     inst.from = src?.from;
     inst.to = src?.to;
+    inst.scripted = src !== undefined;
     CUE_RENDERERS[id](this.ctx, inst);
   }
 

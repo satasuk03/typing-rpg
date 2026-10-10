@@ -26,6 +26,8 @@ export interface SessionPrologueFxOptions {
   hud: Hud;
   router: EventRouter;
   typing: SessionTypingFx | null;
+  /** P4.2: the combat library, so the cutscene can switch its persistent state off (Aegis bubble, boss circle). */
+  combat?: { setCutscene(on: boolean): void } | null;
   /** Part C: extra CSS-px rects (x, y, w, h each) the world effects keep away from: the dialogue box and the ink line. */
   extraKeepOut?: (out: Float32Array, offset: number) => number;
 }
@@ -108,10 +110,14 @@ export function attachPrologueFx(o: SessionPrologueFxOptions): SessionPrologueFx
       return n;
     },
     heroRim: (amount, rgb) => stage.rimFlash("hero", amount, rgb),
+    combat: o.combat ?? null,
     defOf: (id) => stage.view?.enemies.find((e) => e.id === id)?.defId ?? null,
   });
   router.sinks.prologue = fx;
-  const off = router.register(["LevelStarted"], () => fx.clear());
+  const off = router.register(["LevelStarted"], () => {
+    fx.clear();
+    fx.leaveCutscene();
+  });
   if (typing) fx.attachAura(typing.handle.worldFx.aura);
   fx.setSettings(hud.getSettings(), world.qualityTier);
   return {
@@ -126,6 +132,7 @@ export function attachPrologueFx(o: SessionPrologueFxOptions): SessionPrologueFx
     },
     reset() {
       fx.clear();
+      fx.leaveCutscene();
     },
     dispose() {
       off();

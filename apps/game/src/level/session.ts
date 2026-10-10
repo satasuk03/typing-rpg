@@ -137,6 +137,9 @@ interface ProState {
   frozen: boolean;
   /** Part C began before the boss appeared (idle auto-advance): the stage stands Nul up for the cutscene. */
   nulStandIn: boolean;
+  /** P4.2: the prewarm ran / frames of HUD prewarm left. */
+  warmed: boolean;
+  warmHud: number;
 }
 
 /** The layout the prologue plays on: `assets/levels/prologue.json` once it exists, else a Ch1 boss level (fallback). */
@@ -305,6 +308,7 @@ export class PlaySession {
         hud: this.hud,
         router: this.router,
         typing: this.typingFx,
+        combat: this.combat?.fx ?? null,
         extraKeepOut: (out, off) => this.cutsceneKeepOuts(out, off),
       });
       this.router.register(["EnemySpawned", "BossIntroStarted", "EnemyAttack"], (e) =>
@@ -543,6 +547,7 @@ export class PlaySession {
       this.pro?.phase === "C" ? this.cutsceneView(this.lastView) : this.lastView;
     const alpha = paused ? 0 : this.lastAlpha;
     const animDt = paused ? 0 : dt;
+    this.proPrewarm();
 
     const worldDt = this.typingFx ? this.typingFx.update(animDt, view) : animDt;
     this.stage.setFxSettings(this.hud.getSettings());
@@ -553,8 +558,14 @@ export class PlaySession {
     this.applyFade();
     this.world.render();
     // Part A has no view yet (the sim has not started): only the cinematic overlay (caption, dialogue, skip ring)
-    if (pro?.phase === "A") this.hud.renderOverlay(animDt);
-    else this.hud.render(view, alpha, animDt);
+    if (pro?.phase === "A") {
+      // P4.2: the HUD's first full frames are drawn once under the opening black (the overlay clears the canvas right after)
+      if (pro.warmHud > 0) {
+        pro.warmHud--;
+        this.hud.render(view, 0, 0);
+      }
+      this.hud.renderOverlay(animDt);
+    } else this.hud.render(view, alpha, animDt);
     this.drawSkipFade(now);
     this.screens.updateView(view);
     this.audio?.update();
@@ -617,6 +628,8 @@ export class PlaySession {
       cState: null,
       frozen: false,
       nulStandIn: false,
+      warmed: false,
+      warmHud: 0,
     };
     this.pro = pro;
     const holdMs = o.holdMs ?? SKIP_HOLD_MS;
@@ -969,6 +982,7 @@ export class PlaySession {
     // the combat library's Fireball (the cast that ended Part B) and every servant still standing go: the catch is the
     // cutscene's own (`catchFireball` draws a frozen Fireball in Nul's palm); the plates / bars fade out over 300 ms
     this.combat?.fx.clear();
+    this.proFx?.fx.enterCutscene(); // P4.2: the Aegis bubble, the combo rune and Nul's boss-intro circle go (idle path too)
     this.stage.dissolveAdds();
     this.standUpNul();
     pro.hudPro.showGrimoire(true);
@@ -1064,6 +1078,24 @@ export class PlaySession {
     pro.hudPro.setCutscene(pro.cState, jumped);
     pro.hudPro.settle();
     return true;
+  }
+
+  /**
+   * P4.2 prewarm: while Part A is still fully black, draw every prologue cue kind and the HUD once, so the first Part B frames
+   * do not pay for shader compiles and first draws (50 ms at tier 0, 133 ms at tier 2 with 4x throttle). `?prewarm=0` skips it.
+   */
+  private proPrewarm(): void {
+    const pro = this.pro;
+    if (pro?.phase !== "A" || pro.warmed || !pro.cState) return;
+    if (pro.cState.hud.fade < 0.99) return;
+    pro.warmed = true;
+    if (
+      typeof location !== "undefined" &&
+      new URLSearchParams(location.search).get("prewarm") === "0"
+    )
+      return;
+    this.proFx?.fx.prewarm(3);
+    pro.warmHud = 3;
   }
 
   /** The timeline's black fade (Part A opens on black, Part C ends on it): a full-screen black flash in the grade. */
