@@ -99,8 +99,11 @@ export function loadMonsterSprites(file: URL = ART_FILE): string[] | null {
   if (!m?.[1]) return null;
   // v2.0: the Chapter 2 sprites are a second union (Ch2MonsterArt), registered by render/sprites/ch2Monsters.ts.
   const m2 = /type Ch2MonsterArt = ([^;]+);/.exec(src);
+  // v2.2: the prologue villain is a third union (PrologueArt = "nul", registered by render/sprites/prologueArt.ts).
+  const m3 = /type PrologueArt = ([^;]+);/.exec(src);
   return [
     ...m[1].matchAll(/"([A-Za-z0-9]+)"/g),
     ...(m2?.[1] ? m2[1].matchAll(/"([A-Za-z0-9]+)"/g) : []),
+    ...(m3?.[1] ? m3[1].matchAll(/"([A-Za-z0-9]+)"/g) : []),
   ].map((x) => x[1] as string);
 }

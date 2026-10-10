@@ -176,4 +176,20 @@ export const ENEMIES: EnemyDef[] = [
     hpWeight: 1,
     hitWeight: 1,
   }),
+  // ---- Prologue (v2.2, interfaces 14.2): the villain, prologue-only. Actor scale 1.0 (docs/vfx/prologue-art-direction.md),
+  // not the 1.6 boss default. `spriteId` "nul" = monster.nul (render/sprites/prologueArt.ts, P2.1).
+  EnemyDef.parse({
+    id: "nul",
+    name: "Nul",
+    archetype: "boss",
+    spriteId: "nul",
+    scale: 1.0,
+    baseIntervalS: 10,
+    heavy: true,
+    plateLength: [4, 5],
+    weaknesses: ["slash", "pierce", "arcane"],
+    shield: 6,
+    hpWeight: 1,
+    hitWeight: 1,
+  }),
 ];
