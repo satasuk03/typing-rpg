@@ -33,7 +33,17 @@ import {
 import type { PlateGeom } from "./plates";
 import { drawPlate, measurePlate } from "./plates";
 import type { Pop, PopAnchor, PopKind } from "./pops";
-import { PopSystem, popAlpha, popScale } from "./pops";
+import {
+  BOSS_BREAK_MAX_DIST,
+  BREAK_MAX_DIST,
+  fitBreakPop,
+  freeSpot,
+  inflate,
+  overlapsRect,
+  PopSystem,
+  popAlpha,
+  popScale,
+} from "./pops";
 import type { HudSettings } from "./settings";
 import { DEFAULT_HUD_SETTINGS, normalizeSettings } from "./settings";
 import type { PlatePalette } from "./theme";
@@ -138,10 +148,6 @@ interface Ghost {
 }
 
 const FRAME_SAMPLES = 240;
-/** Boss BREAK pop: max design-px distance of its centre from the boss head anchor. */
-const BOSS_BREAK_MAX_DIST = 160;
-/** Any other enemy's BREAK pop: preferred max distance from its head. */
-const BREAK_MAX_DIST = 200;
 
 export class Hud {
   readonly fx = new EffectLayers();
@@ -1042,7 +1048,7 @@ export class Hud {
       // other enemies: the same rule with a looser limit, and an unconstrained retry instead of the under-bar drop
       const head =
         p.kind === "break" && p.anchor.kind === "enemy" ? this.popAnchorCss(p.anchor) : null;
-      let maxD = bossBreak ? BOSS_BREAK_MAX_DIST : BREAK_MAX_DIST;
+      const maxD = bossBreak ? BOSS_BREAK_MAX_DIST : BREAK_MAX_DIST;
       const near = (r: Rect): boolean =>
         !head || Math.hypot(r.x + r.w / 2 - head.x / s, r.y + r.h / 2 - head.y / s) <= maxD;
       const ok = (r: Rect): boolean =>
@@ -1058,16 +1064,27 @@ export class Hud {
           p.offX = 0;
           p.offY = 0;
         } else {
-          const best = this.freeSpot(base, [...obst, ...placed], ok);
+          const best = freeSpot(base, [...obst, ...placed], ok);
           p.offX = best.x;
           p.offY = best.y;
         }
       }
       if (Number.isNaN(p.offX) && head && !bossBreak) {
-        maxD = Number.POSITIVE_INFINITY;
-        const best = this.freeSpot(base, [...obst, ...placed], ok);
-        p.offX = best.x;
-        p.offY = best.y;
+        // crowded: never drift far from the head. Shrink the pop (keep-out wins) and retry within the same clamp;
+        // if even the smallest size has no free spot it is skipped this frame (it fades with its lifetime).
+        const fit = fitBreakPop(
+          (k) => {
+            const pz = this.popPose(c, { ...p, size: p.size * k }, set);
+            return { x: pz.x - pz.w / 2, y: pz.y - pz.h / 2, w: pz.w, h: pz.h };
+          },
+          ok,
+          [...obst, ...placed],
+        );
+        if (fit) {
+          p.size *= fit.k;
+          p.offX = fit.x;
+          p.offY = fit.y;
+        }
       }
       if (Number.isNaN(p.offX) && bossBreak) {
         // fallback: directly under the boss bar (below its +22 px clearance), if no plate is there
@@ -1116,42 +1133,6 @@ export class Hud {
     const h = Math.abs(ft.y - hd.y) / s;
     const w = h * 0.55;
     return { x: hd.x / s - w / 2, y: Math.min(hd.y, ft.y) / s, w, h };
-  }
-
-  /** Smallest offset that clears every obstacle; tries single moves, then two-axis combinations. */
-  private freeSpot(
-    base: Rect,
-    obst: readonly Rect[],
-    ok: (r: Rect) => boolean,
-  ): { x: number; y: number } {
-    const gap = 6;
-    const dxs = [0];
-    const dys = [0];
-    for (const o of obst) {
-      if (!overlapsRect(base, o)) continue;
-      dys.push(o.y - gap - (base.y + base.h), o.y + o.h + gap - base.y);
-      dxs.push(o.x - gap - (base.x + base.w), o.x + o.w + gap - base.x);
-    }
-    let best: { x: number; y: number; c: number } | null = null;
-    for (const dx of dxs)
-      for (const dy of dys) {
-        const r: Rect = { ...base, x: base.x + dx, y: base.y + dy };
-        if (!ok(r)) continue;
-        const c = dx * dx + (dy > 0 ? 1.15 : 1) * dy * dy;
-        if (!best || c < best.c) best = { x: dx, y: dy, c };
-      }
-    if (!best) {
-      // crowded: scan a grid around the pop for the nearest free spot
-      for (let dy = -320; dy <= 320; dy += 10)
-        for (let dx = -420; dx <= 420; dx += 12) {
-          const r: Rect = { ...base, x: base.x + dx, y: base.y + dy };
-          if (!ok(r)) continue;
-          const c = dx * dx + dy * dy;
-          if (!best || c < best.c) best = { x: dx, y: dy, c };
-        }
-    }
-    // still nothing (screen full of plates): hide this pop rather than cover a word
-    return best ?? { x: Number.NaN, y: Number.NaN };
   }
 
   /** Font + size + animated centre of a pop (design px) and its bounding box. */
@@ -1458,10 +1439,3 @@ export class Hud {
 
 export type { PlateView, PopKind };
 export { BOSS_PLATE_W, ENEMY_BAR_W, keyStreakColor, PLATE_PALETTES };
-
-function inflate(r: Rect, n: number): Rect {
-  return { x: r.x - n, y: r.y - n, w: r.w + 2 * n, h: r.h + 2 * n };
-}
-function overlapsRect(a: Rect, b: Rect): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}

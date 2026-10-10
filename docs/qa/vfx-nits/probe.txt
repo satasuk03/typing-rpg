@@ -1,0 +1,8 @@
+W5 FX-only glare probe, now also counting the sprite hit-flash (uFlash zeroed in the FX-off render). Real Metal, 90 WPM bot, story, 96 px window.
+Frames with a window >= 60% clipped, before (main shader) -> after (cave flash mix 1.0 -> 0.55, colour 1.0 -> 0.8):
+  L09: 114/1373 = 8.30%  ->  89/1388 = 6.41%   (>=35%: 16.02% -> 15.92%; max 0.908 -> 0.883)
+  L10:  37/3082 = 1.20%  ->  11/3016 = 0.36%   (>=35%:  2.60% ->  1.49%; max 0.851 -> 0.734)
+  (the old probe without sprite flash reported L09 3.3%, L10 0.13%)
+Small-enemy BREAK pop max distance from head (design px, bot runs, metal-nits):
+  before: L10 173, L09 178, L05 182 (clamp 200, then unconstrained retry)
+  after:  L10 122, L09 127, L05 127 (hard clamp 140; crowded pops shrink 1/.8/.64/.5, else are skipped)

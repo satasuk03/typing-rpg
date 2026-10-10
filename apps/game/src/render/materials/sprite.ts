@@ -64,8 +64,9 @@ void main(){
   col += c.rgb * uTint * rimTint * (CAVE_FILL * caveLift);
   col += texture2D(emap, vUv).rgb * uEmis;
   // hit flash: on the bright forest a full white sprite (plus bloom) is a 100 px glare blob, so the flash is weaker and
-  // a little dimmer there; in the cave (caveK 1) it is unchanged
-  col = mix(col, uFlashCol * mix(0.75, 1.0, uCaveK), uFlash * mix(0.5, 1.0, uCaveK));
+  // a little dimmer there. Nit fix (after W5): in the dark cave (caveK 1) a full-white sprite is the brightest thing on
+  // screen and stacks with the additive FX glare, so it is also reduced (0.55 mix, 0.8 colour): the hit stays readable
+  col = mix(col, uFlashCol * mix(0.75, 0.8, uCaveK), uFlash * mix(0.5, 0.55, uCaveK));
   col += edge * uEdgeCol;
   col = applyFog(col, vWP);
   if (uRimFlash > 0.0 || caveLift > 0.0) {
