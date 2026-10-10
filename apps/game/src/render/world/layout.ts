@@ -351,7 +351,7 @@ const propLight = z.strictObject({
 
 const FIELDS = {
   Level: z.strictObject({
-    id: z.string().regex(/^ch\d+-l\d{2}$/),
+    id: z.string().regex(/^(ch\d+-l\d{2}|prologue)$/),
     chapter: z.number().int().positive(),
     name: z.string().min(1),
     note: z.string().default(""),
