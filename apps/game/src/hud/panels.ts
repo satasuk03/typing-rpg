@@ -5,6 +5,16 @@ import { bar, clamp, damageIcon, diamond, frame, shieldBadge, txt } from "./draw
 import type { Rect } from "./layout";
 import type { HudSettings } from "./settings";
 import {
+  DEFAULT_ACCENT,
+  FRAME_CELLS,
+  getOrbFrame,
+  getRingCells,
+  getSkillIcon,
+  ICON_PX,
+  ICON_SCALE,
+  SKILL_ACCENT,
+} from "./skillIcons";
+import {
   COMBO_TIER_COLORS,
   COMBO_TIER_NAMES,
   FONT_DISP,
@@ -260,27 +270,6 @@ function skillName(id: string): string {
   };
   return m[id] ?? id.toUpperCase();
 }
-function skillIcon(id: string): string {
-  const m: Record<string, string> = {
-    slashWave: "slash",
-    piercingThrust: "pierce",
-    fireball: "fire",
-    frostLock: "ice",
-    mendingLight: "light",
-    aegis: "shield",
-  };
-  return m[id] ?? "arcane";
-}
-const SKILL_COL: Record<string, string> = {
-  fire: "#ff9a40",
-  ice: "#8ae0ff",
-  light: "#fff08a",
-  slash: "#e8eef6",
-  pierce: "#b8e0ff",
-  blunt: "#d8b080",
-  arcane: "#d49aff",
-  shield: "#8ab8ff",
-};
 
 export const skillCenter = (i: number, H: number): { x: number; y: number } => ({
   x: 64 + i * 92,
@@ -292,49 +281,65 @@ export function drawSkill(p: PanelCtx, sk: SkillView, charge: number): void {
   const { c, time, settings } = p;
   const { x: cx, y: cy } = skillCenter(sk.slot, p.H);
   const R = SKILL_R;
-  const ic = skillIcon(sk.id);
-  const col = SKILL_COL[ic] ?? "#ffffff";
-  c.beginPath();
-  c.arc(cx, cy, R + 7, 0, 7);
-  c.fillStyle = "rgba(8,6,12,0.88)";
-  c.fill();
-  c.lineWidth = 3;
-  c.strokeStyle = "#000";
-  c.stroke();
-  c.lineWidth = 1.5;
-  c.strokeStyle = "#7a6448";
-  c.stroke();
-  c.beginPath();
-  c.arc(cx, cy, R, 0, 7);
-  c.fillStyle = "#14101c";
-  c.fill();
-  damageIcon(c, ic, cx, cy, 13);
+  const col = SKILL_ACCENT[sk.id] ?? DEFAULT_ACCENT;
   const prog = clamp(sk.ready ? 1 : charge, 0, 1);
-  if (!sk.ready) {
-    c.beginPath();
-    c.moveTo(cx, cy);
-    c.arc(cx, cy, R, -Math.PI / 2 + prog * Math.PI * 2, Math.PI * 1.5);
-    c.closePath();
-    c.fillStyle = "rgba(6,4,10,0.62)";
-    c.fill();
-  }
-  c.beginPath();
-  c.arc(cx, cy, R + 3.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * prog);
-  c.lineWidth = 4;
-  c.strokeStyle = col;
-  c.stroke();
+  const S = ICON_SCALE;
+  const fo = (FRAME_CELLS * S) / 2;
+  const fx = Math.round(cx - fo);
+  const fy = Math.round(cy - fo);
+  c.save();
+  c.imageSmoothingEnabled = false;
+  // ready: soft additive glow behind the frame, pulsing
   if (sk.ready && settings.effectsIntensity > 0) {
+    const pulse = settings.reducedFlash ? 0.5 : 0.5 + 0.5 * Math.sin(time * 5);
+    const a = (0.25 + 0.2 * pulse) * settings.effectsIntensity;
     c.save();
     c.globalCompositeOperation = "lighter";
-    const a =
-      (0.25 + (settings.reducedFlash ? 0 : 0.15 * Math.sin(time * 5))) * settings.effectsIntensity;
     const rg = c.createRadialGradient(cx, cy, 0, cx, cy, R * 1.9);
-    rg.addColorStop(0, `rgba(255,200,110,${a})`);
+    rg.addColorStop(0, `rgba(255,200,110,${a * 0.7})`);
     rg.addColorStop(1, "rgba(0,0,0,0)");
     c.fillStyle = rg;
     c.fillRect(cx - R * 2, cy - R * 2, R * 4, R * 4);
     c.restore();
   }
+  c.drawImage(getOrbFrame(), fx, fy, FRAME_CELLS * S, FRAME_CELLS * S);
+  const ic = getSkillIcon(sk.id);
+  const ix = Math.round(cx - (ICON_PX * S) / 2);
+  const iy = Math.round(cy - (ICON_PX * S) / 2);
+  const rows = sk.ready ? ICON_PX : Math.floor(prog * ICON_PX);
+  if (rows < ICON_PX) {
+    c.drawImage(ic.dim, 0, 0, ICON_PX, ICON_PX, ix, iy, ICON_PX * S, ICON_PX * S);
+  }
+  if (rows > 0) {
+    // colour fills bottom-up in whole pixel rows
+    const sy = ICON_PX - rows;
+    c.drawImage(ic.color, 0, sy, ICON_PX, rows, ix, iy + sy * S, ICON_PX * S, rows * S);
+    if (rows < ICON_PX) {
+      c.fillStyle = "rgba(255,255,255,0.55)";
+      c.fillRect(ix, iy + sy * S, ICON_PX * S, 1);
+    }
+  }
+  // pixel charge ring: cells filled clockwise from 12 o'clock
+  const ring = getRingCells();
+  c.fillStyle = col;
+  c.beginPath();
+  for (const cell of ring) {
+    if (cell.t <= prog) c.rect(fx + cell.x * S, fy + cell.y * S, S, S);
+  }
+  c.fill();
+  if (sk.ready && settings.effectsIntensity > 0) {
+    // ready: sparkling pixels on the full ring
+    const tw = settings.reducedFlash ? 1 : Math.sin(time * 5) > 0 ? 1 : 0.5;
+    c.globalAlpha = 0.6 * tw * settings.effectsIntensity;
+    c.fillStyle = "#ffffff";
+    c.beginPath();
+    for (const cell of ring) {
+      if ((cell.x + cell.y) % 5 === 0) c.rect(fx + cell.x * S, fy + cell.y * S, S, S);
+    }
+    c.fill();
+    c.globalAlpha = 1;
+  }
+  c.restore();
   txt(c, skillName(sk.id), cx, cy + R + 22, 11, "#d8c8e8", { align: "center", ls: 1 });
   txt(
     c,

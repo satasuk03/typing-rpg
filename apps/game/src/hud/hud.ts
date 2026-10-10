@@ -365,7 +365,7 @@ export class Hud {
    */
   getPlateLabelRectInto(plateId: number, out: Rect): boolean {
     const e = this.entries.get(plateId);
-    if (!e || !e.geom.label) return false;
+    if (!e?.geom.label) return false;
     const chars = e.geom.label.length + (e.geom.hasTimer ? 6 : 0);
     out.x = (e.box.x + e.geom.fx) * this.s;
     out.y = e.box.y * this.s;
