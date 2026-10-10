@@ -1,6 +1,16 @@
 import { contentBundle } from "@hd2d/content";
 import { migrateSave } from "@hd2d/shared";
-import { createLevel, getResult, resolveLevel, step, upgradeCap } from "@hd2d/sim";
+import {
+  createLevel,
+  getResult,
+  guardRatingBp,
+  levelGold,
+  parArmorBp,
+  resolveLevel,
+  starGold,
+  step,
+  upgradeCap,
+} from "@hd2d/sim";
 import { describe, expect, it } from "vitest";
 import { makeRunConfig } from "../../src/level/config";
 import * as ops from "../../src/meta/ops";
@@ -203,5 +213,27 @@ describe("applyLevelResult", () => {
     expect(ops.goldMultFor(a.save, "ch1-l03", "2026-10-09").goldMultBp).toBe(4000);
     // the result is a valid save
     expect(() => migrateSave(b.save)).not.toThrow();
+  });
+});
+
+describe("Ch1 armor path to the Golem (guard leak v1.9)", () => {
+  // Golem P = 1.25 x par armor; leak = clamp(1 - G/P, 0, 50%) in bp
+  const golemLeakBp = (s: ops.Save): number =>
+    Math.max(
+      0,
+      10_000 - Math.floor((guardRatingBp(ops.loadoutOf(s)) * 10_000) / (parArmorBp(1) * 1.25)),
+    );
+
+  it("first-clear gold of L1-L9 (1 star each, no chests) buys armor +3 in Gear: leak <= 5% at the Golem", () => {
+    let gold = 0;
+    for (let i = 1; i <= 9; i++) {
+      const g = levelGold(1, i);
+      gold += g + starGold(1, g);
+    }
+    let s: ops.Save = { ...fresh(), wallet: { gold } };
+    expect(golemLeakBp(s)).toBe(2000); // par armor: 20%
+    for (let n = 0; n < 3; n++) s = ops.upgradeGear(s, 2, 2_000) as ops.Save;
+    expect(s.inventory.gear.find((g) => g.uid === 2)?.upgrade).toBe(3);
+    expect(golemLeakBp(s)).toBeLessThanOrEqual(500);
   });
 });

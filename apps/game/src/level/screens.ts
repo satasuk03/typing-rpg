@@ -56,7 +56,7 @@ export function sumLeakDamage(events: readonly { type: string; leakDamage?: numb
 /** One results-screen line when armor let damage through a guard; null when nothing leaked. */
 export function leakHintNote(leakDamage: number): string | null {
   return leakDamage > 0
-    ? `Your armor let <b>${leakDamage}</b> damage through. Upgrade armor to stop leaks.`
+    ? `Your armor let <b>${leakDamage}</b> damage through. Upgrade armor under Gear on the map to stop leaks.`
     : null;
 }
 
