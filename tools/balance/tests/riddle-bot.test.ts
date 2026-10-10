@@ -52,7 +52,7 @@ describe("the persona bot on a riddle boss", () => {
   const run = (seed: number) =>
     playLevel({
       def,
-      loadout: starterLoadout("starter", 2),
+      loadout: starterLoadout("ch1-full", 2),
       seed,
       attempt: drawAttempt(persona, seed, false),
       options: {

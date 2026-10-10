@@ -134,6 +134,30 @@ describe("T4.2 content rules catch breakage", () => {
     expect(msgs.some((m) => m.includes("unknown placeholder"))).toBe(true);
     expect(msgs.some((m) => m.includes("does not exist"))).toBe(true);
   });
+  it("slow drip: the shipped schedule passes; future skills are fine; the starter kit, gaps and alternation are enforced", () => {
+    const msgs = (b: ContentBundle): string[] =>
+      ruleSkills(b, ctx.sfxIds)
+        .filter((i) => i.severity === "error")
+        .map((i) => i.message);
+    expect(msgs(contentBundle)).toEqual([]);
+    // a future skill moved into the starter kit (no unlockLevel)
+    const kit = clone();
+    const gambit = kit.passives.find((p) => p.id === "openingGambit");
+    if (gambit) delete gambit.unlockLevel;
+    expect(msgs(kit)).toContain("starter kit must be exactly one passive");
+    // two unlocks in a row on adjacent levels, both actives
+    const fast = clone();
+    const frost = fast.actives.find((a) => a.id === "frostLock");
+    if (frost) frost.unlockLevel = "ch1-l03";
+    const m = msgs(fast);
+    expect(m.some((x) => x.includes("1 levels apart"))).toBe(true);
+    expect(m.some((x) => x.includes("must alternate"))).toBe(true);
+    // never on a boss level
+    const boss = clone();
+    const cm = boss.passives.find((p) => p.id === "comeback");
+    if (cm) cm.unlockLevel = "ch1-l10";
+    expect(msgs(boss).some((x) => x.includes("land before the boss"))).toBe(true);
+  });
   it("enemy sprite not in the renderer and uncovered weakness", () => {
     const b = clone();
     const e = b.enemies[0];

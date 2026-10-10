@@ -25,10 +25,11 @@ Willow 1.30).
 
 The Ch2 player is **Fireball + Aegis; Clean Cut + Calm Mind + Iron Will**.
 - Calm Mind replaces Steady Hands from **L6**. It is unlocked by the L5 first clear, so it is not in play on L5's first
-  try.
-- Reveal (unlocked by the L3 first clear) is **not** equipped. It is available as `--kit ch2-reveal`.
-- The kit lives in `runner.ts` (`defaultKit`, `starterLoadout`). The unlock gating reads `unlockLevel` from content
-  `skills.ts`, so it cannot drift.
+  try. (**§10:** since the slow drip, the unlock is at L4 and Calm Mind is in play from **L5**.)
+- Reveal (unlocked by the L3 first clear; **§10:** now L2, so it is available from L3) is **not** equipped. It is
+  available as `--kit ch2-reveal`.
+- The kit lives in `runner.ts` (`defaultKit`, `starterLoadout`); since §10 it is the `progress` kit. The unlock gating
+  reads `unlockLevel` from content `skills.ts`, so it cannot drift.
 
 **Why this kit:**
 - **Calm Mind:** it is the Ch2 unlock aimed at Beginners (CH2_PLAN S7: "a non-gear defensive answer"). It is a defensive
@@ -386,3 +387,47 @@ pnpm bot --chapter 2 [--quick] [--gimmicks realistic]
 
 A gear-offset or `--kit` run in Ch2 prints its verdicts but always exits 0, because it is a lever check, not the
 contract. Ch1 keeps its old exit behaviour.
+
+## 10. PO "slow drip" skill unlocks (2026-10-10)
+
+The full schedule and its rationale are in `balance-ch1.md` §10. Ch2 unlocks four skills (first clear; each is in play
+from the next level):
+
+| Unlocked by | Skill | Kind | Why here |
+|---|---|---|---|
+| ch2-l02 (was l03) | **Reveal** | A | In play from L3, the "Fading review" level. Fading and scrambled plates appear from L1, so Reveal arrives as soon as the chapter's gimmick is established. |
+| ch2-l04 (was l05) | **Calm Mind** | P | In play from L5. The Gloom Wolf (elite, leaks 20% at par) debuts on L4. Longer guard words are the "non-gear defensive answer" (CH2_PLAN S7) from the Mire Toad (brute) onward. |
+| ch2-l06 | **Slash Wave** | A | In play from L7. It hits every enemy, which teaches crowd and healer play: L8 is the 4-slot peak-density level with a Mender, and the Willow has adds. It was ch1-l03 before. |
+| ch2-l08 | **Riposte** | P | In play from L9. Calm Mind's longer guard window makes perfect parries reachable, and Riposte rewards them on the two-elite L9 and at the Willow. It was ch1-l05 before. |
+
+- **Gaps:** ch1-l09 → ch2-l02 is 3 levels, then 2, 2, 2. The kinds continue the Ch1 alternation (A, P, A, P).
+- **A player entering Ch2** owns Fireball, Aegis and Piercing Thrust, plus Clean Cut, Iron Will and Steady Hands. That
+  is the same equipped kit the T5.1 "Ch2 player" used. Before the drip they also owned Slash Wave, Mending Light, Frost
+  Lock and 5 more passives, but the balance never equipped those.
+
+### 10.1 Effect on the Ch2 balance
+
+- **The only kit change is L5:** Calm Mind replaces Steady Hands one level earlier.
+- **No Ch2 content knob changed.** Every other level and the Willow run the same loadout as before, so their cells are
+  byte-identical.
+
+| Cell (`pnpm balance --chapter 2`, 200 seeds, exit 0, 27/27 PASS) | Before | After | Target |
+|---|---|---|---|
+| Beginner normal active / boss active | 4.34 / 8.56 | 4.34 / **8.56** | 3–4.5 / ~8.1 |
+| Beginner first-try normal mean / worst level | 99.6% / 98.5% | 99.6% / 98.5% | ≥ 90 / ≥ 85% |
+| **Beginner Willow first-try** | **87.5%** (88.0% @1000) | **87.5%** (88% @1000) | 75–90% |
+| Beginner skill share | 17.0% | 17.0% | 15–20% |
+| Average boss active / clear | 4.41 / 100% | **4.41 / 100%** | ~4.4 / ≥ 90% |
+| Average skill share | 15.5% | 15.6% | 15–20% |
+| Fast boss active / clear | 3.12 / 100% | **3.12 / 100%** | ~2.8 ±15% / ≥ 95% |
+| Fast skill share | 14.8% | 14.9% | 15–20% (±15%) |
+| Reference auto-attacks / encounter | 11.60 | 11.57 | ~11 |
+| ch2-l05, Beginner damage taken per run | 109.4 | 101.2 | |
+| ch2-l05, Average damage taken per run | 49.5 | 43.0 | |
+| Reveal-for-Aegis sensitivity (`--kit ch2-reveal`), Beginner Willow, 1000 seeds | 59.5% | 60% | |
+
+`pnpm bot` (20 seeds): BOT PASS. Ch2 Beginner clears L1–L9 19–20/20, and the Willow 17/20.
+
+**Riposte** is owned from L9, but the bot does not equip it: it keeps Calm Mind + Iron Will. A player who swaps Iron
+Will for Riposte trades block damage reduction for counter damage. This is not measured; the Willow's window has about 2
+points of headroom (88% vs 90%) on the upside only.

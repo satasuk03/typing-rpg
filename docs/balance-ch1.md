@@ -32,9 +32,10 @@ Targets are plan §9, with two PO decisions (2026-10-09, §8):
   - The attempt rate is not the same number as `guard`. An attempted guard word can still fail (too slow, or a typo).
     An ignored guard word is often answered by killing or Breaking the enemy before the impact, and economy_sim does not
     count that as an attack.
-- **Loadout.** Every level uses par gear (T1 Common +0, sword) and the starter kit: Fireball and Aegis as actives, Clean
-  Cut, Steady Hands and Iron Will as passives. Unlocks that happen during the chapter are not equipped. Each level is a
-  first clear.
+- **Loadout.** Every level uses par gear (T1 Common +0, sword). Each level is a first clear. **Since §10 (slow drip)**
+  the kit is the "progress" kit: what a real player owns when the level starts. §2–§9 were measured with the T6.1 kit
+  (Fireball and Aegis as actives, Clean Cut, Steady Hands and Iron Will as passives) on every level; that kit is now
+  `--kit ch1-full`, and it is exactly the progress kit at the L10 boss.
 
 **Active time.** Active time = sim time from `LevelStarted` to the end, plus `LEVEL_END_S` (10 s for the results screen,
 which the sim does not model).
@@ -338,3 +339,107 @@ Results (`pnpm balance`, 200 seeds): **31/31 PASS**. Beginner boss clear 83.5% (
 
 Boss leak by armor (unit test `guardLeak.test.ts`, P = 1.25 x par): par +0 = 20%, +3 = 3.2%, +5 = 0. The balance tool
 does not model gear upgrades, so this is checked as a formula, not as a persona run.
+
+## 10. PO "slow drip" skill unlocks (2026-10-10)
+
+The PO ruled that skills unlocked too fast: 12 unlocks over Ch1's 10 levels. The new rule keeps the starter kit
+(Fireball + Clean Cut) and then gives one skill every 2–3 levels, alternating active and passive. That is 4 in Ch1, 4 in
+Ch2, and 6 held for later chapters. Story: the hero lost his power in the prologue and regains it over the 20 h story.
+
+### 10.1 Schedule (content `skills.ts`; enforced by `tools/content` `ruleUnlockDrip`)
+
+"Clear" is the first clear. A skill is in play from the next level.
+
+| Unlocked by | Skill | Kind | In play from | Why here |
+|---|---|---|---|---|
+| (new save) | Fireball, Clean Cut | A + P | ch1-l01 | Starter kit, unchanged |
+| ch1-l02 | **Aegis** | A | L3 | L1–L2 teach guard words by hand (the tutorial's guard cue). Aegis then automates the lesson on the first 3-encounter level. It is the Ch1 boss's defensive anchor. |
+| ch1-l04 | **Iron Will** | P | L5 | Defense after Aegis: the guard theme continues. It arrives as the Goblin Raider (brute) debuts on L5. |
+| ch1-l06 | **Piercing Thrust** | A | L7 | Teaches shields and BREAK. From L7 every level mixes Scouts and Raiders (shield 3, weak to pierce), and the Golem has shield 6. It is a second damage active the player can try instead of Fireball or Aegis. |
+| ch1-l09 | **Steady Hands** | P | L10 | A boss reward: the Golem's Doom Spells and finisher are long, exact sentences where one forgiven typo matters most. |
+| ch2-l02 | Reveal | A | ch2-l03 | See `balance-ch2.md` §10. |
+| ch2-l04 | Calm Mind | P | ch2-l05 | |
+| ch2-l06 | Slash Wave | A | ch2-l07 | |
+| ch2-l08 | Riposte | P | ch2-l09 | |
+| future | Mending Light, Frost Lock (A); Opening Gambit, Bulwark Streak, Last Stand, Comeback (P) | | | Held for later chapters (`unlockLevel: FUTURE_UNLOCK`) |
+
+- **Gaps:** 2, 2, 3 in Ch1; 3 across the chapter boundary (ch1-l09 → ch2-l02); 2, 2, 2 in Ch2. The kinds alternate
+  A, P, A, P across both chapters. No unlock sits on a boss level.
+- **Held for later:** Mending Light and Frost Lock are the strongest survival actives. Holding them keeps the PO's
+  boss-risk windows meaningful. Last Stand, Comeback, Bulwark Streak and Opening Gambit are the "power fantasy" passives,
+  which suit the later regain arc.
+- **Contract:** `unlockLevel: "future"` (`FUTURE_UNLOCK`). See `docs/interfaces.md` v2.1 (proposed). Absent still means
+  starter kit, so every existing consumer reads a future skill as "never unlocked".
+- **Existing saves keep everything.** Unlock lists are only ever added to (`applyLevelUnlocks`, `mergeSaves`). A save
+  that owns Frost Lock keeps it (`apps/game/tests/app/ops.test.ts`). New saves follow the new schedule.
+- **Loadout UI:** locked skills are **shown, not hidden**, sorted owned → unlockable (in play order) → future. A
+  level unlock reads "Clear Level 4 of Chapter I to unlock". A future skill reads "Regain later in your journey". This
+  shows the player what they lost and what lies ahead, which serves the story.
+
+### 10.2 What the balance tool now measures
+
+- **Default kit `progress`** (`tools/balance/src/runner.ts`): the skills the player owns when the level starts, read
+  from content.
+  - Equipped as Fireball + Aegis (once owned), and Clean Cut + (Calm Mind, else Steady Hands) + Iron Will (each once
+    owned).
+  - Piercing Thrust, Slash Wave and Riposte are owned but not equipped by the bot. Fireball is the only damage active
+    the skill-share target counts on, and Aegis is worth about 30 points of Beginner boss clear (`balance-ch2.md` §1.1).
+  - The same kit drives `pnpm bot`.
+- **Ch1 kit by level:** L1–L2 Fireball / Clean Cut. L3–L4 + Aegis. L5–L9 + Iron Will. L10 + Steady Hands = the T6.1 kit.
+- **Note:** before this change the tool equipped the T6.1 kit on every level. That was already out of date after the
+  "starter kit" change earlier on 2026-10-10 (Aegis at L1, Steady Hands at L4, Iron Will at L6). So the real tutorial
+  had been a starter-kit-only fight since then, and the tool did not show it.
+
+### 10.3 Rebalance
+
+- **The thinner kit only hurts L1–L2.** On L3–L9 the Beginner's clear and damage don't move (within ±2 HP). The reason
+  is that Iron Will and Steady Hands barely matter on normal levels for a typist who blocks about 37% of attacks. The
+  boss kit is unchanged, so **the boss cells are byte-identical**.
+- **One data knob:** `PRE_KIT_HIT_MULT` = **0.8** on the L1–L2 grunt hits (`levels-ch1.ts`), the two levels fought with
+  the starter kit alone. L1 hit 10.18 → **8.15**, L2 9.22 → **7.38**.
+
+  | Beginner, 1000 seeds | L1 clear / dmg / SW | L2 clear / dmg / SW |
+  |---|---|---|
+  | T6.1 kit (before) | 100% / 58 / 0% | 100% / 58 / 1% |
+  | progress kit, hits ×1.0 | **95% / 88 / 9%** | **96% / 82 / 5%** |
+  | progress kit, hits ×0.9 | 97% / 79 / 4% | 99% / 73 / 1% |
+  | progress kit, hits ×0.85 | 98% / 80 / 2% | 99% / 71 / 1% |
+  | **progress kit, hits ×0.8 (shipped)** | **100% / 68 / 1%** | **100% / 69 / 0%** |
+
+  - A 1-in-20 loss on the tutorial at 20 WPM is not the risk the PO asked for in §8.2, which was risk at the boss.
+  - ×0.8 still leaves L1–L2 about 10 HP harder than before for the Beginner.
+- **Cost:** the reference typist's bare-kit damage over L1–L9 is now **0.96× the `DMG_FRAC` budget** (381 / 396; L1
+  34.5 / 40, L2 33.8 / 41; `solve-hits --global --iters 1`). Before it was about 1.01×. This is intended: the starter kit
+  levels sit under budget.
+- **Byte-identity:** this is a deliberate Ch1 content change. `ch1-resolved.json` is re-pinned for ch1-l01 / ch1-l02
+  only (L3–L10 hashes unchanged). `CONTENT_VERSION` is now 282e2d86. The typing goldens are unchanged.
+
+### 10.4 Before / after (`pnpm balance`, 200 seeds, exit 0, 31/31 PASS)
+
+| Cell | Before (T6.1 kit) | After (progress kit) | Target |
+|---|---|---|---|
+| Beginner normal active (L1–L9) | 4.31 | 4.33 | 3–4.5 |
+| Beginner boss active | 8.69 | **8.69** | ~8.1 ±15% |
+| Beginner first-try normal (mean) | 99.9% | 99.9% | ≥ 80% |
+| **Beginner first-try boss** | **83.5%** (86.0% @1000) | **83.5%** (86.0% @1000) | 80–90% |
+| Beginner skill share | 17.0% | 17.0% | 15–20% |
+| Average normal / boss active | 2.33 / 4.48 | 2.35 / **4.48** | 2.4–3 / ~4.4 |
+| Average first-try normal / boss | 100% / 100% | 100% / **100%** | ≥ 97 / ≥ 85% |
+| Average skill share | 16.1% | 16.2% | 15–20% |
+| Fast normal / boss active | 1.58 / 2.96 | 1.59 / **2.96** | 1.7–2.2 / ~2.8 |
+| Fast first-try normal / boss | 100% / 100% | 100% / **100%** | ≥ 99 / ≥ 90% |
+| Fast skill share | 15.2% | 15.4% | 15–20% |
+| Reference auto-attacks / encounter | 11.56 | 11.50 | ~11 |
+
+Beginner per level (200 seeds; clear, damage taken per run):
+
+| | L1 | L2 | L3 | L4 | L5 | L6 | L7 | L8 | L9 | L10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Before | 100%, 57 | 100%, 59 | 100%, 38 | 100%, 83 | 100%, 71 | 100%, 60 | 100%, 75 | 100%, 50 | 100%, 58 | 84%, 119 |
+| After | 100%, 67 | 100%, 71 | 100%, 38 | 100%, 84 | 100%, 71 | 100%, 60 | 100%, 76 | 100%, 54 | 100%, 58 | 84%, 119 |
+
+`pnpm bot` (20 seeds): BOT PASS. Ch1 Beginner clears L1–L9 20/20, and the Golem 17/20.
+
+**Risk for the PO:** the bot keeps Aegis in slot 2 at the boss. A player who swaps Aegis out for the new Piercing Thrust
+gives up Aegis's barrier, the boss-clear anchor (§8.2). This is the same trap as Reveal in Ch2, where it cost ~28 points (not measured for the Golem: the tool has no such kit). The existing Willow
+loadout hint covers only ch2-l10. A matching Golem hint ("Aegis guards you against the Golem") would be an app change.

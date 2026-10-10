@@ -2,7 +2,7 @@
 // pool only changes wall time, never numbers.
 import { availableParallelism } from "node:os";
 import { Worker } from "node:worker_threads";
-import { type ContentBundle, contentBundle } from "@hd2d/content";
+import { type ContentBundle, contentBundle, isFutureUnlock } from "@hd2d/content";
 import {
   type LevelOptions,
   type Loadout,
@@ -45,14 +45,14 @@ export interface Job {
   gear?: string;
 }
 
-export type Kit = "starter" | "bare" | "ch2" | "ch2-reveal";
-export const KITS: readonly Kit[] = ["starter", "bare", "ch2", "ch2-reveal"];
+export type Kit = "progress" | "starter" | "ch1-full" | "bare" | "ch2-reveal";
+export const KITS: readonly Kit[] = ["progress", "starter", "ch1-full", "bare", "ch2-reveal"];
 
 /**
- * The balance default kit per chapter (T5.1). Ch1: the starter kit (byte-identical). Ch2 and later: "the Ch2 player", the
- * starter kit with Calm Mind in Steady Hands's slot once unlocked (docs/balance-ch2.md §1).
+ * The balance default kit (PO 2026-10-10 "slow drip"): every chapter plays "progress", the kit a real player holds when the
+ * level starts under content skills.ts's unlock schedule (docs/balance-ch1.md §10, balance-ch2.md §10).
  */
-export const defaultKit = (chapter: number): Kit => (chapter >= 2 ? "ch2" : "starter");
+export const defaultKit = (_chapter: number): Kit => "progress";
 
 /** Level order key: chapter x 100 + index (an id that does not parse sorts first). */
 const levelKey = (levelId: string): number => {
@@ -63,41 +63,64 @@ const levelKey = (levelId: string): number => {
 /**
  * True when skill `id` is in play when `levelId` starts: no `unlockLevel` (starter kit), or its unlockLevel was
  * first-cleared earlier (a level's own unlock arrives with its first clear, so it is not in play on that level's first
- * try). `levelId` undefined = after the whole chapter (every unlock in play). Reads content skills.ts, so it cannot drift.
+ * try). `levelId` undefined = after every shipped level (every unlock in play). A FUTURE_UNLOCK skill is never in play.
+ * Reads content skills.ts, so it cannot drift.
  */
 export function unlockedBefore(id: string, levelId: string | undefined): boolean {
   const d = [...contentBundle.actives, ...contentBundle.passives].find((x) => x.id === id);
   if (d === undefined) throw new Error(`unknown skill ${id}`);
+  if (isFutureUnlock(d)) return false;
   if (d.unlockLevel === undefined || levelId === undefined) return true;
   return levelKey(d.unlockLevel) < levelKey(levelId);
 }
 
+/** Second active slot preference of the "progress" player: Aegis whenever it is owned (balance-ch2.md §1.1). */
+const PROGRESS_ACTIVE_2 = ["aegis", "piercingThrust", "slashWave", "reveal"] as const;
+
 /**
  * The balance loadout: par gear (+ the --gear offset) and a kit.
- *  - starter: the Ch1 starter kit (content skills.ts, no unlockLevel): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will.
+ *  - progress (default): the kit a real player owns when `levelId` starts (content unlock schedule), equipped as
+ *    Fireball + Aegis (once owned; else the first owned of Piercing Thrust / Slash Wave / Reveal), and Clean Cut +
+ *    (Calm Mind, else Steady Hands) + Iron Will, each once owned. Fireball stays: it is the only damage active the
+ *    skill-share target counts on. Aegis keeps slot 2: it is worth ~30 points of Beginner boss clear (balance-ch2.md
+ *    §1.1). Piercing Thrust, Slash Wave and Riposte are owned from ch1-l07 / ch2-l07 / ch2-l09 but not equipped.
+ *  - starter: the new-save kit only (content skills.ts, no unlockLevel): Fireball, Clean Cut.
+ *  - ch1-full: the pre-"slow drip" balance kit on every level: Fireball + Aegis, Clean Cut + Steady Hands + Iron Will
+ *    (the T6.1 baseline; `--kit ch1-full` reproduces the Ch1 "before" table).
  *  - bare: Fireball, Clean Cut + Steady Hands (the solve-hits reference build: no barrier, no reduced block damage).
- *  - ch2: "the Ch2 player" (balance-ch2.md §1): the starter kit, with Calm Mind in Steady Hands's slot once unlocked
- *    (ch2-l05 first clear, so from L6). Aegis stays in the second active slot: it is worth ~40 points of Beginner boss
- *    clear, Reveal ~0 (measured, §1), and Fireball is the only damage active (skill share).
- *  - ch2-reveal: ch2 plus Reveal in Aegis's slot once unlocked (ch2-l03 clear, so from L4). Sensitivity only: the player
- *    who equips the new active (PO question, balance-ch2.md §8).
- * `levelId` gates the Ch2 unlocks (undefined = every unlock in play).
+ *  - ch2-reveal: progress plus Reveal in Aegis's slot once owned (ch2-l02 clear, so from ch2-l03). Sensitivity only: the
+ *    player who equips the new active (PO question, balance-ch2.md §8).
+ * `levelId` gates the unlocks (undefined = every shipped unlock in play).
  */
 export function starterLoadout(
-  kit: Kit = "starter",
+  kit: Kit = "ch1-full",
   chapter = 1,
   gear?: string,
   levelId?: string,
 ): Loadout {
   const l = applyGear(parLoadout(chapter), parseGear(gear));
-  const ch2 = kit === "ch2" || kit === "ch2-reveal";
-  const reveal = kit === "ch2-reveal" && unlockedBefore("reveal", levelId);
-  const calm = ch2 && unlockedBefore("calmMind", levelId);
-  l.actives = kit === "bare" ? ["fireball", null] : ["fireball", reveal ? "reveal" : "aegis"];
-  l.passives =
-    kit === "bare"
-      ? ["cleanCut", "steadyHands", null]
-      : ["cleanCut", calm ? "calmMind" : "steadyHands", "ironWill"];
+  const has = (id: string): boolean => unlockedBefore(id, levelId);
+  if (kit === "bare") {
+    l.actives = ["fireball", null];
+    l.passives = ["cleanCut", "steadyHands", null];
+  } else if (kit === "starter") {
+    l.actives = ["fireball", null];
+    l.passives = ["cleanCut", null, null];
+  } else if (kit === "ch1-full") {
+    l.actives = ["fireball", "aegis"];
+    l.passives = ["cleanCut", "steadyHands", "ironWill"];
+  } else {
+    const second =
+      kit === "ch2-reveal" && has("reveal")
+        ? "reveal"
+        : (PROGRESS_ACTIVE_2.find((id) => has(id)) ?? null);
+    l.actives = ["fireball", second];
+    l.passives = [
+      "cleanCut",
+      has("calmMind") ? "calmMind" : has("steadyHands") ? "steadyHands" : null,
+      has("ironWill") ? "ironWill" : null,
+    ];
+  }
   return l;
 }
 

@@ -555,7 +555,7 @@ export function gearSection(rep: Report): string[] {
   const chapter = rep.config.chapter ?? 1;
   const spec = parseGear(rep.config.gear);
   if (rep.config.gear === undefined && chapter === 1) return [];
-  const l = starterLoadout("starter", chapter, rep.config.gear);
+  const l = starterLoadout("ch1-full", chapter, rep.config.gear);
   const d = describeGear(l, spec, chapter);
   const bossId = chapterLevels(chapter)[9] as string;
   const lv = resolveLevel(bundleForLevel(bossId), bossId, { dueWeakWords: [] });
@@ -631,12 +631,8 @@ export function markdown(rep: Report): string {
   // Ch1 strings are frozen (byte-identical report); Ch2+ get their own headings.
   out.push(
     `# Chapter ${ch} balance (${rep.config.seeds} seeds per level per persona, noise ${rep.config.noise ? "on" : "off"})`,
-    ...(ch === 1
-      ? []
-      : [
-          "",
-          `**Kit:** ${rep.config.kit ?? "ch2 (default, the Ch2 player: Fireball + Aegis; Clean Cut + Steady Hands + Iron Will, Calm Mind for Steady Hands from L6)"}`,
-        ]),
+    "",
+    `**Kit:** ${rep.config.kit ?? "progress (default: the kit a real player owns at each level under the slow-drip unlock schedule, runner.ts starterLoadout)"}`,
     ...(Object.keys(rep.config.whatif).length > 0
       ? ["", `**What-if:** ${JSON.stringify(rep.config.whatif)} (Py columns ignore it)`]
       : []),

@@ -27,7 +27,7 @@ import {
 import reference from "../fixtures/economy-reference.json" with { type: "json" };
 import { mkLoadout } from "../typingHarness.ts";
 
-/** The ch1 starter kit (content/data/skills.ts): Fireball + Aegis, Clean Cut + Steady Hands + Iron Will. */
+/** The T6.1 Ch1 balance kit: Fireball + Aegis, Clean Cut + Steady Hands + Iron Will. Under the slow-drip schedule (PO 2026-10-10) a player owns it from ch1-l10 (the boss); the new-save kit is only Fireball + Clean Cut. */
 export function starterLoadout(archetype: "sword" | "dagger" | "staff" | "hammer" = "sword") {
   const l = mkLoadout(archetype);
   l.actives = ["fireball", "aegis"];

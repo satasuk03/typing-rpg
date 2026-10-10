@@ -1,16 +1,22 @@
-import type { ActiveSkillDef, PassiveDef } from "../schemas.ts";
+import { type ActiveSkillDef, FUTURE_UNLOCK, type PassiveDef } from "../schemas.ts";
 
 /**
- * The slice set: 6 actives and 8 passives (interfaces D20). Numbers live in BALANCE.SKILLS / BALANCE.PASSIVES (D19).
+ * The slice set: 7 actives and 9 passives (interfaces D20, v2.0.3). Numbers live in BALANCE.SKILLS / BALANCE.PASSIVES (D19).
  * Description placeholders are filled by the UI from BALANCE.SKILLS[id]:
  *   {dmg}    = atk_mult (or atk_mult_all) as a percent of ATK, e.g. "120%"
  *   {charge} = charge (words)
  *   {secs}   = burn_s, freeze_s or duration_s
  * `iconId` / `vfxId` are forward keys for the HUD (T2.4) and the VFX library (T2.3). `sfxId` is an existing procedural
  * sound (apps/game/src/audio/types.ts SFX_IDS; tools/content checks it).
- * `unlockLevel` is the level whose first clear unlocks the skill (absent = part of the starter kit).
- * Ch2 (v2.0.3): Reveal (active, ch2-l03) and Calm Mind (passive, ch2-l05). Scholar (ch2-l07) is deferred, see interfaces ICP v2.0.3.
- * Starter kit: Fireball + Clean Cut.
+ * `unlockLevel` is the level whose first clear unlocks the skill; absent = the starter kit; FUTURE_UNLOCK = held for a
+ * later chapter (interfaces v2.1).
+ *
+ * PO 2026-10-10 "slow drip" (docs/balance-ch1.md §10): the hero lost his power in the prologue and regains it over the
+ * story. Starter kit Fireball + Clean Cut, then one unlock every 2-3 levels, alternating active / passive:
+ *   ch1-l02 Aegis (A) · ch1-l04 Iron Will (P) · ch1-l06 Piercing Thrust (A) · ch1-l09 Steady Hands (P)
+ *   ch2-l02 Reveal (A) · ch2-l04 Calm Mind (P) · ch2-l06 Slash Wave (A) · ch2-l08 Riposte (P)
+ *   future: Mending Light, Frost Lock (A); Opening Gambit, Bulwark Streak, Last Stand, Comeback (P).
+ * Saves keep every unlock they already hold (unlocks are only ever added, never recomputed).
  */
 export const ACTIVES: ActiveSkillDef[] = [
   {
@@ -28,7 +34,7 @@ export const ACTIVES: ActiveSkillDef[] = [
     iconId: "icon.skill.aegis",
     vfxId: "vfx.skill.aegis",
     sfxId: "guard",
-    unlockLevel: "ch1-l01",
+    unlockLevel: "ch1-l02",
   },
   {
     id: "slashWave",
@@ -38,7 +44,7 @@ export const ACTIVES: ActiveSkillDef[] = [
     iconId: "icon.skill.slashWave",
     vfxId: "vfx.skill.slashWave",
     sfxId: "slash",
-    unlockLevel: "ch1-l03",
+    unlockLevel: "ch2-l06",
   },
   {
     id: "piercingThrust",
@@ -47,7 +53,7 @@ export const ACTIVES: ActiveSkillDef[] = [
     iconId: "icon.skill.piercingThrust",
     vfxId: "vfx.skill.piercingThrust",
     sfxId: "slash",
-    unlockLevel: "ch1-l04",
+    unlockLevel: "ch1-l06",
   },
   {
     id: "mendingLight",
@@ -56,7 +62,7 @@ export const ACTIVES: ActiveSkillDef[] = [
     iconId: "icon.skill.mendingLight",
     vfxId: "vfx.skill.mendingLight",
     sfxId: "heal",
-    unlockLevel: "ch1-l06",
+    unlockLevel: FUTURE_UNLOCK,
   },
   {
     id: "frostLock",
@@ -66,7 +72,7 @@ export const ACTIVES: ActiveSkillDef[] = [
     iconId: "icon.skill.frostLock",
     vfxId: "vfx.skill.frostLock",
     sfxId: "skillMagic",
-    unlockLevel: "ch1-l08",
+    unlockLevel: FUTURE_UNLOCK,
   },
   {
     id: "reveal",
@@ -76,7 +82,7 @@ export const ACTIVES: ActiveSkillDef[] = [
     iconId: "icon.skill.reveal",
     vfxId: "vfx.skill.reveal",
     sfxId: "skillMagic",
-    unlockLevel: "ch2-l03",
+    unlockLevel: "ch2-l02",
   },
 ];
 
@@ -94,7 +100,7 @@ export const PASSIVES: PassiveDef[] = [
     description: "Your first typo in each fight does not crack your combo.",
     tag: "precision",
     iconId: "icon.passive.steadyHands",
-    unlockLevel: "ch1-l04",
+    unlockLevel: "ch1-l09",
   },
   {
     id: "ironWill",
@@ -102,7 +108,7 @@ export const PASSIVES: PassiveDef[] = [
     description: "Blocked hits deal 15% damage instead of 20%.",
     tag: "defense",
     iconId: "icon.passive.ironWill",
-    unlockLevel: "ch1-l06",
+    unlockLevel: "ch1-l04",
   },
   {
     id: "openingGambit",
@@ -110,7 +116,7 @@ export const PASSIVES: PassiveDef[] = [
     description: "Every fight begins with your attack gauge half full.",
     tag: "speed",
     iconId: "icon.passive.openingGambit",
-    unlockLevel: "ch1-l02",
+    unlockLevel: FUTURE_UNLOCK,
   },
   {
     id: "bulwarkStreak",
@@ -118,7 +124,7 @@ export const PASSIVES: PassiveDef[] = [
     description: "A streak of perfect words conjures a one-hit barrier.",
     tag: "defense",
     iconId: "icon.passive.bulwarkStreak",
-    unlockLevel: "ch1-l03",
+    unlockLevel: FUTURE_UNLOCK,
   },
   {
     id: "riposte",
@@ -126,7 +132,7 @@ export const PASSIVES: PassiveDef[] = [
     description: "A perfect parry answers with a much harder counter.",
     tag: "tech",
     iconId: "icon.passive.riposte",
-    unlockLevel: "ch1-l05",
+    unlockLevel: "ch2-l08",
   },
   {
     id: "lastStand",
@@ -134,7 +140,7 @@ export const PASSIVES: PassiveDef[] = [
     description: "When your HP runs low, your attack gauge charges faster.",
     tag: "speed",
     iconId: "icon.passive.lastStand",
-    unlockLevel: "ch1-l07",
+    unlockLevel: FUTURE_UNLOCK,
   },
   {
     id: "comeback",
@@ -142,7 +148,7 @@ export const PASSIVES: PassiveDef[] = [
     description: "After a typo, your next perfect word wins back half the combo you lost.",
     tag: "tech",
     iconId: "icon.passive.comeback",
-    unlockLevel: "ch1-l09",
+    unlockLevel: FUTURE_UNLOCK,
   },
   {
     id: "calmMind",
@@ -150,6 +156,6 @@ export const PASSIVES: PassiveDef[] = [
     description: "Every guard word stays on screen half a second longer.",
     tag: "defense",
     iconId: "icon.passive.calmMind",
-    unlockLevel: "ch2-l05",
+    unlockLevel: "ch2-l04",
   },
 ];

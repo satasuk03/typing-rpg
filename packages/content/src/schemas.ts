@@ -216,6 +216,17 @@ export const GearDef = z
   .refine((g) => (g.slot === "weapon") === (g.archetype !== undefined));
 export type GearDef = z.infer<typeof GearDef>;
 
+/**
+ * v2.1 (PO 2026-10-10 "slow drip"): `unlockLevel` is a level id (its first clear unlocks the skill), absent (the starter
+ * kit), or FUTURE_UNLOCK: held for a later chapter, so no shipped level unlocks it yet (the hero regains it later in the
+ * story). Consumers that compare `unlockLevel` with a level id or with `undefined` need no change: a future skill is never
+ * starter kit and never unlocked by a level.
+ */
+export const FUTURE_UNLOCK = "future" as const;
+/** True when the skill is held for a later chapter (no shipped level unlocks it). */
+export const isFutureUnlock = (d: { unlockLevel?: string }): boolean =>
+  d.unlockLevel === FUTURE_UNLOCK;
+
 export const ActiveSkillDef = z.object({
   id: z.enum([
     "slashWave",
@@ -231,7 +242,7 @@ export const ActiveSkillDef = z.object({
   iconId: z.string(),
   vfxId: z.string(),
   sfxId: z.string(),
-  unlockLevel: z.string().optional(),
+  unlockLevel: z.string().optional(), // a level id, or FUTURE_UNLOCK (v2.1)
 });
 export type ActiveSkillDef = z.infer<typeof ActiveSkillDef>;
 export const PassiveDef = z.object({
@@ -250,7 +261,7 @@ export const PassiveDef = z.object({
   description: z.string(),
   tag: z.enum(["precision", "speed", "defense", "tech", "economy"]),
   iconId: z.string(),
-  unlockLevel: z.string().optional(),
+  unlockLevel: z.string().optional(), // a level id, or FUTURE_UNLOCK (v2.1)
 });
 export type PassiveDef = z.infer<typeof PassiveDef>;
 export const TrialDef = z.object({

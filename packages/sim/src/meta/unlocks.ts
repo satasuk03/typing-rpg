@@ -1,6 +1,8 @@
 // unlockLevel semantics (content ActiveSkillDef / PassiveDef): the FIRST clear of a level unlocks the skills and passives
-// that list it as their `unlockLevel`. Replays and failed attempts unlock nothing.
-import type { ContentBundle } from "@hd2d/content";
+// that list it as their `unlockLevel`. Replays and failed attempts unlock nothing. A FUTURE_UNLOCK skill (interfaces v2.1,
+// PO "slow drip") is unlocked by no level. Unlocks are only ever added: a save keeps every skill it already holds, even one
+// the current schedule holds for a later chapter.
+import { type ContentBundle, isFutureUnlock } from "@hd2d/content";
 
 /** Active skills and passives unlocked by clearing `levelId` for the first time (bundle order). */
 export function levelUnlocks(
@@ -8,8 +10,12 @@ export function levelUnlocks(
   levelId: string,
 ): { actives: string[]; passives: string[] } {
   return {
-    actives: bundle.actives.filter((a) => a.unlockLevel === levelId).map((a) => a.id),
-    passives: bundle.passives.filter((p) => p.unlockLevel === levelId).map((p) => p.id),
+    actives: bundle.actives
+      .filter((a) => a.unlockLevel === levelId && !isFutureUnlock(a))
+      .map((a) => a.id),
+    passives: bundle.passives
+      .filter((p) => p.unlockLevel === levelId && !isFutureUnlock(p))
+      .map((p) => p.id),
   };
 }
 
