@@ -74,6 +74,11 @@ function boot(): void {
   }
 
   if (scene === "nul-sheet") return void import("./dev/nulSheet").then((m) => m.start(glCanvas)); // P2.1 dev sheets
+  // Dev-only route: ?scene=prologue&part=cutscene&t=<ms>&freeze=1 (src/dev/prologueScene.ts): the cutscene engine test timeline.
+  if (scene === "prologue") {
+    void import("./dev/prologueScene").then((m) => m.start(glCanvas));
+    return;
+  }
 
   // The real game: title -> map -> levels (src/app/).
   void import("./app/boot").then((m) => m.start(glCanvas, hudCanvas));

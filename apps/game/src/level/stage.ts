@@ -10,9 +10,10 @@
  */
 import type { EnemyDef } from "@hd2d/content";
 import type { EnemyView, LevelView } from "@hd2d/sim";
+import type { ActorRef, HeroCutsceneAnim, StageDirector } from "../cutscene/types";
 import type { HudAnchor, HudProjector } from "../hud";
 import type { CameraPose, RenderWorld, SpriteActor, SpriteFrame } from "../render";
-import { blendMood, GROVE_DAWN } from "../render/biomes";
+import { type BiomeMood, blendMood, GROVE_DAWN } from "../render/biomes";
 import type { DynamicLight } from "../render/lighting";
 import { ELITE_SCALE, eliteKey, WILLOW_FACE_FRAC } from "../render/sprites/ch2Monsters";
 import { HERO_LUM_CAP } from "../render/vfx/colors";
@@ -160,6 +161,9 @@ interface EnemyActor {
 /** Boss adds stay hidden until the boss intro ends, then dissolve in over this long (T6.3 #7). */
 export const ADDS_FADE_SEC = 0.3;
 
+/** P3.1 cutscene seam (interfaces.md v2.2 §14.4). Implemented by `LevelStage.director()`. */
+export type { StageDirector } from "../cutscene/types";
+
 export interface StageOptions {
   enemies: ReadonlyMap<string, EnemyDef>;
 }
@@ -205,6 +209,17 @@ export class LevelStage {
   /** P2-3: the grove-dawn crossfade once the Willow is freed. */
   private dawnT = 0;
   private freedClock = 0;
+  // ---- P3.1 cutscene seam (all null unless a cutscene player drives `director()`: story levels never set them)
+  private dirCam: CameraPose | null = null;
+  private dirMood: BiomeMood | null = null;
+  private dirHero: {
+    anim: HeroCutsceneAnim | null;
+    ageMs: number;
+    dx: number;
+    dz: number;
+    visible: boolean;
+  } | null = null;
+  private dirSeam: StageDirector | null = null;
 
   constructor(
     readonly world: RenderWorld,
@@ -543,6 +558,50 @@ export class LevelStage {
     this.pendingDash = { at: this.time + inMs / 1000, target };
   }
 
+  /**
+   * The narrow seam a cutscene player drives (P3.1). Additive: until a method here is called nothing in `update`
+   * changes. The hero/boss "actors" are the live `SpriteActor`s (or null); `prop` is not tracked by the stage yet.
+   */
+  director(): StageDirector {
+    const hero = (): NonNullable<LevelStage["dirHero"]> => {
+      this.dirHero ??= { anim: null, ageMs: 0, dx: 0, dz: 0, visible: true };
+      return this.dirHero;
+    };
+    this.dirSeam ??= {
+      heroActor: () => this.hero,
+      bossActor: () => {
+        for (const e of this.foes.values()) if (e.isBoss) return e.actor;
+        return null;
+      },
+      prop: () => null,
+      setCameraOverride: (pose) => {
+        this.dirCam = pose ? { ...pose } : null;
+      },
+      setMood: (mood) => {
+        this.dirMood = (mood as BiomeMood | null) ?? null;
+      },
+      setLetterbox: (on) => this.setLetterbox(on),
+      setHeroAnim: (anim, ageMs = 0) => {
+        const d = hero();
+        d.anim = anim;
+        d.ageMs = ageMs;
+      },
+      setActorState: (who: ActorRef, st) => {
+        if (who !== "hero") return; // the boss/props are driven by their own stage owners (P3.5/P3.6)
+        if (!st) {
+          this.dirHero = null;
+          if (this.hero) this.hero.visible = true;
+          return;
+        }
+        const d = hero();
+        d.dx = st.dx;
+        d.dz = st.dz;
+        d.visible = st.visible;
+      },
+    };
+    return this.dirSeam;
+  }
+
   setLetterbox(on: boolean): void {
     if (this.letterboxOn === on) return;
     this.letterboxOn = on;
@@ -586,6 +645,8 @@ export class LevelStage {
     this.updateHero(view, tickF);
     this.updateCamera(view);
     this.handle.update(dt, this.world.camera.pose.x);
+    // P3.1: a cutscene's blended mood wins over the level's per-x mood (re-applied by `handle.update` every frame)
+    if (this.dirMood) this.world.setMood(this.dirMood);
     this.dawnT = Math.min(DAWN_SEC, Math.max(0, this.freedClock - DAWN_DELAY));
     if (this.dawnT > 0 && this.world.biome === "grove") {
       // P2-3: grove dawn. `handle.update` re-applies the level's mood every frame, so the warm-up blends from it afterwards
@@ -593,6 +654,19 @@ export class LevelStage {
       this.world.setMood(blendMood(this.world.currentMood, GROVE_DAWN, 0.85 * k * k * (3 - 2 * k)));
     }
     this.world.update(dt, alpha);
+  }
+
+  /** Frames for a cutscene hero anim; anims the sprite source does not have (yet) fall back to idle. */
+  private cutsceneFrames(anim: HeroCutsceneAnim, F: HeroFrames): readonly SpriteFrame[] {
+    const known = (F as unknown as Record<string, readonly SpriteFrame[] | undefined>)[anim];
+    if (known) return known;
+    try {
+      const fr = this.world.source.frames("hero", anim);
+      if (fr.length > 0) return fr;
+    } catch {
+      // not drawn yet
+    }
+    return F.idle;
   }
 
   private placeHero(): void {
@@ -644,6 +718,19 @@ export class LevelStage {
     } else if (this.heroGuardT < 0.6) {
       frames = F.raise;
     }
+    let animT = this.time;
+    const dh = this.dirHero;
+    if (dh) {
+      // P3.1: cutscene hero override (anim by the cue's age, offset from the layout anchor, visibility)
+      if (dh.anim) {
+        frames = this.cutsceneFrames(dh.anim, F);
+        fps = dh.anim === "walk" ? 8 : 2.5;
+        animT = dh.ageMs / 1000;
+      }
+      x += dh.dx;
+      z += dh.dz;
+      hero.visible = dh.visible;
+    }
     if (this.pushT < this.pushOut + this.pushBack) {
       const u =
         this.pushT < this.pushOut
@@ -651,7 +738,7 @@ export class LevelStage {
           : 1 - easeOut((this.pushT - this.pushOut) / this.pushBack);
       x -= this.pushDist * u;
     }
-    const idx = frames.length > 1 ? Math.floor(this.time * fps) % frames.length : 0;
+    const idx = frames.length > 1 ? Math.floor(animT * fps) % frames.length : 0;
     const f = frames[idx] ?? frames[0];
     if (f) {
       hero.setFrame(f);
@@ -820,6 +907,12 @@ export class LevelStage {
   }
 
   private updateCamera(view: LevelView): void {
+    if (this.dirCam) {
+      // P3.1: a cutscene owns the camera: hard-set the evaluated pose every frame (it is already a pure fn of t)
+      this.world.camera.setTarget(this.dirCam);
+      this.world.camera.snap();
+      return;
+    }
     const { target, letterbox } = this.poseFor(view);
     this.world.camera.setTarget(this.camOverride ? { ...target, ...this.camOverride } : target);
     if (this.camSnapPending) {
