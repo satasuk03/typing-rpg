@@ -102,3 +102,4 @@ Maintained by the orchestrator. **Next session: start with `docs/HANDOFF.md`.** 
   - The default Ch2 balance kit is Fireball + Aegis, Clean Cut + Iron Will (Calm Mind from L6).
 - 2026-10-10: Fading words use the new style **in every chapter**: the next letter is never below 85% opacity, with a violet underline. This replaces Ch1's blank dashes.
 
+- 2026-10-10: **PO signed off Chapter II** (`docs/qa/po-signoff-ch2/`). The remaining art P2/P3 items stay on the backlog in `docs/qa/ch2-review-1.md`.
