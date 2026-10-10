@@ -142,6 +142,7 @@ export interface RunReport {
   maxBolts: number;
   maxQueued: number;
   kinds: Set<string>;
+  detailed?: boolean;
 }
 
 export async function playAndProbe(
@@ -175,6 +176,15 @@ export async function playAndProbe(
     const s = await sample(page);
     rep.samples++;
     for (const v of checkSnapshot(s.snapshot)) rep.violations.push(`tick ${s.tick}: ${v}`);
+    if (rep.violations.some((v) => v.includes("outside its plate")) && !rep.detailed) {
+      rep.detailed = true;
+      for (const p of s.snapshot.plates)
+        for (const l of p.letters)
+          if (l.x < p.rect.x - 8 || l.x + l.w > p.rect.x + p.rect.w + 8)
+            rep.violations.push(
+              `DETAIL tick ${s.tick} plate ${p.id} "${p.text}" rect ${JSON.stringify(p.rect)} frame ${JSON.stringify(p.frameRect)} letter ${JSON.stringify(l)} shake ${JSON.stringify(p.shake)}`,
+            );
+    }
     rep.maxSparks = Math.max(rep.maxSparks, s.sparks);
     rep.maxTier = Math.max(rep.maxTier, s.tier);
     rep.maxBarrier = Math.max(rep.maxBarrier, s.barrier);

@@ -114,6 +114,9 @@ export interface HudDebugPlate {
   /** v2.0 fading word: the plate is faded and the alpha its next letter was drawn with (must be >= 0.85). */
   faded?: boolean;
   nextAlpha?: number | null;
+  /** Debug: the shake/bounce offset (CSS px) the letters were drawn with, and the plate text. */
+  shake?: { dx: number; dy: number };
+  text?: string;
 }
 export interface HudDebugSnapshot {
   viewport: { w: number; h: number; dpr: number; scale: number };
@@ -1541,6 +1544,11 @@ export class Hud {
         contrast,
         faded: p?.faded ?? false,
         nextAlpha: p?.faded ? en.nextAlpha.v : null,
+        shake: (() => {
+          const o = this.plateFx.offset(id, this.time);
+          return { dx: o.dx * this.s, dy: o.dy * this.s };
+        })(),
+        text: p?.display ?? "",
       });
     }
     const sorted = [...this.frameMs].sort((a, b) => a - b);
