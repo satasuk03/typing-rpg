@@ -456,7 +456,7 @@ Rough total: about 12 agent-days over 10 batches. The critical path is P0.1 → 
 | It feels long for someone replaying New Game | Hold-Esc skip anywhere (1 s) |
 | Merge collisions with the parallel balance task | Prologue numbers live in `prologue.ts`, not `balance.ts`. P1.1 lists `balance.ts` and `meta/**` as off limits. The golden comparison is against `main` at merge time |
 
-### 7.2 Questions (my recommendation in bold; building can start on these defaults)
+### 7.2 Questions: RESOLVED 2026-10-10. The PO said "let's go", so the bold defaults are adopted: Nul, the Silent King; hold Esc for 1 s; the 6 Ch1 actives without Reveal; the shard tracker comes later.
 1. **Villain name.** **"Nul, the Silent King"** (short, easy for learners to read and type), "Vesper, the Unwriter", or
    "The Hollow King"?
 2. **Skip input.** **Hold Esc for 1 s anywhere, with a ring** (a tap of Esc in the fight still opens the pause menu, which has
